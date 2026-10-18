@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProbeResponse, QuestionVerdict } from "../../src/shared/types.ts";
-import { costLine, diagnosis, failureAdvice, MAX_CALLS_PER_QUESTION, missingNumbers, normalizeKey } from "../../src/web/results.ts";
+import { costLine, diagnosis, dotLabel, failureAdvice, MAX_CALLS_PER_QUESTION, missingNumbers, normalizeKey } from "../../src/web/results.ts";
 import type { Attempt } from "../../src/web/runner.ts";
 
 const base = { question: "candy", protocol: "responses" as const, runId: "r", stage: 1, seq: 1, attempt: 1, done: true };
@@ -44,6 +44,13 @@ describe("failure mapping", () => {
 		expect(failureAdvice(attempts)).toEqual({ reason: "密钥无效或模型无权限", next: "检查密钥" });
 	});
 
+	it("points bad responses at the raw download instead of an in-page snippet", () => {
+		expect(failureAdvice([failed({ ok: false, reason: "bad_response", httpStatus: 200 }, 1)])).toEqual({
+			reason: "站点返回异常",
+			next: "在历史里点「下载原始数据」查看站点返回内容",
+		});
+	});
+
 	it("reports our own endpoint when every attempt was a network error", () => {
 		expect(failureAdvice([failed(null, 1)])).toEqual({ reason: "连不上本站接口", next: "检查网络后重测" });
 	});
@@ -56,6 +63,15 @@ describe("failure mapping", () => {
 		expect(diagnosis(verdict("failed", 2, 4, 6), [], "回答不是 Yes。")).toBe("第 2 关未达标，答对 4/6。回答不是 Yes。");
 		expect(diagnosis(verdict("passed", 4, 31, 31), [], "")).toBe("四关全部通过，答对 31/31。");
 		expect(diagnosis(verdict("incomplete", 2, 1, 1), [], "")).toBe("停在第 2 关，测试没有跑完。");
+	});
+});
+
+describe("dotLabel", () => {
+	it("names the call position and its state for screen readers", () => {
+		expect(dotLabel({ ...base, stage: 2, seq: 3, done: false, response: null })).toBe("第 2 关第 3 次 尝试 1 · responses：进行中");
+		expect(dotLabel(failed(okWith("ok"), 2))).toBe("第 1 关第 1 次 尝试 2 · responses：正确");
+		expect(dotLabel(failed(okWith("NO"), 1))).toBe("第 1 关第 1 次 尝试 1 · responses：错误");
+		expect(dotLabel(failed({ ok: false, reason: "timeout", httpStatus: null }, 1))).toBe("第 1 关第 1 次 尝试 1 · responses：失败 timeout");
 	});
 });
 

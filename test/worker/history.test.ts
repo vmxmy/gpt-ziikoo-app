@@ -61,7 +61,6 @@ describe("buildRunViews", () => {
 			questionId: "candy",
 			startedAt: 6,
 			attempt: 2,
-			protocol: "chat",
 			correct: false,
 			note: 'missing ["9","12"]',
 			totalMs: 800,
@@ -72,7 +71,7 @@ describe("buildRunViews", () => {
 	const older = call({ runId: RUN_B, startedAt: 1, protocol: "chat" });
 	const views = buildRunViews([older, ...candy, ...thibault], (id) => (id === "candy" ? "reasoning" : "knowledge"));
 
-	it("orders runs newest first and takes model and protocol from the latest call", () => {
+	it("orders runs newest first and reports each run's protocol", () => {
 		expect(views.map((v) => [v.runId, v.startedAt, v.protocol, v.overall])).toEqual([
 			[RUN_A, 5, "responses", "partial"],
 			[RUN_B, 1, "chat", "incomplete"],
@@ -95,6 +94,31 @@ describe("buildRunViews", () => {
 		expect(thibaultView.verdict?.correct).toBe(31);
 		expect(thibaultView.metrics.totalMs).toEqual({ min: 100, p50: 1600, p95: 3000, max: 3100 });
 		expect(thibaultView.metrics.cacheHitRate).toBeNull();
+	});
+
+	it("judges a stage-1 protocol race by the protocol the page picked, whatever the write order", () => {
+		const chatFirst = call({ protocol: "chat", startedAt: 1, correct: true });
+		const responsesWrong = call({ protocol: "responses", startedAt: 2, correct: false, note: "NO" });
+		for (const records of [
+			[chatFirst, responsesWrong],
+			[{ ...chatFirst, startedAt: 3 }, responsesWrong],
+		]) {
+			const [view] = buildRunViews(records, () => "knowledge");
+			expect(view.protocol).toBe("responses");
+			expect(view.questions[0].verdict?.status).toBe("failed");
+			expect(view.questions[0].metrics.calls).toBe(1);
+		}
+	});
+
+	it("picks chat when only chat answered in the race", () => {
+		const records = [
+			call({ protocol: "responses", ok: false, reason: "upstream_error", correct: null }),
+			call({ protocol: "chat", startedAt: 1 }),
+			call({ protocol: "chat", stage: 2, startedAt: 2 }),
+		];
+		const [view] = buildRunViews(records, () => "knowledge");
+		expect(view.protocol).toBe("chat");
+		expect(view.questions[0].verdict?.stages[0].state).toBe("passed");
 	});
 
 	it("leaves metrics-only questions without a verdict", () => {

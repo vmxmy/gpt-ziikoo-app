@@ -8,12 +8,14 @@ import { Monitor } from "./monitor.tsx";
 import {
 	costLine,
 	diagnosis,
+	dotLabel,
 	failureAdvice,
 	MAX_CALLS_PER_QUESTION,
 	missingNumbers,
 	ms,
 	normalizeKey,
 	OVERALL_LABEL,
+	resultText,
 	VERDICT_LABEL,
 } from "./results.ts";
 import { callState, ladderCalls, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
@@ -106,7 +108,9 @@ function Lane({ id, title, attempts }: { id: string; title: string; attempts: At
 										class="call-dot"
 										data-testid="call-dot"
 										data-state={callState(a)}
-										title={`第 ${a.seq} 次 · 尝试 ${a.attempt} · ${a.protocol}`}
+										role="img"
+										aria-label={dotLabel(a)}
+										title={dotLabel(a)}
 										key={`${a.protocol}-${a.seq}-${a.attempt}`}
 									/>
 								))}
@@ -116,13 +120,6 @@ function Lane({ id, title, attempts }: { id: string; title: string; attempts: At
 			</ol>
 		</li>
 	);
-}
-
-function resultText(a: Attempt): string {
-	if (!a.response) return "网络异常";
-	if (!a.response.ok) return `失败 ${a.response.reason}${a.response.httpStatus ? ` ${a.response.httpStatus}` : ""}`;
-	if (a.response.correct === null) return "不评分";
-	return a.response.correct ? "正确" : "错误";
 }
 
 function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {

@@ -34,8 +34,19 @@ export const FAILURE_ADVICE: Record<FailReason, FailureAdvice> = {
 	rate_limited: { reason: "站点正忙或限流", next: "几分钟后再测" },
 	upstream_error: { reason: "站点推理接口不可用", next: "等恢复后重测" },
 	timeout: { reason: "站点响应太慢", next: "稍后重测" },
-	bad_response: { reason: "站点返回异常", next: "展示片段供判断" },
+	bad_response: { reason: "站点返回异常", next: "在历史里点「下载原始数据」查看站点返回内容" },
 };
+
+export function resultText(a: Attempt): string {
+	if (!a.response) return "网络异常";
+	if (!a.response.ok) return `失败 ${a.response.reason}${a.response.httpStatus ? ` ${a.response.httpStatus}` : ""}`;
+	if (a.response.correct === null) return "不评分";
+	return a.response.correct ? "正确" : "错误";
+}
+
+export function dotLabel(a: Attempt): string {
+	return `第 ${a.stage} 关第 ${a.seq} 次 尝试 ${a.attempt} · ${a.protocol}：${a.done ? resultText(a) : "进行中"}`;
+}
 
 export function failureAdvice(attempts: Attempt[]): FailureAdvice {
 	const failed = attempts.filter((a) => a.done && !a.response?.ok);

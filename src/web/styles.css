@@ -6,11 +6,11 @@
 	--surface: #f5f6f8;
 	--accent: #1f5fd1;
 	--focus: #1f5fd1;
-	--ok: #1e8e3e;
+	--ok: #1a7f37;
 	--warn: #b06000;
 	--bad: #c5221f;
-	--none: #c4c7cc;
-	--pending: #8ab4f8;
+	--none: #80868b;
+	--pending: #3b6fd1;
 	color-scheme: light dark;
 }
 
@@ -252,6 +252,7 @@ pre {
 }
 
 .call-dot[data-state="wrong"] {
+	border-radius: 2px;
 	background: var(--bad);
 }
 
