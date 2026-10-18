@@ -349,7 +349,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | P1 | 题库清单格式与评分器表、两题录入、`/api/probe` 与 `/api/questions`(流式计时)、地址校验、限速、脱敏、测试 |
 | P2 | 对象存储:标识、保存最近 10 轮、脱敏、闲置清空、`/api/history*` |
 | P3 | 单页:多选清单、题面展开与复制、分题阶梯、分题结果、历史、API 说明 |
-| P4 | 独立部署:Workers Builds 加 PR 门禁,灰度发布与回滚 |
+| P4 | 独立部署:GitHub Actions 加 `cf`,PR 门禁,灰度发布与回滚 |
 | 后续 | 「长前缀」仅度量题与缓存命中率 |
 
 P1 与 P3 文件互不相交,可并行,但先定好接口形状。P2 依赖 P1 的调用记录形状。
@@ -367,11 +367,12 @@ P1 与 P3 文件互不相交,可并行,但先定好接口形状。P2 依赖 P1 �
 | 闲置保留期 | 90 天 |
 | 缓存命中率 | 本期留 `metrics` 类型口子,题放后续 |
 | 流式接口 `/api/run` | 不加 |
-| 前端栈 | Vite 加 Preact,配 Cloudflare Vite 插件 |
+| 命令行与项目配置 | `cf`(测试版)加 `cloudflare.config.ts`,不用 `wrangler.jsonc`。维护者决定,承担测试版的变更风险 |
+| 前端栈 | Vite 加 Preact,配 `@cloudflare/vite-plugin@beta` |
 | 语言 | 只做简体中文 |
 | 题面是否公开 | 公开,可复制 |
 | 糖果评分 | 21、9、12 须同时出现 |
-| 部署 | Workers Builds 部署,GitHub Actions 只做 PR 门禁 |
+| 部署 | GitHub Actions 加 `cf`:PR 跑 `cf deploy --dry-run`,合并后构建一次并 `--prebuilt` 部署。不用 Workers Builds,因为没有查到它支持 `cf deploy` |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。
