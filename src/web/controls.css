@@ -1,0 +1,222 @@
+.muted {
+	color: var(--fg-2);
+}
+
+.small {
+	font-size: var(--fs-13);
+}
+
+.warn {
+	color: var(--warn);
+}
+
+.mono {
+	font-family: var(--font-mono);
+	font-size: 0.95em;
+}
+
+.num {
+	font-variant-numeric: tabular-nums;
+}
+
+.tag {
+	display: inline-block;
+	padding: 0 var(--space-2);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-1);
+	background: var(--surface-2);
+	color: var(--fg-2);
+	font-size: var(--fs-12);
+	font-weight: 400;
+	line-height: 20px;
+	white-space: nowrap;
+}
+
+.tag-warn {
+	color: var(--warn);
+	background: transparent;
+}
+
+.notice {
+	padding: var(--space-3) var(--space-4);
+	border-radius: var(--radius-2);
+	background: var(--surface-2);
+	color: var(--fg-2);
+	font-size: var(--fs-13);
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: var(--control-h);
+	padding: 0 var(--space-4);
+	border: var(--border-width) solid transparent;
+	border-radius: var(--radius-2);
+	font: 600 var(--fs-14) / 1 var(--font-sans);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.btn-secondary,
+.btn-danger {
+	background: var(--surface);
+	border-color: var(--border-strong);
+	color: var(--fg);
+}
+
+.btn-danger {
+	color: var(--bad);
+}
+
+.btn-secondary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+	background: var(--surface-2);
+}
+
+.btn:disabled,
+.btn-text:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.btn-text {
+	min-height: 24px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent);
+	font: 500 var(--fs-13) / 1.4 var(--font-sans);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.btn-text:hover:not(:disabled) {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.btn-text-danger {
+	color: var(--bad);
+}
+
+.form {
+	display: grid;
+	gap: var(--space-4);
+}
+
+.field {
+	display: grid;
+	gap: var(--space-2);
+	align-content: start;
+}
+
+.field-label {
+	color: var(--fg-2);
+	font-size: var(--fs-13);
+	font-weight: 600;
+}
+
+.field-error {
+	color: var(--bad);
+	font-size: var(--fs-13);
+}
+
+input:not([type="checkbox"]),
+select,
+.affix {
+	width: 100%;
+	min-width: 0;
+	height: var(--control-h);
+	border: var(--border-width) solid var(--border-strong);
+	border-radius: var(--radius-2);
+	background: var(--surface);
+	color: var(--fg);
+	font: var(--fs-16) / 1 var(--font-sans);
+}
+
+input:not([type="checkbox"]),
+select {
+	padding: 0 var(--space-3);
+}
+
+input:not([type="checkbox"]):focus,
+select:focus,
+.affix:focus-within {
+	outline: 2px solid var(--focus);
+	outline-offset: -1px;
+	border-color: var(--focus);
+}
+
+input[aria-invalid="true"],
+.affix:has([aria-invalid="true"]) {
+	border-color: var(--bad);
+}
+
+.affix {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding-right: var(--space-3);
+}
+
+.affix input:not([type="checkbox"]) {
+	height: 100%;
+	border: 0;
+	background: transparent;
+	outline: none;
+}
+
+input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+@media (min-width: 720px) {
+	input:not([type="checkbox"]),
+	select,
+	.affix {
+		font-size: var(--fs-14);
+	}
+}
+
+pre.code,
+pre.prompt {
+	margin: var(--space-3) 0 0;
+	padding: var(--space-3) var(--space-4);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-2);
+	background: var(--surface-2);
+	font: var(--fs-13) / 1.6 var(--font-mono);
+	tab-size: 4;
+}
+
+pre.code {
+	white-space: pre;
+	overflow-x: auto;
+	overflow-wrap: normal;
+}
+
+pre.prompt {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+code {
+	padding: 1px var(--space-1);
+	border-radius: var(--radius-1);
+	background: var(--surface-2);
+	font-family: var(--font-mono);
+	font-size: 0.92em;
+}

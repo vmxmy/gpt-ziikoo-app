@@ -2,6 +2,8 @@ import { STAGES } from "../shared/ladder.ts";
 import type { FailReason, OverallStatus, ProbeResponse, QuestionStatus, QuestionVerdict } from "../shared/types.ts";
 import type { Attempt } from "./runner.ts";
 
+export const DEFAULT_MODEL = "gpt-6-astra";
+
 export const MAX_CALLS_PER_QUESTION = STAGES.reduce((n, s) => n + s.calls, 0);
 
 export function costLine(selected: number): string {

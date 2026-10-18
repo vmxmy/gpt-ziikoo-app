@@ -14,6 +14,35 @@ function download(name: string, data: unknown) {
 	URL.revokeObjectURL(url);
 }
 
+function HistoryRun({ run: r, busy, onRaw }: { run: RunView; busy: boolean; onRaw: (runId: string) => void }) {
+	return (
+		<li data-testid="history-run">
+			<p class="history-head">
+				<strong>{OVERALL_LABEL[r.overall]}</strong>
+				<span class="muted num">{time(r.startedAt)}</span>
+				<span class="mono muted">
+					{r.model} · {r.protocol}
+				</span>
+			</p>
+			<ul class="history-questions">
+				{r.questions.map((q) => (
+					<li key={q.id}>
+						<span class="mono">
+							{q.id} v{q.version}
+						</span>
+						：{q.verdict ? `${VERDICT_LABEL[q.verdict.status]} ${q.verdict.correct}/${q.verdict.total}` : "仅度量"}
+						，有效 {q.metrics.validCalls}/{q.metrics.calls}，总耗时 p50 {ms(q.metrics.totalMs?.p50)}，TTFT p50{" "}
+						{ms(q.metrics.ttftMs?.p50)}
+					</li>
+				))}
+			</ul>
+			<button type="button" class="btn-text" disabled={busy} onClick={() => onRaw(r.runId)} data-testid="history-raw-button">
+				下载原始数据
+			</button>
+		</li>
+	);
+}
+
 export function History({ target }: { target: Target }) {
 	const [runs, setRuns] = useState<RunView[] | null>(null);
 	const [message, setMessage] = useState("");
@@ -40,14 +69,14 @@ export function History({ target }: { target: Target }) {
 	};
 
 	return (
-		<section aria-labelledby="history-h" data-testid="history-section">
+		<section class="block col-12 col-md-6" id="history" aria-labelledby="history-h" data-testid="history-section">
 			<h2 id="history-h">历史</h2>
 			<p class="muted">用上面填写的站点与密钥取回最近 10 轮。</p>
-			<div class="row">
-				<button type="button" disabled={!ready || busy} onClick={load}>
+			<div class="actions">
+				<button type="button" class="btn btn-secondary" disabled={!ready || busy} onClick={load}>
 					查看历史
 				</button>
-				<button type="button" disabled={!ready || busy} onClick={remove} data-testid="history-delete-button">
+				<button type="button" class="btn btn-danger" disabled={!ready || busy} onClick={remove} data-testid="history-delete-button">
 					删除全部历史
 				</button>
 			</div>
@@ -60,23 +89,7 @@ export function History({ target }: { target: Target }) {
 			{runs && runs.length > 0 && (
 				<ul class="history">
 					{runs.map((r) => (
-						<li data-testid="history-run" key={r.runId}>
-							<p>
-								<strong>{OVERALL_LABEL[r.overall]}</strong> · {time(r.startedAt)} · {r.model} · {r.protocol}
-							</p>
-							<ul>
-								{r.questions.map((q) => (
-									<li key={q.id}>
-										{q.id} v{q.version}：{q.verdict ? `${VERDICT_LABEL[q.verdict.status]} ${q.verdict.correct}/${q.verdict.total}` : "仅度量"}
-										，有效 {q.metrics.validCalls}/{q.metrics.calls}，总耗时 p50 {ms(q.metrics.totalMs?.p50)}，TTFT p50{" "}
-										{ms(q.metrics.ttftMs?.p50)}
-									</li>
-								))}
-							</ul>
-							<button type="button" class="link" disabled={busy} onClick={() => raw(r.runId)} data-testid="history-raw-button">
-								下载原始数据
-							</button>
-						</li>
+						<HistoryRun key={r.runId} run={r} busy={busy} onRaw={raw} />
 					))}
 				</ul>
 			)}
