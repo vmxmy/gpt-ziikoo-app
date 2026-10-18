@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { MonitorResponse } from "../shared/monitor.ts";
-import { fetchMonitor, probeSite } from "./api.ts";
+import { probeSite } from "./api.ts";
 import {
 	canAdd,
 	cardMonitor,
@@ -24,34 +23,10 @@ import { MonitorCard } from "./monitor-card.tsx";
 import { monitorView } from "./monitor-view.ts";
 import { normalizeKey } from "./results.ts";
 
-const REFRESH_MS = 60_000;
 const TICK_MS = 1_000;
-const OFFICIAL_HOST = "gaoxin.net.cn";
 
 // Keys live only in this module-level map: never in component state, storage, the URL or the DOM.
 const keys: KeyStore = new Map<string, string>();
-
-function useOfficialMonitor(): MonitorResponse | null | undefined {
-	const [data, setData] = useState<MonitorResponse | null | undefined>(undefined);
-	useEffect(() => {
-		let timer: ReturnType<typeof setInterval> | undefined;
-		const refresh = () => fetchMonitor().then(setData);
-		const schedule = () => {
-			clearInterval(timer);
-			timer = undefined;
-			if (document.hidden) return;
-			refresh();
-			timer = setInterval(refresh, REFRESH_MS);
-		};
-		schedule();
-		document.addEventListener("visibilitychange", schedule);
-		return () => {
-			clearInterval(timer);
-			document.removeEventListener("visibilitychange", schedule);
-		};
-	}, []);
-	return data;
-}
 
 // Storage can be blocked (private mode, site data disabled); custom monitoring then lives only for this page.
 function loadCards(): CustomCard[] {
@@ -209,7 +184,6 @@ function CustomMonitorCard(props: CardHandlers & { card: CustomCard; now: number
 }
 
 export function Monitor({ questionIds }: { questionIds: string[] }) {
-	const official = useOfficialMonitor();
 	const m = useCustomMonitors(questionIds);
 	const [adding, setAdding] = useState(false);
 	const full = !canAdd(m.cards);
@@ -233,7 +207,6 @@ export function Monitor({ questionIds }: { questionIds: string[] }) {
 			</div>
 			{adding && !full && <AddSiteForm ready={questionIds.length > 0} onAdd={m.add} onClose={() => setAdding(false)} />}
 			<div class="grid card-grid">
-				<MonitorCard testPrefix="monitor" rootTestId="monitor-section" host={OFFICIAL_HOST} source="官方监测" view={monitorView(official)} now={Date.now()} />
 				{m.cards.map((card) => (
 					<CustomMonitorCard key={card.id} card={card} now={m.now} onPause={m.pause} onResume={m.resume} onRemove={m.remove} />
 				))}

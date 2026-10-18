@@ -1,7 +1,4 @@
-import { MONITOR, type MonitorResponse, type MonitorState } from "../src/shared/monitor.ts";
 import { expect, test } from "./fixtures.ts";
-
-const MONITOR_STATES: MonitorState[] = ["operational", "degraded", "down", "no_data"];
 
 test("页面加载,题目清单,题面展开与复制和接口逐字节一致", async ({ page, context, questions }) => {
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -36,37 +33,8 @@ test("首屏在 CSP 下无违规", async ({ page }) => {
 	});
 	await page.goto("/");
 	await expect(page.getByTestId("start-button")).toBeVisible();
-	await expect(page.getByTestId("monitor-badge")).toBeVisible();
+	await expect(page.getByTestId("monitor-add-card")).toBeVisible();
 	expect(violations).toEqual([]);
-});
-
-test("监测区块与 /api/monitor 一致", async ({ page, request }) => {
-	const res = await request.get("/api/monitor");
-	await page.goto("/");
-	const badge = page.getByTestId("monitor-badge");
-	await expect(badge).toBeVisible();
-	if (res.status() === 404) {
-		await expect(badge).toHaveAttribute("data-state", "no_data");
-		await expect(page.getByTestId("monitor-section")).toContainText("暂无数据");
-		return;
-	}
-	expect(res.status()).toBe(200);
-	const monitor: MonitorResponse = await res.json();
-	expect(monitor).toEqual(
-		expect.objectContaining({
-			target: expect.any(String),
-			intervalSec: expect.any(Number),
-			bucketMin: expect.any(Number),
-			generatedAt: expect.any(Number),
-		}),
-	);
-	expect(MONITOR_STATES).toContain(monitor.state);
-	expect(monitor.buckets).toHaveLength(MONITOR.buckets);
-	for (const bucket of monitor.buckets) expect(MONITOR_STATES).toContain(bucket.state);
-	await expect(badge).toHaveAttribute("data-state", monitor.state);
-	await expect(page.getByTestId("monitor-bar")).toBeVisible();
-	await expect(page.getByTestId("monitor-segment")).toHaveCount(MONITOR.buckets);
-	for (const id of ["monitor-chart", "monitor-uptime", "monitor-correct"]) await expect(page.getByTestId(id)).toBeAttached();
 });
 
 test("手机宽度无横向滚动", async ({ page }, testInfo) => {

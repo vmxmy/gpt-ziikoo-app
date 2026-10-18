@@ -6,12 +6,12 @@ import { CHART, chartModel, xOf, xTickIndexes, type Point } from "./chart.ts";
 import {
 	badgeLabel,
 	clock,
-	EMPTY_NOTICE,
 	emptyBuckets,
 	latencyP50,
 	metaLine,
 	segmentLabel,
 	type MonitorView,
+	WAITING_NOTICE,
 } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
 
@@ -33,8 +33,8 @@ export type CardProps = {
 
 export function MonitorCard(props: CardProps) {
 	const { testPrefix: t, view } = props;
-	const data = "data" in view ? view.data : null;
-	const buckets = data?.buckets.length === MONITOR.buckets ? data.buckets : emptyBuckets();
+	const { data } = view;
+	const buckets = data.buckets.length === MONITOR.buckets ? data.buckets : emptyBuckets();
 	const headingId = `${t}-h`;
 	return (
 		<section class="card monitor-card" aria-labelledby={headingId} data-testid={props.rootTestId}>
@@ -46,24 +46,19 @@ export function MonitorCard(props: CardProps) {
 				{props.actions && <div class="card-actions">{props.actions}</div>}
 			</header>
 			<div class="card-status">
-				<p
-					class="status-badge"
-					data-testid={`${t}-badge`}
-					data-state={data?.state ?? "no_data"}
-					data-configured={view.kind === "disabled" ? "false" : undefined}
-				>
+				<p class="status-badge" data-testid={`${t}-badge`} data-state={data.state}>
 					{badgeLabel(view)}
 				</p>
-				{data && <p class="meta">{metaLine(data, props.now, props.protocol)}</p>}
+				<p class="meta">{metaLine(data, props.now, props.protocol)}</p>
 			</div>
 			{props.children}
-			<Metrics t={t} uptime={data?.uptimePct ?? null} correct={data?.correctPct ?? null} p50={latencyP50(buckets)} />
+			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />
 			<StatusBar t={t} buckets={buckets} />
 			{view.kind === "live" ? (
 				<Chart t={t} buckets={buckets} />
 			) : (
 				<p class="chart-empty" data-testid={`${t}-chart`} data-kind={view.kind}>
-					{EMPTY_NOTICE[view.kind]}
+					{WAITING_NOTICE}
 				</p>
 			)}
 		</section>

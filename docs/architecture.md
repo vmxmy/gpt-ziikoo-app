@@ -75,12 +75,12 @@ DO 类用配置里的 `exports` 声明存储引擎,例如 `exports.durableObject
 
 实际配置就是仓库根目录的 `cloudflare.config.ts`,以它为准。构建产物 `.cloudflare/output/v0/workers/default/worker.config.json` 能看到工具链实际识别出的字段。已核实的写法:
 
-- `domains`、`workersDev`、`previewUrls` 是 `worker` 下的字段;定时触发是 `triggers: [triggers.scheduled({ schedule })]`,`triggers` 从 `cf/config` 导入。
+- `domains`、`workersDev`、`previewUrls` 是 `worker` 下的字段。
 - Durable Object 用 `exports: { Name: exports.durableObject({ storage: "sqlite" }) }` 声明,同一个 Worker 内通过 `ctx.exports.Name` 访问,需要兼容性标志 `enable_ctx_exports`。
 - 秘密用 `bindings.secret()` 声明,文本变量用 `bindings.text()`,限速用 `bindings.rateLimit({ namespace, simple })`,`namespace` 写成字符串即可,构建与部署都接受。
 - `worker.assets` 的键是 camelCase(`runWorkerFirst`),`worker.observability` 同理。
 
-秘密的规矩:`cf deploy` 在任何已声明的秘密没有值时拒绝部署。`PEPPER` 与 `GAOXIN_KEY` 都通过 `--secrets-file` 随版本上传,文件放在 0600 权限的临时位置,用完即删。之后的部署不带 `--secrets-file` 也会保留已有的秘密值。
+秘密的规矩:`cf deploy` 在任何已声明的秘密没有值时拒绝部署。`PEPPER` 通过 `--secrets-file` 随版本上传,文件放在 0600 权限的临时位置,用完即删。之后的部署不带 `--secrets-file` 也会保留已有的秘密值。
 
 ## 目录
 
@@ -137,22 +137,10 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 
 | 资源 | 说明 |
 | --- | --- |
-| Worker `gpt-ziikoo-app` | 自定义域 `gpt.ziikoo.app`,定时触发 `* * * * *`,`workers.dev` 与预览地址关闭 |
+| Worker `gpt-ziikoo-app` | 自定义域 `gpt.ziikoo.app`,`workers.dev` 与预览地址关闭 |
 | Durable Object `Target` | 每 [站点 × 密钥] 对象一实例,存最近 10 轮 |
-| Durable Object `Monitor` | 单例,名字 `gaoxin`,存 7 天监测样本 |
 | Worker `gpt-ziikoo-mock-relay` | e2e 用的 mock 中转站,`https://gpt-ziikoo-mock-relay.blueyang.workers.dev`,不绑域名。任何人都能访问,它不存任何东西 |
 | 秘密 `PEPPER` | 备份在维护者本机 `~/.config/gpt-ziikoo-app/pepper`,权限 0600。**不可轮换**:换掉它会让全部历史对象失联 |
-| 秘密 `GAOXIN_KEY` | 目前是占位 `unset`,监测静默跳过。换成真密钥的方法见下 |
-
-换入真正的监测密钥(密钥不会出现在命令行历史和对话里):
-
-```sh
-cd ~/github/gpt-ziikoo-app
-( umask 077; read -rs "K?监测密钥: "; echo; printf '{"GAOXIN_KEY":"%s"}' "$K" > "$TMPDIR/gk.json" )
-pnpm build && cf deploy --prebuilt --mode production --secrets-file "$TMPDIR/gk.json"; rm -f "$TMPDIR/gk.json"
-```
-
-之后约 1 分钟内就会有第一个样本。`GET /api/monitor` 有 60 秒边缘缓存,页面最多晚一分钟看到。
 
 日常部署:
 

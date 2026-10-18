@@ -1,12 +1,11 @@
 import type { Page } from "@playwright/test";
-import { MONITOR, type MonitorResponse, type MonitorState } from "../src/shared/monitor.ts";
+import { MONITOR } from "../src/shared/monitor.ts";
 import { expect, test } from "./fixtures.ts";
 
 // Every add probes the shared mock host once, and an open card probes again each minute. Serial
 // tests keep those calls from bunching up next to run.spec's ladders.
 test.describe.configure({ mode: "serial", retries: 0 });
 
-const STATES: MonitorState[] = ["operational", "degraded", "down", "no_data"];
 const STORAGE_KEY = "gpt.monitors.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
 
@@ -51,24 +50,6 @@ async function addOneGood(page: Page, site: string, key: string): Promise<string
 	await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "operational", { timeout: 30_000 });
 	return id;
 }
-
-test("官方卡片:徽标、未启用说明、48 格且 testid 唯一", async ({ page, request }) => {
-	const res = await request.get("/api/monitor");
-	expect(res.status()).toBe(200);
-	const monitor: MonitorResponse = await res.json();
-	await page.goto("/");
-	const badge = page.getByTestId("monitor-badge");
-	await expect(badge).toBeVisible();
-	expect(STATES).toContain(await badge.getAttribute("data-state"));
-	if (monitor.configured === false) {
-		await expect(badge).toHaveAttribute("data-configured", "false");
-		await expect(page.getByTestId("monitor-section")).toContainText("监测尚未启用");
-	}
-	await expect(page.getByTestId("monitor-segment")).toHaveCount(MONITOR.buckets);
-	for (const id of ["monitor-section", "monitor-badge", "monitor-bar", "monitor-chart", "monitor-uptime", "monitor-correct"]) {
-		await expect(page.getByTestId(id)).toHaveCount(1);
-	}
-});
 
 test("添加自定义站点后立即探测,密钥不进本地存储与页面", async ({ page, site, key }) =>
 	cleaned(page, async () => {
