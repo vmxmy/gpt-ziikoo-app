@@ -230,7 +230,7 @@ describe("probe", () => {
 		expect(JSON.stringify(result)).not.toContain(KEY);
 	});
 
-	it("records a buffered event stream as not streamed and leaves TTFT empty", async () => {
+	it("measures TTFT as the arrival of the first delta even when it shares a chunk with the final event", async () => {
 		const { deps } = fakeUpstream({
 			status: 200,
 			ttfb: 100,
@@ -245,7 +245,7 @@ describe("probe", () => {
 			],
 		});
 		const result = await probe(input({}), deps);
-		expect(result.response).toMatchObject({ ok: true, correct: true, streamed: false, ttftMs: null });
+		expect(result.response).toMatchObject({ ok: true, correct: true, streamed: true, ttftMs: 900 });
 		expect(result.capture.rawEvents?.map((e) => e.t)).toEqual([150, 900, 900]);
 	});
 

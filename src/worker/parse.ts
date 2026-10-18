@@ -161,21 +161,18 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 		error ||= isError(p);
 		if (get(p, "type") === "response.completed") completedText = fullText(get(p, "response"));
 	}
-	// A relay that buffers the stream delivers the first delta together with the last event, so its arrival time is not a TTFT.
-	const lastEventT = events[events.length - 1]?.t;
-	const streamed = ttftMs !== null && lastEventT !== undefined && ttftMs < lastEventT;
 	// Per-event redaction misses a key the tokenizer split across deltas. The events are dropped rather than rewritten:
 	// mapping the key's span in the joined text back onto delta substrings is fragile, and an echoed key is already abnormal.
 	const joined = text || completedText;
 	const answer = redact(joined, key);
 	const rawDropped = answer !== joined;
 	return {
-		streamed,
+		streamed: true,
 		rawBody: null,
 		rawEvents: rawDropped ? null : events,
 		rawDropped,
 		text: answer,
-		ttftMs: streamed ? ttftMs : null,
+		ttftMs,
 		usage,
 		id,
 		error,
