@@ -33,11 +33,11 @@
 ## 请求分层
 
 ```
-请求 → WAF 限速(按 IP,边缘,封禁期内直接拦)
+请求 → WAF 限速(Free zone 只有 1 条规则,10 秒窗口,按 IP,当洪水闸)
      → 静态资源(页面,不唤醒 Worker)
      → Worker(仅 /api/*)
           ├ 解析与校验请求体
-          ├ 限速绑定(键 = 目标主机)
+          ├ 限速绑定(键 = 调用方 IP,60 秒;键 = 目标主机,60 秒)
           ├ 代发,流式读取并计字节与计时,120 秒超时
           ├ 评分
           └ 带 runId 则写入对象(DO),写入前脱敏
@@ -67,8 +67,12 @@
   "assets": { "directory": "./dist/client", "run_worker_first": ["/api/*"] },
   "durable_objects": { "bindings": [{ "name": "TARGETS", "class_name": "Target" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Target"] }],
-  "ratelimits": [{ "name": "HOST_LIMITER", "namespace_id": "<唯一整数>",
-                   "simple": { "limit": 60, "period": 60 } }],
+  "ratelimits": [
+    { "name": "IP_LIMITER", "namespace_id": "<唯一整数>",
+      "simple": { "limit": 150, "period": 60 } },
+    { "name": "HOST_LIMITER", "namespace_id": "<另一个唯一整数>",
+      "simple": { "limit": 60, "period": 60 } }
+  ],
   "observability": {
     "enabled": true,
     "logs": { "invocation_logs": false, "head_sampling_rate": 1 },
@@ -114,9 +118,9 @@ Workers Builds 管理部署凭证,GitHub 里不放部署令牌(推断,首次接�
 
 ## 未核实,实现前必须验证
 
-1. `ziikoo.app` 这个 zone 的套餐。它决定 WAF 限速的计数窗口与规则条数。官方文档的可用窗口为 Free 10 秒、Pro 最长 1 分钟、Business 最长 10 分钟。
-2. Bot Fight Mode 或 Super Bot Fight Mode 是否会质询匿名脚本,以及对 `/api/*` 的跳过规则怎么配。
-3. WAF 限速规则可选的计数特征随套餐不同,只确认了「按 IP」。
+1. `ziikoo.app` 这个 zone 当前 Bot Fight Mode 是开是关,以及该 zone 上是否还有别的站点依赖它。官方文档写明 Bot Fight Mode 不能被任何规则跳过,开着会质询匿名脚本,必须关。
+2. Free zone 的 WAF 限速规则被触发时,响应头是否带 `Retry-After`。文档只写明默认响应码 429,新旧两版文档对这一点说法不同,没有定论。
+3. 限速绑定在多节点下的实际放行量。P1 用压测确认,决定是否提前引入限速 Durable Object。
 4. 兼容性标志 `global_fetch_strictly_public` 的语义。启用前读文档。
 5. Cloudflare Vite 插件的版本与配置,读它的入门页。
 6. DO SQLite 的单行大小上限,我没有查到。原始数据单次上限 256KB,必须先确认在行限制之内。
