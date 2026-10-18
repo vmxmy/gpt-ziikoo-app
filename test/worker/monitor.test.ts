@@ -109,7 +109,7 @@ describe("scheduled", () => {
 		expect(requests).toEqual(["https://api.gaoxin.net.cn/v1/responses"]);
 		expect(names).toEqual(["gaoxin"]);
 		expect(recorded).toEqual([
-			{ ts: minuteForThibault, question: "thibault", ok: true, correct: true, reason: null, httpStatus: 200, totalMs: 0, ttfbMs: 0, ttftMs: null },
+			{ ts: minuteForThibault, question: "thibault", ok: true, correct: true, reason: null, httpStatus: 200, totalMs: 0, ttfbMs: 0, ttftMs: 0 },
 		]);
 		expect(JSON.stringify(recorded)).not.toContain("know him");
 		expect(JSON.parse(log.mock.calls[0][0])).toEqual({
