@@ -1,4 +1,4 @@
-import { bindings, defineConfig, exports } from "cf/config";
+import { bindings, defineConfig, exports, triggers } from "cf/config";
 import * as entrypoint from "./src/worker/index.ts" with { type: "cf-worker" };
 
 export default defineConfig({
@@ -10,14 +10,19 @@ export default defineConfig({
 		domains: ["gpt.ziikoo.app"],
 		workersDev: false,
 		previewUrls: false,
+		triggers: [triggers.scheduled({ schedule: "* * * * *" })],
 		assets: { runWorkerFirst: ["/api/*"] },
 		exports: {
 			Target: exports.durableObject({ storage: "sqlite" }),
+			Monitor: exports.durableObject({ storage: "sqlite" }),
 		},
 		env: {
 			PEPPER: bindings.secret(),
+			GAOXIN_KEY: bindings.secret(),
+			MONITOR_SITE: bindings.text("https://api.gaoxin.net.cn"),
+			MONITOR_MODEL: bindings.text("gpt-6-astra"),
 			IP_LIMITER: bindings.rateLimit({ namespace: "7101", simple: { limit: 150, period: 60 } }),
-			HOST_LIMITER: bindings.rateLimit({ namespace: "7102", simple: { limit: 60, period: 60 } }),
+			HOST_LIMITER: bindings.rateLimit({ namespace: "7102", simple: { limit: 120, period: 60 } }),
 		},
 		observability: {
 			enabled: true,
