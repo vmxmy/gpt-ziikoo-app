@@ -1,0 +1,426 @@
+:root {
+	--bg: #ffffff;
+	--fg: #1a1a1a;
+	--muted: #5f6368;
+	--border: #d8dadf;
+	--surface: #f5f6f8;
+	--accent: #1f5fd1;
+	--focus: #1f5fd1;
+	--ok: #1a7f37;
+	--warn: #b06000;
+	--bad: #c5221f;
+	--none: #80868b;
+	--pending: #3b6fd1;
+	color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #15171a;
+		--fg: #e8eaed;
+		--muted: #a0a4aa;
+		--border: #3a3d42;
+		--surface: #1f2226;
+		--accent: #8ab4f8;
+		--focus: #8ab4f8;
+		--ok: #5bb974;
+		--warn: #fcad70;
+		--bad: #f28b82;
+		--none: #4a4e54;
+		--pending: #5c7fb8;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font: 16px/1.6 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+	overflow-wrap: anywhere;
+}
+
+main {
+	max-width: 880px;
+	margin: 0 auto;
+	padding: 24px 16px 64px;
+}
+
+h1 {
+	font-size: 1.75rem;
+	margin: 0 0 8px;
+}
+
+h2 {
+	font-size: 1.25rem;
+	margin: 32px 0 12px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+
+h3 {
+	font-size: 1rem;
+	margin: 16px 0 8px;
+}
+
+p {
+	margin: 4px 0;
+}
+
+a,
+.link {
+	color: var(--accent);
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+button {
+	font: inherit;
+	padding: 6px 14px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--surface);
+	color: var(--fg);
+	cursor: pointer;
+}
+
+button[type="submit"] {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--bg);
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+button.link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+input:not([type="checkbox"]) {
+	font: inherit;
+	width: 100%;
+	min-width: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--fg);
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.warn {
+	color: var(--warn);
+}
+
+.notice {
+	padding: 8px 12px;
+	border-left: 3px solid var(--border);
+	background: var(--surface);
+}
+
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin: 8px 0;
+}
+
+.questions,
+.lanes,
+.history {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.question,
+.lane,
+.history > li {
+	padding: 12px 0;
+	border-bottom: 1px solid var(--border);
+}
+
+.question-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.tag {
+	font-size: 0.8rem;
+	font-weight: 400;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--muted);
+}
+
+pre {
+	margin: 8px 0;
+	padding: 12px;
+	background: var(--surface);
+	border-radius: 6px;
+	white-space: pre-wrap;
+	tab-size: 8;
+	font: 0.9rem/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+	overflow-wrap: anywhere;
+}
+
+.form {
+	display: grid;
+	gap: 12px;
+}
+
+.form label {
+	display: grid;
+	gap: 4px;
+}
+
+.form label .row {
+	flex-wrap: nowrap;
+	margin: 0;
+}
+
+.form label .row button {
+	flex: none;
+}
+
+.lane-title {
+	font-weight: 600;
+}
+
+.stages {
+	list-style: none;
+	margin: 4px 0 0;
+	padding: 0;
+	display: grid;
+	gap: 4px;
+}
+
+.stage {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+}
+
+.stage > .muted {
+	min-width: 9em;
+	font-size: 0.875rem;
+}
+
+.dots {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.call-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--none);
+}
+
+.call-dot[data-state="pending"] {
+	background: var(--pending);
+}
+
+.call-dot[data-state="ok"] {
+	background: var(--ok);
+}
+
+.call-dot[data-state="wrong"] {
+	border-radius: 2px;
+	background: var(--bad);
+}
+
+.call-dot[data-state="fail"] {
+	background: var(--warn);
+}
+
+.overall {
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.overall[data-status="all_passed"],
+.verdict[data-status="passed"] h3 {
+	color: var(--ok);
+}
+
+.overall[data-status="failed"],
+.verdict[data-status="failed"] h3 {
+	color: var(--bad);
+}
+
+.overall[data-status="partial"],
+.overall[data-status="unavailable"],
+.verdict[data-status="unavailable"] h3 {
+	color: var(--warn);
+}
+
+.verdict {
+	margin-top: 16px;
+}
+
+.table-wrap {
+	overflow-x: auto;
+	margin: 8px 0;
+}
+
+table {
+	border-collapse: collapse;
+	font-size: 0.875rem;
+}
+
+th,
+td {
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+	vertical-align: top;
+	white-space: nowrap;
+}
+
+td.answer,
+.advice td {
+	white-space: normal;
+	min-width: 16em;
+}
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-weight: 600;
+}
+
+.badge::before {
+	content: "";
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--none);
+}
+
+.badge[data-state="operational"]::before,
+.segment[data-state="operational"] {
+	background: var(--ok);
+}
+
+.badge[data-state="degraded"]::before,
+.segment[data-state="degraded"] {
+	background: var(--warn);
+}
+
+.badge[data-state="down"]::before,
+.segment[data-state="down"] {
+	background: var(--bad);
+}
+
+.bar {
+	display: flex;
+	gap: 2px;
+	height: 32px;
+	margin: 12px 0;
+}
+
+.segment {
+	flex: 1 1 0;
+	min-width: 0;
+	border-radius: 2px;
+	background: var(--none);
+}
+
+.chart {
+	margin: 12px 0;
+}
+
+.chart svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.chart .grid {
+	stroke: var(--border);
+	stroke-width: 1;
+}
+
+.chart .axis {
+	fill: var(--muted);
+	font-size: 12px;
+}
+
+.line-total,
+.line-ttft {
+	fill: none;
+	stroke-width: 2;
+	stroke-linejoin: round;
+}
+
+.line-total {
+	stroke: var(--accent);
+}
+
+.line-ttft {
+	stroke: var(--warn);
+}
+
+.key::before {
+	content: "";
+	display: inline-block;
+	width: 16px;
+	height: 2px;
+	margin-right: 4px;
+	vertical-align: middle;
+}
+
+.key-total::before {
+	background: var(--accent);
+}
+
+.key-ttft::before {
+	background: var(--warn);
+}
+
+.docs summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.docs {
+	margin-top: 32px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+
+code {
+	font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 0.9em;
+}
