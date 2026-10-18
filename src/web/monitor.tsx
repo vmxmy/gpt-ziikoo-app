@@ -231,7 +231,7 @@ export function Monitor({ questionIds }: { questionIds: string[] }) {
 					</button>
 				</div>
 			</div>
-			{adding && !full && <AddSiteForm onAdd={m.add} onClose={() => setAdding(false)} />}
+			{adding && !full && <AddSiteForm ready={questionIds.length > 0} onAdd={m.add} onClose={() => setAdding(false)} />}
 			<div class="grid card-grid">
 				<MonitorCard testPrefix="monitor" rootTestId="monitor-section" host={OFFICIAL_HOST} source="官方监测" view={monitorView(official)} now={Date.now()} />
 				{m.cards.map((card) => (
