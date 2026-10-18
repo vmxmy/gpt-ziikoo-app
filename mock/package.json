@@ -1,0 +1,9 @@
+{
+	"name": "gpt-ziikoo-mock-relay",
+	"private": true,
+	"type": "module",
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "2.0.0-beta.v.1",
+		"vite": "^8.3.4"
+	}
+}
