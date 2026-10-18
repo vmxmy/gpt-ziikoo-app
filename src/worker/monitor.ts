@@ -6,6 +6,8 @@ import type { ProbeResult } from "./probe.ts";
 
 export const MONITOR_NAME = "gaoxin";
 export const MONITOR_TARGET = "gaoxin.net.cn";
+// `cf deploy` refuses to deploy while a declared secret has no value, so a deployment without the real key uploads this placeholder.
+export const NO_KEY = "unset";
 
 export function monitorQuestions(): Question[] {
 	return activeQuestions()
