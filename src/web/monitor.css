@@ -88,11 +88,6 @@
 	background: var(--bad);
 }
 
-.status-badge[data-configured="false"]::before {
-	background: transparent;
-	box-shadow: inset 0 0 0 2px var(--fg-3);
-}
-
 .meta,
 .footnote {
 	color: var(--fg-3);

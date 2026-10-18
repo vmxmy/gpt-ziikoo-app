@@ -1,14 +1,7 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
 
-export type MonitorView =
-	| { kind: "loading" }
-	| { kind: "unavailable" }
-	| { kind: "disabled"; data: MonitorResponse }
-	| { kind: "waiting"; data: MonitorResponse }
-	| { kind: "live"; data: MonitorResponse };
-
-export type EmptyKind = Exclude<MonitorView["kind"], "live">;
+export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };
 
 export const STATE_LABEL: Record<MonitorState, string> = {
 	operational: "运行正常",
@@ -17,26 +10,13 @@ export const STATE_LABEL: Record<MonitorState, string> = {
 	no_data: "暂无数据",
 };
 
-export const EMPTY_NOTICE: Record<EmptyKind, string> = {
-	loading: "正在读取监测数据…",
-	unavailable: "监测暂不可用，稍后刷新页面再看。",
-	disabled: "监测尚未启用：运营方还没有配置监测密钥。配置后这里会每分钟更新。",
-	waiting: "等待第一个样本。按设定间隔探测，第一次结果出来后这里会更新。",
-};
+export const WAITING_NOTICE = "等待第一个样本。按设定间隔探测，第一次结果出来后这里会更新。";
 
-// undefined means the first request has not settled; null means it failed.
-export function monitorView(data: MonitorResponse | null | undefined): MonitorView {
-	if (data === undefined) return { kind: "loading" };
-	if (data === null) return { kind: "unavailable" };
-	if (!data.configured) return { kind: "disabled", data };
-	if (data.last === null) return { kind: "waiting", data };
-	return { kind: "live", data };
+export function monitorView(data: MonitorResponse): MonitorView {
+	return { kind: data.last === null ? "waiting" : "live", data };
 }
 
-export function badgeLabel(view: MonitorView): string {
-	if (view.kind === "disabled") return "未启用";
-	return STATE_LABEL["data" in view ? view.data.state : "no_data"];
-}
+export const badgeLabel = (view: MonitorView): string => STATE_LABEL[view.data.state];
 
 export function agoText(ts: number, now: number): string {
 	const minutes = Math.max(0, Math.floor((now - ts) / 60_000));

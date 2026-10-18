@@ -1,9 +1,7 @@
 import { activeQuestions } from "../../questions/index.ts";
-import { buildMonitor, MONITOR } from "../shared/monitor.ts";
 import type { ApiError, HistoryDeleteResponse, HistoryResponse, Question } from "../shared/types.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
-import { MONITOR_NAME, MONITOR_TARGET, NO_KEY, monitorQuestions, pickQuestion, toSample } from "./monitor.ts";
 import { probe, type ProbeResult } from "./probe.ts";
 import {
 	type HistoryCommand,
@@ -13,11 +11,8 @@ import {
 	type ProbeCommand,
 	type RunRef,
 } from "./request.ts";
-import { parseSite } from "./target-url.ts";
-
 import type { Target } from "./target.ts";
 
-export { Monitor } from "./monitor.ts";
 export { Target } from "./target.ts";
 
 type Handler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
@@ -28,7 +23,6 @@ const API_HEADERS = {
 	"X-Content-Type-Options": "nosniff",
 };
 const RETRY_AFTER_SEC = 60;
-const MONITOR_WINDOW_MS = (MONITOR.buckets + 1) * MONITOR.bucketMin * 60_000;
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
 	return new Response(JSON.stringify(body), { status, headers: { ...API_HEADERS, ...headers } });
@@ -143,51 +137,8 @@ const handleHistoryDelete: Handler = async (request, env, ctx) => {
 	return json({ deleted: true } satisfies HistoryDeleteResponse);
 };
 
-function monitorStub(ctx: ExecutionContext) {
-	return ctx.exports.Monitor.get(ctx.exports.Monitor.idFromName(MONITOR_NAME));
-}
-
-// The only cacheable route: public data, and the edge cache keeps page views off the singleton object.
-// The key drops the query string so `?x=1` cannot bypass the cache.
-const handleMonitor: Handler = async (request, env, ctx) => {
-	const url = new URL(request.url);
-	const key = new Request(`${url.origin}${url.pathname}`);
-	const cached = await caches.default.match(key);
-	if (cached) return cached;
-	const now = Date.now();
-	const samples = await monitorStub(ctx).since(now - MONITOR_WINDOW_MS);
-	const configured = Boolean(env.GAOXIN_KEY) && env.GAOXIN_KEY !== NO_KEY;
-	const response = json(buildMonitor(samples, now, MONITOR_TARGET, configured), 200, { "Cache-Control": "public, max-age=60" });
-	ctx.waitUntil(caches.default.put(key, response.clone()));
-	return response;
-};
-
-async function runMonitor(scheduledTime: number, env: Env, ctx: ExecutionContext): Promise<void> {
-	if (!env.GAOXIN_KEY || env.GAOXIN_KEY === NO_KEY) {
-		console.log(JSON.stringify({ event: "monitor_skipped", reason: "no_key" }));
-		return;
-	}
-	const site = parseSite(env.MONITOR_SITE);
-	if (!site.ok) throw new Error("MONITOR_SITE is not an allowed https origin");
-	const question = pickQuestion(monitorQuestions(), scheduledTime);
-	const result = await probe({
-		origin: site.origin,
-		key: env.GAOXIN_KEY,
-		protocol: "responses",
-		model: env.MONITOR_MODEL,
-		question,
-		effort: question.defaultEffort ?? null,
-	});
-	const { httpStatus, totalMs } = result.capture;
-	console.log(
-		JSON.stringify({ event: "monitor", host: site.host, question: question.id, outcome: outcome(result), httpStatus, totalMs }),
-	);
-	await monitorStub(ctx).record(toSample(scheduledTime, question.id, result));
-}
-
 const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/questions": { GET: handleQuestions },
-	"/api/monitor": { GET: handleMonitor },
 	"/api/probe": { POST: handleProbe },
 	"/api/history": { POST: handleHistory },
 	"/api/history/raw": { POST: handleHistoryRaw },
@@ -203,8 +154,5 @@ export default {
 			return apiError(405, { error: "bad_request", message: "方法不允许" }, { Allow: Object.keys(route).join(", ") });
 		}
 		return handler(request, env, ctx);
-	},
-	async scheduled(controller, env, ctx) {
-		await runMonitor(controller.scheduledTime, env, ctx);
 	},
 } satisfies ExportedHandler<Env>;

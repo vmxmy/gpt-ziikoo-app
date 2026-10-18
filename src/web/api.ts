@@ -1,4 +1,3 @@
-import type { MonitorResponse } from "../shared/monitor.ts";
 import type { ApiError, HistoryRawResponse, HistoryResponse, ProbeRequest, ProbeResponse, QuestionListItem } from "../shared/types.ts";
 import type { SiteProbe } from "./custom-monitor.ts";
 import type { Probe, ProbeOutcome } from "./runner.ts";
@@ -65,19 +64,3 @@ export const probeSite: SiteProbe = (body) => probeOnce(body);
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);
 export const fetchHistoryRaw = (t: Target, runId: string) => postJson<HistoryRawResponse>("/api/history/raw", { ...t, runId });
 export const deleteHistory = (t: Target) => postJson<{ deleted: boolean }>("/api/history/delete", t);
-
-// A response the edge cached before `configured` existed (up to 60 seconds after a deploy) counts as configured.
-export function parseMonitor(body: unknown): MonitorResponse | null {
-	if (typeof body !== "object" || body === null) return null;
-	const m = body as Partial<MonitorResponse>;
-	if (typeof m.state !== "string" || !Array.isArray(m.buckets)) return null;
-	if (m.configured !== undefined && typeof m.configured !== "boolean") return null;
-	return { ...(m as MonitorResponse), configured: m.configured ?? true };
-}
-
-// Any failure reads as "unavailable" rather than an error.
-export async function fetchMonitor(): Promise<MonitorResponse | null> {
-	const res = await fetch("/api/monitor").catch(() => null);
-	if (!res?.ok) return null;
-	return parseMonitor(await res.json().catch(() => null));
-}

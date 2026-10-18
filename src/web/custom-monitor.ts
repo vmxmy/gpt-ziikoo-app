@@ -120,7 +120,7 @@ export const pauseCard = (card: CustomCard): CustomCard => ({ ...card, status: {
 export const resumeCard = (card: CustomCard, now: number): CustomCard => ({ ...card, status: { kind: "running" }, nextAt: now, unauthorized: 0 });
 
 export function cardMonitor(card: CustomCard, now: number): MonitorResponse {
-	return { ...buildMonitor(card.samples, now, card.host, true), intervalSec: card.intervalMin * 60 };
+	return { ...buildMonitor(card.samples, now, card.host), intervalSec: card.intervalMin * 60 };
 }
 
 export function statusNotice(status: CardStatus, now: number): string | null {
