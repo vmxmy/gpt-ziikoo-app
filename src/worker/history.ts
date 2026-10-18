@@ -90,7 +90,14 @@ function raceCounted(calls: CallRecord[]): CallRecord[] {
 	return calls.filter((c) => c.stage !== 1 || c.protocol === "responses");
 }
 
-// A stage-1 protocol race mixes protocols in one run, so model and protocol come from the latest call.
+// The two race calls share stage 1 and seq 1 and are stored in arbitrary order, so the latest call cannot name the protocol the page continued with.
+function runProtocol(calls: CallRecord[]): Protocol {
+	const protocols = new Set(calls.map((c) => c.protocol));
+	if (protocols.size === 1) return calls[0].protocol;
+	const answered = calls.filter((c) => c.stage === 1 && c.seq === 1 && c.ok);
+	return answered.length > 0 && !answered.some((c) => c.protocol === "responses") ? "chat" : "responses";
+}
+
 function runView(runId: string, calls: CallRecord[], kindOf: (id: string) => QuestionKind | undefined): RunView {
 	const ordered = [...calls].sort((a, b) => a.startedAt - b.startedAt);
 	const latest = ordered[ordered.length - 1];
@@ -101,7 +108,7 @@ function runView(runId: string, calls: CallRecord[], kindOf: (id: string) => Que
 		metrics: questionMetrics(qCalls),
 	}));
 	const overall = summarizeRun(questions.flatMap((q) => (q.verdict ? [q.verdict.status] : [])));
-	return { runId, startedAt: ordered[0].startedAt, model: latest.model, protocol: latest.protocol, overall, questions };
+	return { runId, startedAt: ordered[0].startedAt, model: latest.model, protocol: runProtocol(ordered), overall, questions };
 }
 
 export function buildRunViews(records: CallRecord[], kindOf: (id: string) => QuestionKind | undefined): RunView[] {

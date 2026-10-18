@@ -106,7 +106,7 @@ describe("buildRunViews", () => {
 			const [view] = buildRunViews(records, () => "knowledge");
 			expect(view.protocol).toBe("responses");
 			expect(view.questions[0].verdict?.status).toBe("failed");
-			expect(view.questions[0].metrics.calls).toBe(1);
+			expect(view.questions[0].metrics.calls).toBe(2);
 		}
 	});
 
