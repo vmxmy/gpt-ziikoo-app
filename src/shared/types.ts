@@ -23,6 +23,7 @@ export type QuestionMeta = {
 };
 
 export type Question = QuestionMeta & { prompt: string };
+export type QuestionListItem = Omit<Question, "scorer">;
 
 export type IdShape = "hex" | "ft" | "base64" | "other";
 
