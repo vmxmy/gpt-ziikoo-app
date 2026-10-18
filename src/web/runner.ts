@@ -43,6 +43,19 @@ export type RunOptions = {
 };
 
 export const CONCURRENCY = 4;
+export const RATE_LIMIT_RETRIES = 3;
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const done = () => {
+			clearTimeout(timer);
+			signal.removeEventListener("abort", done);
+			resolve();
+		};
+		const timer = setTimeout(done, ms);
+		signal.addEventListener("abort", done);
+	});
+}
 
 export function callState(a: Attempt): CallState {
 	if (!a.done) return "pending";
@@ -82,16 +95,26 @@ export async function runLadder(opts: RunOptions): Promise<RunSnapshot> {
 		onUpdate?.(snap);
 	};
 
+	async function probeOnce(args: ProbeArgs, signal: AbortSignal): Promise<ProbeOutcome> {
+		try {
+			return await probe(args, signal);
+		} catch (err) {
+			if (!signal.aborted) throw err;
+			return { kind: "network_error" };
+		}
+	}
+
 	// Aborted calls are dropped instead of recorded, so a cancel or early stop never counts as a failed attempt.
 	async function call(args: ProbeArgs, signal: AbortSignal): Promise<ProbeResponse | null | "aborted"> {
 		if (signal.aborted) return "aborted";
 		update({ attempts: [...snap.attempts, { ...args, response: null, done: false }] });
-		let outcome: ProbeOutcome;
-		try {
-			outcome = await probe(args, signal);
-		} catch (err) {
-			if (!signal.aborted) throw err;
-			outcome = { kind: "network_error" };
+		let outcome = await probeOnce(args, signal);
+		// A full two-question run on a fast site exceeds the per-host limit; the worker rejects before recording,
+		// so resending the same attempt after Retry-After is safe. A 429 without one (call cap, edge WAF) still stops.
+		for (let waits = 0; outcome.kind === "stop" && outcome.retryAfterSec !== null && waits < RATE_LIMIT_RETRIES && !signal.aborted; waits++) {
+			await sleep(outcome.retryAfterSec * 1000, signal);
+			if (signal.aborted) break;
+			outcome = await probeOnce(args, signal);
 		}
 		if (signal.aborted || outcome.kind === "stop") {
 			update({ attempts: snap.attempts.filter((a) => !sameCall(a, args)) });

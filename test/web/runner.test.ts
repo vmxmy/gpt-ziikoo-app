@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluateQuestion } from "../../src/shared/ladder.ts";
 import type { ProbeResponse } from "../../src/shared/types.ts";
-import { ladderCalls, runLadder, type ProbeArgs, type ProbeOutcome } from "../../src/web/runner.ts";
+import { ladderCalls, RATE_LIMIT_RETRIES, runLadder, type ProbeArgs, type ProbeOutcome } from "../../src/web/runner.ts";
 
 const RUN_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -133,13 +133,33 @@ describe("runLadder", () => {
 		expect(evaluateQuestion(ladderCalls(snap.attempts, "thibault", "responses")).status).toBe("incomplete");
 	});
 
-	it("stops the whole run on our own 429 and keeps retryAfterSec", async () => {
+	it("waits out our own 429 and resends the same attempt", async () => {
+		let limited = false;
 		const { done, calls } = run(
-			(a) => (a.question === "candy" && a.stage === 2 ? { kind: "stop", status: 429, message: "请求过于频繁", retryAfterSec: 60 } : a.stage === 1 ? CORRECT : HANG),
+			(a) => {
+				if (a.question === "candy" && a.stage === 2 && a.seq === 1 && !limited) {
+					limited = true;
+					return { kind: "stop", status: 429, message: "请求过于频繁", retryAfterSec: 0.01 };
+				}
+				return CORRECT;
+			},
 			{ questions: ["thibault", "candy"], protocol: "responses" },
 		);
 		const snap = await done;
-		expect(snap.stop).toEqual({ status: 429, message: "请求过于频繁", retryAfterSec: 60 });
+		expect(snap.stop).toBeNull();
+		expect(calls.filter((c) => c.question === "candy" && c.stage === 2 && c.seq === 1).map((c) => c.attempt)).toEqual([1, 1]);
+		expect(evaluateQuestion(ladderCalls(snap.attempts, "candy", "responses")).status).toBe("passed");
+		expect(evaluateQuestion(ladderCalls(snap.attempts, "thibault", "responses")).status).toBe("passed");
+	});
+
+	it("stops the whole run when our own 429 persists past the retries and keeps retryAfterSec", async () => {
+		const { done, calls } = run(
+			(a) => (a.question === "candy" && a.stage === 2 ? { kind: "stop", status: 429, message: "请求过于频繁", retryAfterSec: 0.01 } : a.stage === 1 ? CORRECT : HANG),
+			{ questions: ["thibault", "candy"], protocol: "responses" },
+		);
+		const snap = await done;
+		expect(snap.stop).toEqual({ status: 429, message: "请求过于频繁", retryAfterSec: 0.01 });
+		expect(calls.filter((c) => c.question === "candy" && c.stage === 2 && c.seq === 1).length).toBe(1 + RATE_LIMIT_RETRIES);
 		expect(snap.attempts.filter((a) => !a.done).length).toBe(0);
 		expect(calls.filter((c) => c.stage === 3).length).toBe(0);
 	});
