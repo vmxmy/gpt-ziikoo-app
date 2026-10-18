@@ -182,14 +182,18 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 	};
 }
 
-function parseWhole(body: string): ParsedBody {
+// A key the relay wrote with \uXXXX escapes survives the byte-level redaction and only appears after JSON.parse.
+function parseWhole(body: string, key: string): ParsedBody {
 	const d = lenientJson(body);
+	const joined = fullText(d);
+	const text = redact(joined, key);
+	const rawDropped = text !== joined;
 	return {
 		streamed: false,
-		rawBody: body,
+		rawBody: rawDropped ? null : body,
 		rawEvents: null,
-		rawDropped: false,
-		text: fullText(d),
+		rawDropped,
+		text,
 		ttftMs: null,
 		usage: obj(get(d, "usage")),
 		id: str(get(d, "id")),
@@ -200,5 +204,5 @@ function parseWhole(body: string): ParsedBody {
 // Sniffed from the body, not Content-Type: relays that ignore `stream` often keep the SSE header or omit it.
 export function parseBody(chunks: TimedText[], key: string): ParsedBody {
 	const whole = chunks.map((c) => c.text).join("");
-	return SSE_START.test(whole) ? parseSse(chunks, key) : parseWhole(redact(whole, key));
+	return SSE_START.test(whole) ? parseSse(chunks, key) : parseWhole(redact(whole, key), key);
 }

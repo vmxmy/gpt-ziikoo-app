@@ -216,6 +216,20 @@ describe("probe", () => {
 		expect(JSON.stringify(result)).not.toContain(KEY);
 	});
 
+	it("redacts a key the site echoes with unicode escapes in a whole JSON body", async () => {
+		const escaped = [...KEY].map((ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 10,
+			chunks: [{ at: 20, text: `{"choices":[{"message":{"content":"${escaped}"}}]}` }],
+		});
+		const result = await probe(input({ protocol: "chat" }), deps);
+		expect(result.capture.answer).toBe("[REDACTED]");
+		expect(result.capture.rawBody).toBeNull();
+		expect(result.capture.truncated).toBe(true);
+		expect(JSON.stringify(result)).not.toContain(KEY);
+	});
+
 	it("records a buffered event stream as not streamed and leaves TTFT empty", async () => {
 		const { deps } = fakeUpstream({
 			status: 200,
