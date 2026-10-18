@@ -12,7 +12,9 @@
 - 探针接口只发题库里的固定题,只访问 `/v1/responses` 或 `/v1/chat/completions`。不接受自由题面。
 - 目标地址只允许 `https`,拒绝 IP 字面量与 `localhost`,不跟随重定向。
 - 来自中转站的回答是不可信内容。页面只用文本节点渲染,不拼 HTML。
-- `workers_dev` 与 `preview_urls` 保持关闭,否则绕过边缘限速。
+- `workers.dev` 与预览地址保持关闭,否则绕过边缘限速。这个开关写在 `cloudflare.config.ts` 的 `triggers` 里。
+- 工具链是 `cf`(测试版)加 `cloudflare.config.ts`,不使用 `wrangler` 命令与 `wrangler.jsonc`。Node.js 22.18 或更高。CI 里不依赖自动配置,配置必须本地生成、审阅并提交。
+- `cf` 是测试版,升级版本后先读变更说明再改配置。查资料时官方多数示例仍是 Wrangler 写法,对照「Wrangler 到 cf 对照」页。
 - `ziikoo.app` 是 Free zone。Bot Fight Mode 保持关闭,它不能被规则跳过,会质询匿名脚本。边缘限速只有 1 条规则、10 秒窗口,主要限速在 Worker 里。
 - 不在本仓库记录具体中转站的名字或测评结论。不做公开站点榜单。
 - 题面或评分一变,题的 `version` 加 1。
