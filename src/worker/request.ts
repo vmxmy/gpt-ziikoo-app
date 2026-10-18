@@ -22,8 +22,8 @@ export type HistoryCommand = { origin: string; key: string };
 const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
 const EFFORTS: readonly Effort[] = ["low", "medium", "high"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Visible ASCII only: the key becomes an Authorization header value upstream.
-const KEY = /^[\x21-\x7e]{8,1024}$/;
+// No character JSON or HTML encoders escape: redact() matches the key literally, so an escaped echo would slip through.
+const KEY = /^[A-Za-z0-9_.-]{8,1024}$/;
 const MAX_MODEL_LENGTH = 100;
 
 function bad<T>(message: string): Result<T> {
@@ -45,7 +45,7 @@ function isIntIn(value: unknown, min: number, max: number): value is number {
 function parseTarget(f: Record<string, unknown>): Result<HistoryCommand & { host: string }> {
 	const site = typeof f.site === "string" ? parseSite(f.site) : null;
 	if (!site?.ok) return bad("site 不合法:只接受 https 域名");
-	if (typeof f.key !== "string" || !KEY.test(f.key)) return bad("key 必须是 8 到 1024 个可见 ASCII 字符");
+	if (typeof f.key !== "string" || !KEY.test(f.key)) return bad("key 必须是 8 到 1024 个字母、数字或 _ . - 字符");
 	return { ok: true, value: { origin: site.origin, host: site.host, key: f.key } };
 }
 

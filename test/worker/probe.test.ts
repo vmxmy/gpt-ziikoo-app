@@ -199,6 +199,40 @@ describe("probe", () => {
 		expect(JSON.stringify(result)).not.toContain(KEY);
 	});
 
+	it("redacts a key the site echoes across several stream deltas", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 10,
+			chunks: ["Invalid key ", "sk", "-test", "-1234", "5678", " rejected"].map((delta, i) => ({
+				at: 20 + i,
+				text: sse({ type: "response.output_text.delta", delta }),
+			})),
+		});
+		const result = await probe(input({}), deps);
+		expect(result.capture.answer).toBe("Invalid key [REDACTED] rejected");
+		expect(JSON.stringify(result.response)).not.toContain(KEY);
+		expect(result.capture.answer).not.toContain(KEY);
+	});
+
+	it("records a buffered event stream as not streamed and leaves TTFT empty", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 100,
+			chunks: [
+				{ at: 150, text: sse({ type: "response.created", response: { id: "resp_68ab12cd34ef" } }) },
+				{
+					at: 900,
+					text:
+						sse({ type: "response.output_text.delta", delta: "Yes, I know him." }) +
+						sse({ type: "response.completed", response: { id: "resp_68ab12cd34ef" } }),
+				},
+			],
+		});
+		const result = await probe(input({}), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: true, streamed: false, ttftMs: null });
+		expect(result.capture.rawEvents?.map((e) => e.t)).toEqual([150, 900, 900]);
+	});
+
 	it("stops reading past the body cap and marks the capture truncated", async () => {
 		const filler = sse({ type: "response.output_text.delta", delta: "a".repeat(100 * 1024) });
 		const { deps, state } = fakeUpstream({

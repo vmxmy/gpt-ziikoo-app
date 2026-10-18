@@ -1,7 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import { getQuestion } from "../../questions/index.ts";
 import type { CallRecord, RawCall, RunView } from "../shared/types.ts";
-import { buildRunViews, IDLE_MS, planWrite, type RawPart, type RunSummary, splitCall, TOO_MANY_CALLS } from "./history.ts";
+import {
+	buildRunViews,
+	IDLE_MS,
+	planWrite,
+	type RawPart,
+	rawCallsStream,
+	type RunSummary,
+	splitCall,
+	TOO_MANY_CALLS,
+} from "./history.ts";
 
 // Nothing is written until the first allowed record: a constructor-side CREATE TABLE would persist
 // an empty object for every random key, and without an alarm it would never be cleaned up.
@@ -33,8 +42,8 @@ export class Target extends DurableObject<Env> {
 			"INSERT INTO calls (run_id, started_at, record, raw) VALUES (?, ?, ?, ?)",
 			call.runId,
 			call.startedAt,
-			JSON.stringify(record),
-			JSON.stringify(raw),
+			record,
+			raw,
 		);
 		await this.ctx.storage.setAlarm(Date.now() + IDLE_MS);
 	}
@@ -42,22 +51,31 @@ export class Target extends DurableObject<Env> {
 	history(): RunView[] {
 		if (!this.hasTable()) return [];
 		const records = this.ctx.storage.sql
-			.exec<{ record: string }>("SELECT record FROM calls")
+			.exec<{ record: string }>("SELECT record FROM calls ORDER BY started_at, rowid")
 			.toArray()
 			.map((row): CallRecord => JSON.parse(row.record));
 		return buildRunViews(records, (id) => getQuestion(id)?.kind);
 	}
 
-	raw(runId: string): RawCall[] {
-		if (!this.hasTable()) return [];
-		return this.ctx.storage.sql
-			.exec<{ record: string; raw: string }>("SELECT record, raw FROM calls WHERE run_id = ? ORDER BY started_at, rowid", runId)
-			.toArray()
-			.map((row): RawCall => {
+	// Rows are read one per pull so the whole run is never in memory; a row deleted meanwhile is skipped.
+	raw(runId: string): ReadableStream<Uint8Array> {
+		const { sql } = this.ctx.storage;
+		const rowIds = this.hasTable()
+			? sql
+					.exec<{ id: number }>("SELECT rowid AS id FROM calls WHERE run_id = ? ORDER BY started_at, rowid", runId)
+					.toArray()
+					.map((row) => row.id)
+			: [];
+		function* calls(): Generator<RawCall> {
+			for (const id of rowIds) {
+				const [row] = sql.exec<{ record: string; raw: string }>("SELECT record, raw FROM calls WHERE rowid = ?", id).toArray();
+				if (!row) continue;
 				const record: CallRecord = JSON.parse(row.record);
 				const raw: RawPart = JSON.parse(row.raw);
-				return { ...record, ...raw };
-			});
+				yield { ...record, ...raw };
+			}
+		}
+		return rawCallsStream(calls());
 	}
 
 	async deleteAll(): Promise<void> {

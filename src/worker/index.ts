@@ -1,5 +1,5 @@
 import { activeQuestions } from "../../questions/index.ts";
-import type { ApiError, HistoryDeleteResponse, HistoryRawResponse, HistoryResponse, Question } from "../shared/types.ts";
+import type { ApiError, HistoryDeleteResponse, HistoryResponse, Question } from "../shared/types.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
 import { probe, type ProbeResult } from "./probe.ts";
@@ -47,10 +47,17 @@ async function targetStub(ctx: ExecutionContext, env: Env, { origin, key }: Hist
 	return ctx.exports.Target.get(ctx.exports.Target.idFromName(id));
 }
 
-async function withinLimits(request: Request, env: Env, host: string): Promise<boolean> {
+async function ipAllowed(request: Request, env: Env): Promise<boolean> {
 	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-	if (!(await env.IP_LIMITER.limit({ key: ip })).success) return false;
-	return (await env.HOST_LIMITER.limit({ key: host })).success;
+	return (await env.IP_LIMITER.limit({ key: ip })).success;
+}
+
+function rateLimited(): Response {
+	return apiError(
+		429,
+		{ error: "rate_limited", message: "请求过于频繁", retryAfterSec: RETRY_AFTER_SEC },
+		{ "Retry-After": String(RETRY_AFTER_SEC) },
+	);
 }
 
 function outcome({ response }: ProbeResult): string {
@@ -87,13 +94,7 @@ const handleProbe: Handler = async (request, env, ctx) => {
 	const parsed = parseProbeRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	const cmd = parsed.value;
-	if (!(await withinLimits(request, env, cmd.host))) {
-		return apiError(
-			429,
-			{ error: "rate_limited", message: "请求过于频繁", retryAfterSec: RETRY_AFTER_SEC },
-			{ "Retry-After": String(RETRY_AFTER_SEC) },
-		);
-	}
+	if (!(await ipAllowed(request, env)) || !(await env.HOST_LIMITER.limit({ key: cmd.host })).success) return rateLimited();
 	const { run } = cmd;
 	const stub = run ? await targetStub(ctx, env, cmd) : null;
 	// Checked before the upstream call so a full run stops spending the caller's quota; record() re-checks.
@@ -115,6 +116,7 @@ const handleQuestions: Handler = async () => {
 const handleHistory: Handler = async (request, env, ctx) => {
 	const parsed = parseHistoryRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
 	const stub = await targetStub(ctx, env, parsed.value);
 	return json({ runs: await stub.history() } satisfies HistoryResponse);
 };
@@ -122,13 +124,15 @@ const handleHistory: Handler = async (request, env, ctx) => {
 const handleHistoryRaw: Handler = async (request, env, ctx) => {
 	const parsed = parseHistoryRawRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
 	const stub = await targetStub(ctx, env, parsed.value);
-	return json({ calls: await stub.raw(parsed.value.runId) } satisfies HistoryRawResponse);
+	return new Response(await stub.raw(parsed.value.runId), { headers: API_HEADERS });
 };
 
 const handleHistoryDelete: Handler = async (request, env, ctx) => {
 	const parsed = parseHistoryRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
 	const stub = await targetStub(ctx, env, parsed.value);
 	await stub.deleteAll();
 	return json({ deleted: true } satisfies HistoryDeleteResponse);

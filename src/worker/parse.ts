@@ -160,7 +160,12 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 		error ||= isError(p);
 		if (get(p, "type") === "response.completed") completedText = fullText(get(p, "response"));
 	}
-	return { streamed: true, rawBody: null, rawEvents: events, text: text || completedText, ttftMs, usage, id, error };
+	// A relay that buffers the stream delivers the first delta together with the last event, so its arrival time is not a TTFT.
+	const lastEventT = events[events.length - 1]?.t;
+	const streamed = ttftMs !== null && lastEventT !== undefined && ttftMs < lastEventT;
+	// Per-event redaction misses a key the tokenizer split across deltas, so the joined text is redacted again.
+	const answer = redact(text || completedText, key);
+	return { streamed, rawBody: null, rawEvents: events, text: answer, ttftMs: streamed ? ttftMs : null, usage, id, error };
 }
 
 function parseWhole(body: string): ParsedBody {

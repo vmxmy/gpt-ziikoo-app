@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { CallRecord } from "../../src/shared/types.ts";
-import { buildRunViews, planWrite } from "../../src/worker/history.ts";
+import type { CallRecord, HistoryRawResponse, RawCall } from "../../src/shared/types.ts";
+import { buildRunViews, MAX_RAW_BYTES, planWrite, rawCallsStream, splitCall } from "../../src/worker/history.ts";
 
 const RUN_A = "00000000-0000-4000-8000-00000000000a";
 const RUN_B = "00000000-0000-4000-8000-00000000000b";
@@ -100,5 +100,49 @@ describe("buildRunViews", () => {
 	it("leaves metrics-only questions without a verdict", () => {
 		const [view] = buildRunViews([call({ questionId: "long-prefix", correct: null })], () => "metrics");
 		expect(view.questions[0].verdict).toBeNull();
+	});
+});
+
+describe("stage-1 protocol race", () => {
+	const raceChatWrong = call({ protocol: "chat", correct: false, note: "NO" });
+	const raceResponsesRight = call({ protocol: "responses" });
+	const stage2 = [1, 2, 3, 4, 5].map((seq) => call({ stage: 2, seq, startedAt: seq }));
+
+	it.each([
+		["chat stored first", [raceChatWrong, raceResponsesRight]],
+		["responses stored first", [raceResponsesRight, raceChatWrong]],
+	])("counts the responses answer when both protocols answer (%s)", (_, race) => {
+		const [view] = buildRunViews([...race, ...stage2], () => "knowledge");
+		expect(view.questions[0].verdict?.stages.slice(0, 2).map((s) => s.state)).toEqual(["passed", "passed"]);
+		expect(view.questions[0].metrics.calls).toBe(7);
+	});
+});
+
+function rawCall(overrides: Partial<RawCall>): RawCall {
+	return { ...call({}), answer: "Yes", usage: null, rawHeaders: {}, rawBody: null, rawEvents: null, ...overrides };
+}
+
+describe("splitCall", () => {
+	it("keeps a payload that fits the row budget", () => {
+		const { record, raw } = splitCall(rawCall({ rawEvents: [{ t: 1, data: "data: {}" }] }));
+		expect(JSON.parse(record).truncated).toBe(false);
+		expect(JSON.parse(raw).rawEvents).toEqual([{ t: 1, data: "data: {}" }]);
+	});
+
+	it("drops raw events that JSON escaping pushes past the row budget and marks the call truncated", () => {
+		const controlBytes = "\u0001".repeat(256 * 1024);
+		const { record, raw } = splitCall(rawCall({ answer: controlBytes, rawEvents: [{ t: 1, data: controlBytes }] }));
+		expect(new TextEncoder().encode(raw).byteLength).toBeLessThanOrEqual(MAX_RAW_BYTES);
+		expect(JSON.parse(record).truncated).toBe(true);
+		expect(JSON.parse(raw)).toMatchObject({ answer: controlBytes, rawEvents: null, rawBody: null });
+	});
+});
+
+describe("rawCallsStream", () => {
+	it("streams the history raw response shape", async () => {
+		const calls = [rawCall({ seq: 1 }), rawCall({ seq: 2, answer: null })];
+		const expected: HistoryRawResponse = { calls };
+		expect(JSON.parse(await new Response(rawCallsStream(calls.values())).text())).toEqual(expected);
+		expect(JSON.parse(await new Response(rawCallsStream([].values())).text())).toEqual({ calls: [] });
 	});
 });

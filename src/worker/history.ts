@@ -1,10 +1,12 @@
 import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
-import type { CallRecord, QuestionKind, QuestionMetrics, RawCall, RunView, Stat } from "../shared/types.ts";
+import type { CallRecord, Protocol, QuestionKind, QuestionMetrics, RawCall, RunView, Stat } from "../shared/types.ts";
 
 export const MAX_RUNS = 10;
 export const MAX_CALLS_PER_RUN = 200;
 export const IDLE_MS = 90 * 24 * 60 * 60 * 1000;
 export const TOO_MANY_CALLS = "too_many_calls";
+// DO SQLite caps a row at 2 MB; the record column and run_id fit in the remaining headroom.
+export const MAX_RAW_BYTES = 1_900_000;
 
 export type RunSummary = { runId: string; startedAt: number; calls: number };
 export type WritePlan = { kind: "reject" } | { kind: "write"; deleteRunIds: string[] };
@@ -18,10 +20,43 @@ export function planWrite(runs: RunSummary[], runId: string): WritePlan {
 	return { kind: "write", deleteRunIds: oldestFirst.slice(0, Math.max(0, excess)).map((r) => r.runId) };
 }
 
+const byteLength = (text: string) => new TextEncoder().encode(text).byteLength;
+
 // Summaries read only the small record column; raw payloads can be 256KB per call.
-export function splitCall(call: RawCall): { record: CallRecord; raw: RawPart } {
+// JSON escaping can grow a 256KB body past the row cap, so an oversized payload drops the raw body first, then the answer.
+export function splitCall(call: RawCall): { record: string; raw: string } {
 	const { answer, usage, rawHeaders, rawBody, rawEvents, ...record } = call;
-	return { record, raw: { answer, usage, rawHeaders, rawBody, rawEvents } };
+	const fitting = (part: RawPart) => {
+		const text = JSON.stringify(part);
+		return byteLength(text) <= MAX_RAW_BYTES ? text : null;
+	};
+	const full: RawPart = { answer, usage, rawHeaders, rawBody, rawEvents };
+	const raw = fitting(full);
+	if (raw !== null) return { record: JSON.stringify(record), raw };
+	const lean: RawPart = { ...full, rawBody: null, rawEvents: null };
+	return { record: JSON.stringify({ ...record, truncated: true }), raw: fitting(lean) ?? JSON.stringify({ ...lean, answer: null }) };
+}
+
+// RPC caps a serialized return value at 32 MiB, below what one run's raw data can reach; a byte stream is exempt.
+export function rawCallsStream(calls: Iterator<RawCall>): ReadableStream<Uint8Array> {
+	const encoder = new TextEncoder();
+	let separator = "";
+	return new ReadableStream({
+		type: "bytes",
+		start(controller) {
+			controller.enqueue(encoder.encode('{"calls":['));
+		},
+		pull(controller) {
+			const next = calls.next();
+			if (next.done) {
+				controller.enqueue(encoder.encode("]}"));
+				controller.close();
+				return;
+			}
+			controller.enqueue(encoder.encode(separator + JSON.stringify(next.value)));
+			separator = ",";
+		},
+	});
 }
 
 export function stat(values: number[]): Stat | null {
@@ -48,6 +83,13 @@ export function questionMetrics(calls: CallRecord[]): QuestionMetrics {
 	};
 }
 
+// When both protocols answer the stage-1 race the page continues with responses (design.md), so the chat answer is not counted.
+function raceCounted(calls: CallRecord[]): CallRecord[] {
+	const answered = (protocol: Protocol) => calls.some((c) => c.stage === 1 && c.ok && c.protocol === protocol);
+	if (!answered("responses") || !answered("chat")) return calls;
+	return calls.filter((c) => c.stage !== 1 || c.protocol === "responses");
+}
+
 // A stage-1 protocol race mixes protocols in one run, so model and protocol come from the latest call.
 function runView(runId: string, calls: CallRecord[], kindOf: (id: string) => QuestionKind | undefined): RunView {
 	const ordered = [...calls].sort((a, b) => a.startedAt - b.startedAt);
@@ -55,7 +97,7 @@ function runView(runId: string, calls: CallRecord[], kindOf: (id: string) => Que
 	const questions = [...Map.groupBy(ordered, (c) => c.questionId)].map(([id, qCalls]) => ({
 		id,
 		version: qCalls[qCalls.length - 1].questionVersion,
-		verdict: kindOf(id) === "metrics" ? null : evaluateQuestion(qCalls),
+		verdict: kindOf(id) === "metrics" ? null : evaluateQuestion(raceCounted(qCalls)),
 		metrics: questionMetrics(qCalls),
 	}));
 	const overall = summarizeRun(questions.flatMap((q) => (q.verdict ? [q.verdict.status] : [])));

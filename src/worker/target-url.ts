@@ -7,7 +7,8 @@ const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 export function parseSite(input: string): Site {
 	if (!URL.canParse(input.trim())) return { ok: false };
 	const url = new URL(input.trim());
-	const { hostname } = url;
+	// A trailing dot names the same DNS host; left in place it slips past the localhost checks and splits the object id.
+	const hostname = url.hostname.replace(/\.+$/, "");
 	const rejected =
 		url.protocol !== "https:" ||
 		url.username !== "" ||
@@ -17,5 +18,6 @@ export function parseSite(input: string): Site {
 		hostname.endsWith(".localhost") ||
 		!hostname.includes(".");
 	if (rejected) return { ok: false };
-	return { ok: true, origin: `https://${url.host}`, host: url.host };
+	const authority = url.port ? `${hostname}:${url.port}` : hostname;
+	return { ok: true, origin: `https://${authority}`, host: hostname };
 }

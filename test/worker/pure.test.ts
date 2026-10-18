@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Scorer } from "../../src/shared/types.ts";
 import { objectId } from "../../src/worker/identity.ts";
 import { redact } from "../../src/worker/redact.ts";
+import { parseHistoryRequest } from "../../src/worker/request.ts";
 import { score } from "../../src/worker/scorers.ts";
 import { parseSite } from "../../src/worker/target-url.ts";
 
@@ -34,6 +35,10 @@ describe("parseSite", () => {
 		"https://[::1]",
 		"https://localhost",
 		"https://app.localhost",
+		"https://localhost.",
+		"https://LOCALHOST..",
+		"https://a.localhost.",
+		"https://intranet.",
 		"https://intranet",
 		"https://user:pw@api.example.com",
 		"not a url",
@@ -48,15 +53,16 @@ describe("parseSite", () => {
 		"https://api.example.com/v1/",
 		"https://api.example.com/v1/chat/completions",
 		"https://api.example.com:443/v1/responses?x=1",
+		"https://api.example.com./v1",
 	])("normalises %s", (input) => {
 		expect(parseSite(input)).toEqual({ ok: true, origin: "https://api.example.com", host: "api.example.com" });
 	});
 
-	it("keeps a non-default port", () => {
-		expect(parseSite("https://api.example.com:8443/v1")).toEqual({
+	it("keeps a non-default port in the origin but not in the rate-limit host", () => {
+		expect(parseSite("https://api.example.com.:8443/v1")).toEqual({
 			ok: true,
 			origin: "https://api.example.com:8443",
-			host: "api.example.com:8443",
+			host: "api.example.com",
 		});
 	});
 });
@@ -68,6 +74,12 @@ describe("redact", () => {
 		expect(redact(`Incorrect API key provided: ${key}. Header was Bearer ${key}`, key)).toBe(
 			"Incorrect API key provided: [REDACTED]. Header was [REDACTED]",
 		);
+	});
+
+	it("is backed by a key charset that JSON and HTML encoders leave unescaped", () => {
+		const parse = (key: string) => parseHistoryRequest({ site: "https://api.example.com", key }).ok;
+		expect(parse("sk-proj_abc.DEF-1234")).toBe(true);
+		expect(["sk-test-1234\"5678", "sk-test-1234/5678", "sk-test-1234<5678"].map(parse)).toEqual([false, false, false]);
 	});
 
 	it("leaves text alone for keys shorter than 8 characters", () => {
@@ -87,9 +99,11 @@ describe("objectId", () => {
 	it("matches across spellings of one site and differs across keys", async () => {
 		const a = parseSite("https://API.example.com/v1/");
 		const b = parseSite("https://api.example.com");
-		if (!a.ok || !b.ok) throw new Error("site should parse");
+		const c = parseSite("https://api.example.com.");
+		if (!a.ok || !b.ok || !c.ok) throw new Error("site should parse");
 		const idA = await objectId(pepper, a.origin, "sk-test-12345678");
 		expect(await objectId(pepper, b.origin, "sk-test-12345678")).toBe(idA);
+		expect(await objectId(pepper, c.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, b.origin, "sk-test-87654321")).not.toBe(idA);
 	});
 });
