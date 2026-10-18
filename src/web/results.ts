@@ -34,7 +34,7 @@ export const FAILURE_ADVICE: Record<FailReason, FailureAdvice> = {
 	rate_limited: { reason: "站点正忙或限流", next: "几分钟后再测" },
 	upstream_error: { reason: "站点推理接口不可用", next: "等恢复后重测" },
 	timeout: { reason: "站点响应太慢", next: "稍后重测" },
-	bad_response: { reason: "站点返回异常", next: "在历史里点「下载原始数据」查看站点返回内容" },
+	bad_response: { reason: "站点返回异常", next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址" },
 };
 
 export function resultText(a: Attempt): string {

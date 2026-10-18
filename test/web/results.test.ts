@@ -44,10 +44,11 @@ describe("failure mapping", () => {
 		expect(failureAdvice(attempts)).toEqual({ reason: "密钥无效或模型无权限", next: "检查密钥" });
 	});
 
-	it("points bad responses at the raw download instead of an in-page snippet", () => {
+	// A first-run object is only created by an ok call, so failed calls may have no history to download.
+	it("makes the raw-download hint conditional because first-run failures are not persisted", () => {
 		expect(failureAdvice([failed({ ok: false, reason: "bad_response", httpStatus: 200 }, 1)])).toEqual({
 			reason: "站点返回异常",
-			next: "在历史里点「下载原始数据」查看站点返回内容",
+			next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址",
 		});
 	});
 
