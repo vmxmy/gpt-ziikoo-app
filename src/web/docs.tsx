@@ -9,8 +9,11 @@ const CURL = `curl -s https://gpt.ziikoo.app/api/probe \\
 
 export function ApiDocs() {
 	return (
-		<details class="docs" data-testid="api-docs">
-			<summary>API 说明</summary>
+		<details class="block docs col-12 col-md-6" id="api-docs" data-testid="api-docs">
+			<summary>
+				<h2>API 说明</h2>
+				<span class="muted small">接口约定、梯度规则、curl 示例、限额</span>
+			</summary>
 			<h3>接口约定</h3>
 			<ul>
 				<li>
@@ -38,7 +41,7 @@ export function ApiDocs() {
 				<li>梯度在调用方循环，脚本按上述规则自己驱动。</li>
 			</ul>
 			<h3>curl 示例</h3>
-			<pre>{CURL}</pre>
+			<pre class="code">{CURL}</pre>
 			<h3>限额</h3>
 			<ul>
 				<li>每个调用方 IP 每 60 秒 150 次，每个目标站点每 60 秒 60 次。超出返回 429 并带 Retry-After。</li>

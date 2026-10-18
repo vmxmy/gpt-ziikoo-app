@@ -1,32 +1,39 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import { evaluateQuestion, STAGES, summarizeRun } from "../shared/ladder.ts";
-import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { STAGES } from "../shared/ladder.ts";
+import type { Protocol, QuestionListItem } from "../shared/types.ts";
 import { fetchQuestions, makeProbe } from "./api.ts";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { Monitor } from "./monitor.tsx";
-import {
-	costLine,
-	diagnosis,
-	dotLabel,
-	failureAdvice,
-	MAX_CALLS_PER_QUESTION,
-	missingNumbers,
-	ms,
-	normalizeKey,
-	OVERALL_LABEL,
-	resultText,
-	VERDICT_LABEL,
-} from "./results.ts";
-import { callState, ladderCalls, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
+import { DEFAULT_MODEL, dotLabel, MAX_CALLS_PER_QUESTION } from "./results.ts";
+import { Results } from "./result-view.tsx";
+import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
+import { TestForm } from "./test-form.tsx";
 
-const DEFAULT_MODEL = "gpt-6-astra";
 const PRIVACY =
-	"本站不保存你的密钥。为了对比历史，我们保存站点主机名、测试结果和站点返回的原始响应，最近 10 轮，闲置 90 天后自动删除。凭同一站点和同一密钥可查看或立即删除。密钥只在每次测试时转发给你填写的站点";
+	"本站不保存你的密钥。为了对比历史，我们保存站点主机名、测试结果和站点返回的原始响应，最近 10 轮，闲置 90 天后自动删除。凭同一站点和同一密钥可查看或立即删除。密钥只在每次测试时转发给你填写的站点。自定义监测的站点与样本只保存在你的浏览器里，密钥不保存。建议使用有限额的测试密钥。";
 
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 
 type CopyStatus = "copied" | "failed";
+
+type ActionsProps = { id: string; open: boolean; copy: CopyStatus | null; onOpen: () => void; onCopy: () => void };
+
+function QuestionActions({ id, open, copy, onOpen, onCopy }: ActionsProps) {
+	return (
+		<div class="question-actions">
+			<button type="button" class="btn-text" aria-expanded={open} onClick={onOpen} data-testid={`question-${id}-prompt-toggle`}>
+				{open ? "收起题面" : "查看题面"}
+			</button>
+			<button type="button" class="btn-text" onClick={onCopy} data-testid={`question-${id}-copy`}>
+				复制题面
+			</button>
+			<span class="muted small" role="status" data-testid={`question-${id}-copy-status`}>
+				{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
+			</span>
+		</div>
+	);
+}
 
 function QuestionRow(props: {
 	q: QuestionListItem;
@@ -45,47 +52,35 @@ function QuestionRow(props: {
 			() => setCopy("failed"),
 		);
 	};
+	const calibrated = q.calibratedModels.includes(model.trim());
 	return (
-		<li class="question" data-testid={`question-${q.id}`}>
-			<label class="question-head">
-				<input
-					type="checkbox"
-					checked={checked}
-					disabled={checked && locked}
-					onChange={onToggle}
-					data-testid={`question-${q.id}-toggle`}
-				/>
-				<span class="question-title">{q.title}</span>
-				<span class="tag">{KIND_LABEL[q.kind]}</span>
-				<span class="muted">v{q.version}</span>
-			</label>
-			<p>{q.measures}</p>
-			<p class="muted">
-				标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
-			</p>
-			{!q.calibratedModels.includes(model.trim()) && <p class="warn">此模型未校准，结果仅供参考</p>}
-			<div class="row">
-				<button
-					type="button"
-					class="link"
-					aria-expanded={open}
-					onClick={() => setOpen(!open)}
-					data-testid={`question-${q.id}-prompt-toggle`}
-				>
-					{open ? "收起题面" : "查看题面"}
-				</button>
-				<button type="button" class="link" onClick={doCopy} data-testid={`question-${q.id}-copy`}>
-					复制题面
-				</button>
-				<span class="muted" role="status" data-testid={`question-${q.id}-copy-status`}>
-					{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
-				</span>
+		<li class={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
+			<input
+				id={`q-${q.id}`}
+				type="checkbox"
+				checked={checked}
+				disabled={checked && locked}
+				onChange={onToggle}
+				data-testid={`question-${q.id}-toggle`}
+			/>
+			<div class="question-body">
+				<label class="question-head" for={`q-${q.id}`}>
+					<span class="question-title">{q.title}</span>
+					<span class="tag">{KIND_LABEL[q.kind]}</span>
+					<span class="mono muted">v{q.version}</span>
+					{!calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
+				</label>
+				<p>{q.measures}</p>
+				<p class="muted small">
+					标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
+				</p>
+				<QuestionActions id={q.id} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
+				{open && (
+					<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
+						{q.prompt}
+					</pre>
+				)}
 			</div>
-			{open && (
-				<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
-					{q.prompt}
-				</pre>
-			)}
 		</li>
 	);
 }
@@ -95,15 +90,16 @@ function Lane({ id, title, attempts }: { id: string; title: string; attempts: At
 		<li class="lane" data-testid={`lane-${id}`}>
 			<span class="lane-title">{title}</span>
 			<ol class="stages">
-				{STAGES.map((s, i) => (
-					<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
-						<span class="muted">
-							第 {i + 1} 关 · 需 {s.need}/{s.calls}
-						</span>
-						<span class="dots">
-							{attempts
-								.filter((a) => a.stage === i + 1)
-								.map((a) => (
+				{STAGES.map((s, i) => {
+					const inStage = attempts.filter((a) => a.stage === i + 1);
+					const correct = inStage.filter((a) => callState(a) === "ok").length;
+					return (
+						<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
+							<span class="stage-name">
+								第 {i + 1} 关 <span class="muted">需 {s.need}/{s.calls}</span>
+							</span>
+							<span class="dots">
+								{inStage.map((a) => (
 									<span
 										class="call-dot"
 										data-testid="call-dot"
@@ -114,137 +110,27 @@ function Lane({ id, title, attempts }: { id: string; title: string; attempts: At
 										key={`${a.protocol}-${a.seq}-${a.attempt}`}
 									/>
 								))}
-						</span>
-					</li>
-				))}
+							</span>
+							<span class="stage-count num">答对 {correct}</span>
+						</li>
+					);
+				})}
 			</ol>
 		</li>
 	);
 }
 
-function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
-	return (
-		<div class="table-wrap">
-			<table data-testid={`detail-table-${id}`}>
-				<thead>
-					<tr>
-						<th>关·次·尝试</th>
-						<th>结果</th>
-						<th>reasoning tokens</th>
-						<th>idShape</th>
-						<th>TTFT</th>
-						<th>总耗时</th>
-						<th>回答片段</th>
-						<th>缺失数字</th>
-					</tr>
-				</thead>
-				<tbody>
-					{attempts.map((a) => {
-						const r = a.response?.ok ? a.response : null;
-						return (
-							<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
-								<td>
-									{a.stage}·{a.seq}·{a.attempt}
-								</td>
-								<td>{resultText(a)}</td>
-								<td>{r?.reasoningTokens ?? "—"}</td>
-								<td>{r?.idShape ?? "—"}</td>
-								<td>{ms(r?.ttftMs)}</td>
-								<td>{ms(r?.totalMs)}</td>
-								<td class="answer">{r?.answer ?? ""}</td>
-								<td>{missingNumbers(a.response)}</td>
-							</tr>
-						);
-					})}
-				</tbody>
-			</table>
-		</div>
-	);
-}
+const DOT_LEGEND = [
+	["ok", "答对"],
+	["wrong", "答错"],
+	["fail", "失败"],
+	["pending", "进行中"],
+] as const;
 
-function Results(props: { run: RunSnapshot; questions: QuestionListItem[]; onRerun: (protocol?: Protocol) => void }) {
-	const { run, questions, onRerun } = props;
-	const verdicts = questions.map((q) => ({ q, v: evaluateQuestion(ladderCalls(run.attempts, q.id, run.protocol)) }));
-	const overall = summarizeRun(verdicts.map(({ v }) => v.status));
-	const other: Protocol = run.protocol === "chat" ? "responses" : "chat";
-	return (
-		<section aria-labelledby="result-h">
-			<h2 id="result-h">结果</h2>
-			<p class="overall" data-testid="overall-result" data-status={overall}>
-				总评：{OVERALL_LABEL[overall]}
-				{run.protocol && <span class="muted">（通道 {run.protocol}）</span>}
-			</p>
-			{run.cancelled && <p class="warn">已取消。</p>}
-			{run.stop && (
-				<p class="warn" role="alert">
-					{run.stop.message}
-					{run.stop.retryAfterSec ? `，请 ${run.stop.retryAfterSec} 秒后再试。` : "。"}
-				</p>
-			)}
-			<p class="notice" data-testid="snapshot-notice">
-				结果只代表此刻，同一站点一天内可能翻转。时延从 Cloudflare 边缘测到站点，不是你本机到站点；区域受限的站点结果可能与本机不同。
-			</p>
-			{verdicts.map(({ q, v }) => (
-				<QuestionResult key={q.id} q={q} v={v} attempts={run.attempts.filter((a) => a.question === q.id)} protocol={run.protocol} />
-			))}
-			<div class="row">
-				<button type="button" onClick={() => onRerun()}>
-					再测
-				</button>
-				{run.protocol && (
-					<button type="button" onClick={() => onRerun(other)}>
-						也测另一通道（{other}）
-					</button>
-				)}
-			</div>
-		</section>
-	);
-}
-
-function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attempts: Attempt[]; protocol: Protocol | null }) {
-	const { q, v, protocol } = props;
-	const attempts = props.attempts.filter((a) => a.done && (protocol === null || a.protocol === protocol));
-	const advice = v.status === "unavailable" ? failureAdvice(attempts) : null;
-	return (
-		<article class="verdict" data-testid={`verdict-${q.id}`} data-status={v.status}>
-			<h3>
-				{q.title}：{VERDICT_LABEL[v.status]}
-			</h3>
-			<p data-testid={`diagnosis-${q.id}`}>{diagnosis(v, attempts, q.failureHint)}</p>
-			{advice && (
-				<table class="advice">
-					<tbody>
-						<tr>
-							<th>原因</th>
-							<td>{advice.reason}</td>
-						</tr>
-						<tr>
-							<th>下一步</th>
-							<td>{advice.next}</td>
-						</tr>
-					</tbody>
-				</table>
-			)}
-			<DetailTable id={q.id} attempts={attempts} />
-		</article>
-	);
-}
-
-export function App() {
+function useQuestions() {
 	const [questions, setQuestions] = useState<QuestionListItem[] | null>(null);
 	const [loadError, setLoadError] = useState("");
 	const [selected, setSelected] = useState<string[]>([]);
-	const [site, setSite] = useState("");
-	const [key, setKey] = useState("");
-	const [showKey, setShowKey] = useState(false);
-	const [model, setModel] = useState(DEFAULT_MODEL);
-	const [formError, setFormError] = useState("");
-	const [run, setRun] = useState<RunSnapshot | null>(null);
-	const [runQuestions, setRunQuestions] = useState<QuestionListItem[]>([]);
-	const ctrl = useRef<AbortController | null>(null);
-	const keyInput = useRef<HTMLInputElement>(null);
-	const running = run !== null && !run.finished;
-
 	useEffect(() => {
 		fetchQuestions().then(
 			(list) => {
@@ -255,6 +141,84 @@ export function App() {
 			(err: unknown) => setLoadError(err instanceof Error ? err.message : "题目加载失败"),
 		);
 	}, []);
+	const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+	return { questions, loadError, selected, toggle };
+}
+
+type QuestionsProps = { questions: QuestionListItem[] | null; loadError: string; selected: string[]; model: string; onToggle: (id: string) => void };
+
+function QuestionsSection({ questions, loadError, selected, model, onToggle }: QuestionsProps) {
+	return (
+		<section class="block col-12 col-lg-7" aria-labelledby="questions-h">
+			<h2 id="questions-h">选题</h2>
+			{loadError && <p class="warn">{loadError}</p>}
+			{questions === null && !loadError && <p class="muted">题目加载中…</p>}
+			<ul class="questions">
+				{(questions ?? []).map((q) => (
+					<QuestionRow
+						key={q.id}
+						q={q}
+						checked={selected.includes(q.id)}
+						locked={selected.length <= 1}
+						model={model}
+						onToggle={() => onToggle(q.id)}
+					/>
+				))}
+			</ul>
+		</section>
+	);
+}
+
+function RunSection({ run, running, questions }: { run: RunSnapshot; running: boolean; questions: QuestionListItem[] }) {
+	return (
+		<section class="block col-12" aria-labelledby="run-h">
+			<div class="section-head">
+				<h2 id="run-h">运行</h2>
+				<ul class="dot-legend" aria-label="图例">
+					{DOT_LEGEND.map(([state, label]) => (
+						<li key={state}>
+							<span class="call-dot" data-state={state} aria-hidden="true" />
+							{label}
+						</li>
+					))}
+				</ul>
+			</div>
+			<p class="muted" aria-live="polite">
+				{running ? `进行中${run.protocol ? `，通道 ${run.protocol}` : "，正在探测通道"}` : "已结束"}
+			</p>
+			<ul class="lanes">
+				{questions.map((q) => (
+					<Lane key={q.id} id={q.id} title={q.title} attempts={run.attempts.filter((a) => a.question === q.id)} />
+				))}
+			</ul>
+		</section>
+	);
+}
+
+function SiteHeader() {
+	return (
+		<header class="site-header">
+			<div>
+				<h1>GPT 降智测试</h1>
+				<p class="lead">用固定题目多次调用你的中转站，看所买的 GPT 模型是不是原装、有没有被换成弱模型。</p>
+			</div>
+			<nav class="site-nav" aria-label="页内导航">
+				<a href="#monitor">监测</a>
+				<a href="#history">历史</a>
+				<a href="#api-docs">API 说明</a>
+			</nav>
+		</header>
+	);
+}
+
+type RunInput = { site: string; key: string; model: string; questions: QuestionListItem[] | null; selected: string[] };
+
+function useLadderRun({ site, key, model, questions, selected }: RunInput) {
+	const [run, setRun] = useState<RunSnapshot | null>(null);
+	const [runQuestions, setRunQuestions] = useState<QuestionListItem[]>([]);
+	const [formError, setFormError] = useState("");
+	const ctrl = useRef<AbortController | null>(null);
+	const running = run !== null && !run.finished;
 
 	useEffect(() => {
 		if (!running) return;
@@ -282,120 +246,38 @@ export function App() {
 			onUpdate: setRun,
 		}).catch((err: unknown) => setFormError(err instanceof Error ? err.message : "测试中断"));
 	};
+	return { run, runQuestions, running, formError, start, cancel: () => ctrl.current?.abort() };
+}
 
-	// Switching the type on the DOM node keeps the uncontrolled key input from remounting and losing its value.
-	const toggleKey = () => {
-		if (keyInput.current) keyInput.current.type = showKey ? "password" : "text";
-		setShowKey(!showKey);
-	};
-
-	const toggle = (id: string) =>
-		setSelected(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+export function App() {
+	const q = useQuestions();
+	const [site, setSite] = useState("");
+	const [key, setKey] = useState("");
+	const [model, setModel] = useState(DEFAULT_MODEL);
+	const r = useLadderRun({ site, key, model, questions: q.questions, selected: q.selected });
+	const monitorIds = useMemo(() => (q.questions ?? []).map((x) => x.id).sort(), [q.questions]);
+	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
 	return (
-		<main>
-			<header>
-				<h1>GPT 降智测试</h1>
-				<p>用固定题目多次调用你的中转站，看所买的 GPT 模型是不是原装、有没有被换成弱模型。</p>
-				<p class="notice">{PRIVACY}。建议使用有限额的测试密钥。</p>
-			</header>
-
-			<section aria-labelledby="questions-h">
-				<h2 id="questions-h">选题</h2>
-				{loadError && <p class="warn">{loadError}</p>}
-				{questions === null && !loadError && <p class="muted">题目加载中…</p>}
-				<ul class="questions">
-					{(questions ?? []).map((q) => (
-						<QuestionRow
-							key={q.id}
-							q={q}
-							checked={selected.includes(q.id)}
-							locked={selected.length <= 1}
-							model={model}
-							onToggle={() => toggle(q.id)}
-						/>
-					))}
-				</ul>
-				<p data-testid="cost-line">{costLine(selected.length)}</p>
-			</section>
-
-			<section aria-labelledby="form-h">
-				<h2 id="form-h">站点与密钥</h2>
-				<form
-					class="form"
-					onSubmit={(e) => {
-						e.preventDefault();
-						start();
-					}}
-				>
-					<label>
-						站点地址
-						<input
-							type="text"
-							inputMode="url"
-							placeholder="https://example.com"
-							value={site}
-							onInput={(e) => setSite(e.currentTarget.value)}
-							data-testid="site-input"
-						/>
-					</label>
-					<label>
-						密钥
-						<span class="row">
-							{/* Uncontrolled on purpose: no value prop, so the key never becomes a DOM attribute. */}
-							<input
-								ref={keyInput}
-								type="password"
-								autocomplete="off"
-								spellcheck={false}
-								placeholder="sk-..."
-								onInput={(e) => setKey(normalizeKey(e.currentTarget.value))}
-								data-testid="key-input"
-							/>
-							<button type="button" class="link" aria-pressed={showKey} onClick={toggleKey}>
-								{showKey ? "隐藏" : "显示"}
-							</button>
-						</span>
-					</label>
-					<label>
-						模型
-						<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="model-input" />
-					</label>
-					{formError && (
-						<p class="warn" role="alert">
-							{formError}
-						</p>
-					)}
-					<div class="row">
-						<button type="submit" disabled={running || selected.length === 0} data-testid="start-button">
-							开始测试
-						</button>
-						<button type="button" disabled={!running} onClick={() => ctrl.current?.abort()} data-testid="cancel-button">
-							取消
-						</button>
-					</div>
-				</form>
-			</section>
-
-			{run && (
-				<section aria-labelledby="run-h">
-					<h2 id="run-h">运行</h2>
-					<p class="muted" aria-live="polite">
-						{running ? `进行中${run.protocol ? `，通道 ${run.protocol}` : "，正在探测通道"}` : "已结束"}
-					</p>
-					<ul class="lanes">
-						{runQuestions.map((q) => (
-							<Lane key={q.id} id={q.id} title={q.title} attempts={run.attempts.filter((a) => a.question === q.id)} />
-						))}
-					</ul>
-				</section>
-			)}
-
-			{run?.finished && <Results run={run} questions={runQuestions} onRerun={start} />}
-
-			<History target={{ site: site.trim(), key }} />
-			<Monitor />
-			<ApiDocs />
-		</main>
+		<div class="container">
+			<SiteHeader />
+			<Monitor questionIds={monitorIds} />
+			<p class="privacy">
+				<strong>隐私</strong>
+				<span>{PRIVACY}</span>
+			</p>
+			<main class="grid main-grid">
+				<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
+				<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
+				{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
+				{r.run?.finished && <Results run={r.run} questions={r.runQuestions} onRerun={r.start} />}
+				<History target={{ site: site.trim(), key }} />
+				<ApiDocs />
+			</main>
+			<footer class="site-footer">
+				<span>GPT 降智测试</span>
+				<span>不保存密钥 · 结果只代表测试当时的站点表现</span>
+			</footer>
+		</div>
 	);
 }

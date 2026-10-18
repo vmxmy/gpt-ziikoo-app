@@ -161,8 +161,15 @@ describe("GET /api/monitor", () => {
 		expect(matches).toEqual(["https://gpt.ziikoo.app/api/monitor"]);
 		expect(puts).toEqual(["https://gpt.ziikoo.app/api/monitor"]);
 		const body = await res.json<MonitorResponse>();
-		expect(body).toMatchObject({ target: "gaoxin.net.cn", intervalSec: 60, bucketMin: 30, generatedAt: NOW, state: "operational", uptimePct: 100, correctPct: 100, last: sample });
+		expect(body).toMatchObject({ target: "gaoxin.net.cn", intervalSec: 60, bucketMin: 30, generatedAt: NOW, configured: true, state: "operational", uptimePct: 100, correctPct: 100, last: sample });
 		expect(body.buckets).toHaveLength(48);
+	});
+
+	it("reports configured false while GAOXIN_KEY is the deploy placeholder", async () => {
+		fakeCache();
+		const { ctx } = fakeMonitor();
+		const res = await worker.fetch(new Request("https://gpt.ziikoo.app/api/monitor"), env("unset"), ctx);
+		expect(await res.json<MonitorResponse>()).toMatchObject({ configured: false, state: "no_data" });
 	});
 
 	it("rejects POST with 405", async () => {

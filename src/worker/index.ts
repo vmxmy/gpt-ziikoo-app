@@ -149,14 +149,15 @@ function monitorStub(ctx: ExecutionContext) {
 
 // The only cacheable route: public data, and the edge cache keeps page views off the singleton object.
 // The key drops the query string so `?x=1` cannot bypass the cache.
-const handleMonitor: Handler = async (request, _env, ctx) => {
+const handleMonitor: Handler = async (request, env, ctx) => {
 	const url = new URL(request.url);
 	const key = new Request(`${url.origin}${url.pathname}`);
 	const cached = await caches.default.match(key);
 	if (cached) return cached;
 	const now = Date.now();
 	const samples = await monitorStub(ctx).since(now - MONITOR_WINDOW_MS);
-	const response = json(buildMonitor(samples, now, MONITOR_TARGET), 200, { "Cache-Control": "public, max-age=60" });
+	const configured = Boolean(env.GAOXIN_KEY) && env.GAOXIN_KEY !== NO_KEY;
+	const response = json(buildMonitor(samples, now, MONITOR_TARGET, configured), 200, { "Cache-Control": "public, max-age=60" });
 	ctx.waitUntil(caches.default.put(key, response.clone()));
 	return response;
 };

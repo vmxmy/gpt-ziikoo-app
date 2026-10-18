@@ -1,6 +1,7 @@
 import type { MonitorResponse } from "../shared/monitor.ts";
-import type { ApiError, HistoryRawResponse, HistoryResponse, ProbeResponse, QuestionListItem } from "../shared/types.ts";
-import type { Probe } from "./runner.ts";
+import type { ApiError, HistoryRawResponse, HistoryResponse, ProbeRequest, ProbeResponse, QuestionListItem } from "../shared/types.ts";
+import type { SiteProbe } from "./custom-monitor.ts";
+import type { Probe, ProbeOutcome } from "./runner.ts";
 
 export type Target = { site: string; key: string };
 
@@ -38,32 +39,45 @@ export async function fetchQuestions(): Promise<QuestionListItem[]> {
 	return res.json();
 }
 
-export function makeProbe(target: Target, model: string): Probe {
-	return async (args, signal) => {
-		let body: ProbeResponse;
-		try {
-			const res = await post("/api/probe", { ...target, model, ...args }, signal);
-			if (!res.ok) {
-				const f = await failure(res);
-				return { kind: "stop", status: f.status, message: f.message, retryAfterSec: f.retryAfterSec };
-			}
-			body = await res.json();
-		} catch (err) {
-			if (signal.aborted) throw err;
-			return { kind: "network_error" };
+async function probeOnce(body: ProbeRequest, signal?: AbortSignal): Promise<ProbeOutcome> {
+	let response: ProbeResponse;
+	try {
+		const res = await post("/api/probe", body, signal);
+		if (!res.ok) {
+			const f = await failure(res);
+			return { kind: "stop", status: f.status, message: f.message, retryAfterSec: f.retryAfterSec };
 		}
-		return { kind: "response", response: body };
-	};
+		response = await res.json();
+	} catch (err) {
+		if (signal?.aborted) throw err;
+		return { kind: "network_error" };
+	}
+	return { kind: "response", response };
 }
+
+export function makeProbe(target: Target, model: string): Probe {
+	return (args, signal) => probeOnce({ ...target, model, ...args }, signal);
+}
+
+// No runId, so the Worker answers without persisting anything for these calls.
+export const probeSite: SiteProbe = (body) => probeOnce(body);
 
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);
 export const fetchHistoryRaw = (t: Target, runId: string) => postJson<HistoryRawResponse>("/api/history/raw", { ...t, runId });
 export const deleteHistory = (t: Target) => postJson<{ deleted: boolean }>("/api/history/delete", t);
 
-// The endpoint may not be deployed yet, so any failure reads as "no data" rather than an error.
+// A response the edge cached before `configured` existed (up to 60 seconds after a deploy) counts as configured.
+export function parseMonitor(body: unknown): MonitorResponse | null {
+	if (typeof body !== "object" || body === null) return null;
+	const m = body as Partial<MonitorResponse>;
+	if (typeof m.state !== "string" || !Array.isArray(m.buckets)) return null;
+	if (m.configured !== undefined && typeof m.configured !== "boolean") return null;
+	return { ...(m as MonitorResponse), configured: m.configured ?? true };
+}
+
+// Any failure reads as "unavailable" rather than an error.
 export async function fetchMonitor(): Promise<MonitorResponse | null> {
 	const res = await fetch("/api/monitor").catch(() => null);
 	if (!res?.ok) return null;
-	const body: MonitorResponse | null = await res.json().catch(() => null);
-	return body && typeof body.state === "string" && Array.isArray(body.buckets) ? body : null;
+	return parseMonitor(await res.json().catch(() => null));
 }
