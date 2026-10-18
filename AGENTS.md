@@ -38,3 +38,6 @@
 - 代理不要使用 `pkill`、`killall`,本机其他会话也在用开发服务器。只停自己启动并记录了 PID 的进程。
 - e2e 只能跑在线上(Worker 拒绝本机与 IP 地址),命令与 mock 地址见 `docs/architecture.md` 的「已部署资源与运维」。
 - 部署是生产操作,由维护者或在维护者明确授权下由主会话执行,不要交给子代理。
+- 自定义监测的密钥只允许存在于内存里的 Map。任何新代码都不得把密钥写入 `localStorage`、`sessionStorage`、URL、DOM 属性或日志;序列化只显式挑选字段。
+- 页面 CSP 是 `style-src 'self'`:不得出现内联 `style` 属性(包括 Preact 的 `style={{}}`)与内联 `<style>`。
+- e2e 用 `getByTestId`,同名多个会触发严格模式报错。官方监测卡片的 testid 保持唯一,自定义卡片一律用 `custom-<id>-` 前缀。

@@ -359,6 +359,7 @@
 }
 
 .card-add {
+	align-self: start;
 	display: grid;
 	place-content: center;
 	gap: var(--space-2);
