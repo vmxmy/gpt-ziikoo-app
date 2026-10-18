@@ -94,6 +94,7 @@ describe("probe", () => {
 			cachedTokens: 0,
 		});
 		expect(result.capture.rawEvents?.map((e) => e.t)).toEqual([150, 250, 300, 400]);
+		expect(result.capture.truncated).toBe(false);
 		expect(requests[0].url).toBe("https://api.example.com/v1/responses");
 		expect(requests[0].init.redirect).toBe("manual");
 		expect(requests[0].init.headers).toEqual({
@@ -210,8 +211,9 @@ describe("probe", () => {
 		});
 		const result = await probe(input({}), deps);
 		expect(result.capture.answer).toBe("Invalid key [REDACTED] rejected");
-		expect(JSON.stringify(result.response)).not.toContain(KEY);
-		expect(result.capture.answer).not.toContain(KEY);
+		expect(result.capture.rawEvents).toBeNull();
+		expect(result.capture.truncated).toBe(true);
+		expect(JSON.stringify(result)).not.toContain(KEY);
 	});
 
 	it("records a buffered event stream as not streamed and leaves TTFT empty", async () => {

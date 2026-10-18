@@ -132,6 +132,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 		usage: parsed.usage,
 		rawBody: parsed.rawBody,
 		rawEvents: parsed.rawEvents,
+		truncated: base.truncated || parsed.rawDropped,
 		idShape: shape,
 	};
 	const reason = statusReason(status) ?? (parsed.error ? "upstream_error" : answer ? null : "bad_response");

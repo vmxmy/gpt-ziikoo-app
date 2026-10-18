@@ -8,6 +8,7 @@ export type ParsedBody = {
 	streamed: boolean;
 	rawBody: string | null;
 	rawEvents: SseEvent[] | null;
+	rawDropped: boolean;
 	text: string;
 	ttftMs: number | null;
 	usage: unknown;
@@ -163,9 +164,22 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 	// A relay that buffers the stream delivers the first delta together with the last event, so its arrival time is not a TTFT.
 	const lastEventT = events[events.length - 1]?.t;
 	const streamed = ttftMs !== null && lastEventT !== undefined && ttftMs < lastEventT;
-	// Per-event redaction misses a key the tokenizer split across deltas, so the joined text is redacted again.
-	const answer = redact(text || completedText, key);
-	return { streamed, rawBody: null, rawEvents: events, text: answer, ttftMs: streamed ? ttftMs : null, usage, id, error };
+	// Per-event redaction misses a key the tokenizer split across deltas. The events are dropped rather than rewritten:
+	// mapping the key's span in the joined text back onto delta substrings is fragile, and an echoed key is already abnormal.
+	const joined = text || completedText;
+	const answer = redact(joined, key);
+	const rawDropped = answer !== joined;
+	return {
+		streamed,
+		rawBody: null,
+		rawEvents: rawDropped ? null : events,
+		rawDropped,
+		text: answer,
+		ttftMs: streamed ? ttftMs : null,
+		usage,
+		id,
+		error,
+	};
 }
 
 function parseWhole(body: string): ParsedBody {
@@ -174,6 +188,7 @@ function parseWhole(body: string): ParsedBody {
 		streamed: false,
 		rawBody: body,
 		rawEvents: null,
+		rawDropped: false,
 		text: fullText(d),
 		ttftMs: null,
 		usage: obj(get(d, "usage")),
