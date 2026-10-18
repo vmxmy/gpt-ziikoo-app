@@ -1,0 +1,5 @@
+{
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": { "lib": ["es2024", "dom", "dom.iterable"], "jsx": "react-jsx", "jsxImportSource": "preact", "types": [] },
+	"include": ["src/web", "src/shared", "test/web", "e2e"]
+}

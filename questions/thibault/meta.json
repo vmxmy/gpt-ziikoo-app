@@ -1,0 +1,17 @@
+{
+  "id": "thibault",
+  "version": 1,
+  "status": "active",
+  "title": "Thibault 知识测试",
+  "measures": "测模型是否带有大模型应有的世界知识",
+  "kind": "knowledge",
+  "scorer": {
+    "type": "yes_no",
+    "expected": "YES"
+  },
+  "expectedLabel": "Yes(应认识此人)",
+  "calibratedModels": [
+    "gpt-6-astra"
+  ],
+  "failureHint": "回答不是 Yes。同模型的原装通道通常稳定回答认识"
+}
