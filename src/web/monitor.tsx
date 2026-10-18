@@ -61,7 +61,7 @@ function Chart({ buckets }: { buckets: MonitorBucket[] }) {
 			<figcaption>
 				<span class="key key-total">总耗时 p50</span> <span class="key key-ttft">TTFT p50</span>（毫秒，空白处无数据）
 			</figcaption>
-			<details open>
+			<details>
 				<summary>数据表</summary>
 				<div class="table-wrap">
 					<table>
