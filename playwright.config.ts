@@ -6,7 +6,9 @@ export default defineConfig<E2eOptions>({
 	timeout: 60_000,
 	expect: { timeout: 15_000 },
 	retries: 1,
-	workers: 2,
+	// Every probing spec shares the mock host's 60-per-minute HOST_LIMITER budget; parallel workers
+	// would spend it without the serial cooldown in run.spec seeing those probes.
+	workers: 1,
 	reporter: [["list"], ["html", { open: "never" }]],
 	use: {
 		baseURL: process.env.BASE_URL ?? "https://gpt.ziikoo.app",

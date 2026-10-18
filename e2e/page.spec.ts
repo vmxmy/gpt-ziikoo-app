@@ -23,6 +23,23 @@ test("页面加载,题目清单,题面展开与复制和接口逐字节一致", 
 	}
 });
 
+test("首屏在 CSP 下无违规", async ({ page }) => {
+	const violations: string[] = [];
+	// Chrome logs blocked resources as console errors; the init script also reports violation events.
+	page.on("console", (msg) => {
+		if (/Content Security Policy/i.test(msg.text())) violations.push(msg.text());
+	});
+	await page.addInitScript(() => {
+		document.addEventListener("securitypolicyviolation", (e) =>
+			console.error(`Content Security Policy violation: ${e.violatedDirective} ${e.blockedURI}`),
+		);
+	});
+	await page.goto("/");
+	await expect(page.getByTestId("start-button")).toBeVisible();
+	await expect(page.getByTestId("monitor-badge")).toBeVisible();
+	expect(violations).toEqual([]);
+});
+
 test("监测区块与 /api/monitor 一致", async ({ page, request }) => {
 	const res = await request.get("/api/monitor");
 	await page.goto("/");

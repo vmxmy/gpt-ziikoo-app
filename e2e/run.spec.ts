@@ -1,50 +1,87 @@
+import type { Page } from "@playwright/test";
 import { STAGES } from "../src/shared/ladder.ts";
-import { expect, expectOverall, fillForm, scrubbed, startRun, test } from "./fixtures.ts";
+import type { OverallStatus, QuestionListItem } from "../src/shared/types.ts";
+import { expect, expectOverall, fillForm, RUN_TIMEOUT_MS, type RunSetup, scrubbed, startRun, test } from "./fixtures.ts";
 
 // These drive real ladders against the live site. A retry of a serial group reruns every test in
 // it, including the full ladders, so retries stay off here to keep the request volume bounded.
 test.describe.configure({ mode: "serial", retries: 0, timeout: 360_000 });
 
-// HOST_LIMITER allows 60 probes per minute per target host and every test targets the same mock
-// host, so the next test waits out the window after a full ladder (about 62 probes).
+// HOST_LIMITER allows 60 probes per minute per target host and every probe targets the same mock
+// host. A full ladder is 32 probes (31 plus the stage-1 race), at most 33 with one question
+// eliminated alongside it, so only one passing question runs per ladder. Full ladders are spaced
+// a window apart; the light tests in between add at most 13 probes and api.spec at most 5
+// (workers: 1), so any 60-second window stays below 60.
 const HOST_WINDOW_MS = 60_000;
 let quietAt = 0;
 
-test.beforeEach(async () => {
+async function fullLadder(page: Page, setup: RunSetup, status: OverallStatus): Promise<void> {
 	const wait = quietAt - Date.now();
 	if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-});
+	try {
+		await startRun(page, setup);
+		await expectOverall(page, status);
+	} finally {
+		quietAt = Date.now() + HOST_WINDOW_MS;
+	}
+}
 
 const dots = (state: string) => `[data-testid="call-dot"][data-state="${state}"]`;
 const settledDots = '[data-testid="call-dot"]:not([data-state="pending"])';
 
-test("mock-good 两题满跑,全部通过,每题 31 次调用", async ({ page, site, key, questions }) =>
-	scrubbed(page, async () => {
-		await startRun(page, { site, key, model: "mock-good", select: questions.map((q) => q.id), questions });
-		await expectOverall(page, "all_passed");
-		quietAt = Date.now() + HOST_WINDOW_MS;
-		await expect(page.getByTestId("snapshot-notice")).toBeVisible();
+// docs/design.md「架构」: stage 1 of the first question races both channels once, so that stage
+// holds one dot per channel. Every other stage and question runs on the chosen channel only.
+function stageDots(questions: QuestionListItem[], select: string[], id: string, index: number): number {
+	const first = questions.find((q) => select.includes(q.id));
+	return (index === 0 && first?.id === id ? 1 : 0) + STAGES[index]!.calls;
+}
+
+async function expectFullLane(page: Page, questions: QuestionListItem[], select: string[], id: string): Promise<void> {
+	const lane = page.getByTestId(`lane-${id}`);
+	for (const index of STAGES.keys()) {
+		await expect(lane.getByTestId(`stage-${index + 1}`).locator(dots("ok"))).toHaveCount(stageDots(questions, select, id, index));
+	}
+}
+
+async function expectEliminated(page: Page, questions: QuestionListItem[], select: string[], id: string): Promise<void> {
+	const lane = page.getByTestId(`lane-${id}`);
+	await expect(lane.getByTestId("stage-1").locator(dots("wrong"))).toHaveCount(stageDots(questions, select, id, 0));
+	for (const n of [2, 3, 4]) await expect(lane.getByTestId(`stage-${n}`).locator(settledDots)).toHaveCount(0);
+}
+
+test("mock-good 每题单独满跑,全部通过,每关调用数符合梯度", async ({ page, site, key, questions }) => {
+	test.setTimeout(questions.length * (HOST_WINDOW_MS + RUN_TIMEOUT_MS));
+	await scrubbed(page, async () => {
 		for (const q of questions) {
+			const select = [q.id];
+			await fullLadder(page, { site, key, model: "mock-good", select, questions }, "all_passed");
+			await expect(page.getByTestId("snapshot-notice")).toBeVisible();
 			await expect(page.getByTestId(`verdict-${q.id}`)).toHaveAttribute("data-status", "passed");
-			const lane = page.getByTestId(`lane-${q.id}`);
-			await expect(lane.locator(dots("ok"))).toHaveCount(31);
-			for (const [i, stage] of STAGES.entries()) {
-				await expect(lane.getByTestId(`stage-${i + 1}`).locator(dots("ok"))).toHaveCount(stage.calls);
-			}
+			await expectFullLane(page, questions, select, q.id);
 		}
+	});
+});
+
+test("mock-partial 一题通过一题首关淘汰,总评 partial", async ({ page, site, key, questions }) =>
+	scrubbed(page, async () => {
+		const select = ["thibault", "candy"];
+		await fullLadder(page, { site, key, model: "mock-partial", select, questions }, "partial");
+		await expect(page.getByTestId("verdict-thibault")).toHaveAttribute("data-status", "passed");
+		await expect(page.getByTestId("verdict-candy")).toHaveAttribute("data-status", "failed");
+		await expectFullLane(page, questions, select, "thibault");
+		await expectEliminated(page, questions, select, "candy");
 	}));
 
 // The first stage needs 1 of 1, so a relay that is always wrong is eliminated there.
 test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({ page, site, key, questions }) =>
 	scrubbed(page, async () => {
-		await startRun(page, { site, key, model: "mock-wrong", select: questions.map((q) => q.id), questions });
+		const select = questions.map((q) => q.id);
+		await startRun(page, { site, key, model: "mock-wrong", select, questions });
 		await expectOverall(page, "failed");
 		for (const q of questions) {
 			await expect(page.getByTestId(`verdict-${q.id}`)).toHaveAttribute("data-status", "failed");
 			await expect(page.getByTestId(`diagnosis-${q.id}`)).toContainText(q.failureHint);
-			const lane = page.getByTestId(`lane-${q.id}`);
-			await expect(lane.getByTestId("stage-1").locator(dots("wrong"))).toHaveCount(1);
-			for (const n of [2, 3, 4]) await expect(lane.getByTestId(`stage-${n}`).locator(settledDots)).toHaveCount(0);
+			await expectEliminated(page, questions, select, q.id);
 		}
 	}));
 
@@ -78,9 +115,7 @@ test("mock-401 总评 unavailable 并显示原因", async ({ page, site, key, qu
 test("mock-nostream 回退整块 JSON,明细里 TTFT 为空", async ({ page, site, key, questions }) =>
 	scrubbed(page, async () => {
 		const only = questions[0]!;
-		await startRun(page, { site, key, model: "mock-nostream", select: [only.id], questions });
-		await expectOverall(page, "all_passed");
-		quietAt = Date.now() + HOST_WINDOW_MS;
+		await fullLadder(page, { site, key, model: "mock-nostream", select: [only.id], questions }, "all_passed");
 		// Located by header text because the contract names the table, not its columns.
 		const column = await page.getByTestId(`detail-table-${only.id}`).evaluate((table) => {
 			const rows = [...table.querySelectorAll("tr")];
@@ -94,13 +129,27 @@ test("mock-nostream 回退整块 JSON,明细里 TTFT 为空", async ({ page, sit
 		for (const cell of column.cells) expect(cell).toMatch(/^[-–—]?$/);
 	}));
 
-test("历史:跑完出现一轮,原始数据不含密钥,删除后为空", async ({ page, context, request, site, key, questions }) =>
+// The page only fetches history on demand. The call is persisted after the probe reply, so the
+// load is retried until the run shows up.
+async function loadHistory(page: Page): Promise<void> {
+	const section = page.getByTestId("history-section");
+	await expect(async () => {
+		await section.getByRole("button", { name: "查看历史" }).click();
+		await expect(section.getByTestId("history-run")).toHaveCount(1, { timeout: 2_000 });
+	}).toPass({ timeout: 30_000 });
+}
+
+test("历史:跑完可取回一轮,重载后仍在,原始数据不含密钥,删除后为空", async ({ page, context, request, site, key, questions }) =>
 	scrubbed(page, async () => {
 		const only = questions[0]!;
-		await startRun(page, { site, key, model: "mock-wrong", select: [only.id], questions });
+		const setup = { site, key, model: "mock-wrong", select: [only.id], questions };
+		await startRun(page, setup);
 		await expectOverall(page, "failed");
+		await loadHistory(page);
+		// A reload drops page memory, so a run seen afterwards came from the server.
+		await fillForm(page, setup);
+		await loadHistory(page);
 		const section = page.getByTestId("history-section");
-		await expect(section.getByTestId("history-run")).toHaveCount(1, { timeout: 30_000 });
 		const download = page.waitForEvent("download");
 		await section.getByTestId("history-raw-button").first().click();
 		// Opened in the browser because the specs compile without Node types.

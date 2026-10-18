@@ -1,8 +1,10 @@
 type Protocol = "responses" | "chat";
 type IdKind = "hex" | "ft" | "b64";
+type Topic = "thibault" | "candy";
 type Answering = {
 	kind: "answer";
 	correct: boolean;
+	wrongFor: ReadonlySet<Topic>;
 	honorStream: boolean;
 	id: IdKind;
 	cached: boolean;
@@ -31,11 +33,21 @@ const BIG_FILLER_CHARS = 300 * 1024;
 const DELTA_CHARS = 8;
 const BIG_DELTA_CHARS = 1024;
 
-const ANSWER: Answering = { kind: "answer", correct: true, honorStream: true, id: "hex", cached: false, gapMs: 0, big: false };
+const ANSWER: Answering = {
+	kind: "answer",
+	correct: true,
+	wrongFor: new Set<Topic>(),
+	honorStream: true,
+	id: "hex",
+	cached: false,
+	gapMs: 0,
+	big: false,
+};
 
 const MODELS = new Map<string, Behavior>([
 	["mock-good", ANSWER],
 	["mock-wrong", { ...ANSWER, correct: false }],
+	["mock-partial", { ...ANSWER, wrongFor: new Set<Topic>(["candy"]) }],
 	["mock-nostream", { ...ANSWER, honorStream: false }],
 	["mock-ft", { ...ANSWER, id: "ft" }],
 	["mock-b64", { ...ANSWER, id: "b64" }],
@@ -97,8 +109,8 @@ function responseId(protocol: Protocol, kind: IdKind): string {
 }
 
 function answerText(prompt: string, b: Answering): string {
-	const pick = (pair: { right: string; wrong: string }) => (b.correct ? pair.right : pair.wrong);
-	const text = prompt.includes("Thibault") ? pick(ANSWERS.thibault) : prompt.includes("糖果") ? pick(ANSWERS.candy) : "OK";
+	const pick = (topic: Topic) => (b.correct && !b.wrongFor.has(topic) ? ANSWERS[topic].right : ANSWERS[topic].wrong);
+	const text = prompt.includes("Thibault") ? pick("thibault") : prompt.includes("糖果") ? pick("candy") : "OK";
 	return b.big ? `${text} ${"x".repeat(BIG_FILLER_CHARS)}` : text;
 }
 

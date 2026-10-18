@@ -21,6 +21,9 @@ test("POST /api/probe 拒绝非法目标与参数", async ({ request }) => {
 		localhost: { ...valid, site: "https://localhost" },
 		过短密钥: { ...valid, key: "sk-1" },
 		"非法 runId": { ...valid, runId: "not-a-uuid", stage: 1, seq: 1 },
+		自由题面: { ...valid, question: "1+1=?" },
+		未知协议: { ...valid, protocol: "grpc" },
+		"runId 缺 stage 与 seq": { ...valid, runId: crypto.randomUUID() },
 	};
 	for (const [name, data] of Object.entries(cases)) {
 		const res = await request.post("/api/probe", { data });
@@ -52,10 +55,25 @@ test("GET /api/questions 形状", async ({ request }) => {
 	}
 });
 
+test("历史接口拒绝缺参数的请求", async ({ request }) => {
+	for (const path of ["/api/history", "/api/history/raw", "/api/history/delete"]) {
+		const res = await request.post(path, { data: {} });
+		expect(res.status(), path).toBe(400);
+		expect(await res.json(), path).toMatchObject({ error: "bad_request" });
+	}
+	const res = await request.post("/api/history/raw", { data: { site: UNREACHABLE_SITE, key: `sk-e2e-${"a".repeat(24)}`, runId: "not-a-uuid" } });
+	expect(res.status()).toBe(400);
+});
+
 test("错误方法返回 405,预检不放行跨域", async ({ request }) => {
-	const get = await request.get("/api/probe");
-	expect(get.status()).toBe(405);
-	expect(get.headers()["allow"]).toBe("POST");
+	for (const path of ["/api/probe", "/api/history", "/api/history/raw", "/api/history/delete"]) {
+		const get = await request.get(path);
+		expect(get.status(), path).toBe(405);
+		expect(get.headers()["allow"], path).toBe("POST");
+	}
+	const post = await request.post("/api/questions", { data: {} });
+	expect(post.status()).toBe(405);
+	expect(post.headers()["allow"]).toBe("GET");
 	const preflight = await request.fetch("/api/probe", {
 		method: "OPTIONS",
 		headers: { Origin: "https://third-party.example", "Access-Control-Request-Method": "POST" },
@@ -65,7 +83,9 @@ test("错误方法返回 405,预检不放行跨域", async ({ request }) => {
 
 test("页面有 CSP,接口有 no-store 与 nosniff", async ({ request }) => {
 	const page = await request.get("/");
-	expect(page.headers()["content-security-policy"]).toBeTruthy();
+	const csp = page.headers()["content-security-policy"] ?? "";
+	expect(csp).toMatch(/script-src 'self'(;|$)/);
+	for (const loose of ["'unsafe-inline'", "'unsafe-eval'", "http"]) expect(csp).not.toContain(loose);
 	for (const res of [await request.get("/api/questions"), await request.post("/api/probe", { data: {} })]) {
 		expect(res.headers()["cache-control"]).toContain("no-store");
 		expect(res.headers()["x-content-type-options"]).toBe("nosniff");
@@ -87,4 +107,26 @@ test("站点回显密钥时,原始数据已脱敏", async ({ request, site, key 
 	const stored = JSON.stringify(await raw(request, site, key, runId));
 	expect(stored).toContain("[REDACTED]");
 	expect(stored).not.toContain(key);
+});
+
+test("只有带 runId 的有效响应才建立对象,不存在与删除后同形", async ({ request, site, key }) => {
+	const runId = crypto.randomUUID();
+	const empty = async () => {
+		expect(await history(request, site, key)).toEqual({ runs: [] });
+		expect(await raw(request, site, key, runId)).toEqual({ calls: [] });
+	};
+	const probe = (model: string, run: object) =>
+		request.post("/api/probe", { data: { site, key, protocol: "responses", model, question: "thibault", ...run } });
+	await empty();
+	expect(await (await probe("mock-401", { runId, stage: 1, seq: 1 })).json()).toMatchObject({ ok: false, reason: "unauthorized" });
+	expect(await (await probe("mock-good", {})).json()).toMatchObject({ ok: true, correct: true });
+	await empty();
+	expect(await (await probe("mock-good", { runId, stage: 1, seq: 1, attempt: 2 })).json()).toMatchObject({ ok: true });
+	await expect.poll(async () => (await history(request, site, key)).runs.length).toBe(1);
+	// The 401 shares the runId, so a single stored call proves a failure before the object exists is dropped.
+	const { calls } = await raw(request, site, key, runId);
+	expect(calls).toHaveLength(1);
+	expect(calls[0]).toMatchObject({ ok: true, attempt: 2 });
+	expect((await request.post("/api/history/delete", { data: { site, key } })).status()).toBe(200);
+	await empty();
 });
