@@ -3,7 +3,7 @@ import { buildMonitor, MONITOR } from "../shared/monitor.ts";
 import type { ApiError, HistoryDeleteResponse, HistoryResponse, Question } from "../shared/types.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
-import { MONITOR_NAME, MONITOR_TARGET, monitorQuestions, pickQuestion, toSample } from "./monitor.ts";
+import { MONITOR_NAME, MONITOR_TARGET, NO_KEY, monitorQuestions, pickQuestion, toSample } from "./monitor.ts";
 import { probe, type ProbeResult } from "./probe.ts";
 import {
 	type HistoryCommand,
@@ -162,7 +162,7 @@ const handleMonitor: Handler = async (request, _env, ctx) => {
 };
 
 async function runMonitor(scheduledTime: number, env: Env, ctx: ExecutionContext): Promise<void> {
-	if (!env.GAOXIN_KEY) {
+	if (!env.GAOXIN_KEY || env.GAOXIN_KEY === NO_KEY) {
 		console.log(JSON.stringify({ event: "monitor_skipped", reason: "no_key" }));
 		return;
 	}

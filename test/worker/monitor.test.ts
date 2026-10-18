@@ -92,6 +92,17 @@ describe("scheduled", () => {
 		expect(log.mock.calls).toEqual([['{"event":"monitor_skipped","reason":"no_key"}']]);
 	});
 
+	it("treats the deploy-time placeholder as no key", async () => {
+		const fetch = vi.fn();
+		vi.stubGlobal("fetch", fetch);
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const { recorded, ctx } = fakeMonitor();
+		await worker.scheduled(controller(NOW), env("unset"), ctx);
+		expect(fetch).not.toHaveBeenCalled();
+		expect(recorded).toEqual([]);
+		expect(log.mock.calls).toEqual([['{"event":"monitor_skipped","reason":"no_key"}']]);
+	});
+
 	it("probes the minute's question and stores one sample without the answer text", async () => {
 		const requests: string[] = [];
 		vi.stubGlobal("fetch", async (url: string) => {
