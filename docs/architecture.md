@@ -156,9 +156,25 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 - 保留最近 10 轮与闲置清空,把「删什么」写成纯函数测,DO 本身只留薄壳。
 - DO 的集成测试官方推荐 `@cloudflare/vitest-plugin`,它提供对实例的直接访问。它是否与 `cloudflare.config.ts` 配合,待查。查清前不引入,DO 薄壳用 `cf dev` 加手动检查覆盖。
 
+## P0 核查结果
+
+2026-10-18 用 `cf`(1.0.0-beta.18)以只读命令核查,全部通过,没有改动任何设置。
+
+| 项 | 结果 |
+| --- | --- |
+| 账号 | `ziikoo.app` 与 `ziikoo.com` 在同一个账号下,账号类型为标准 |
+| 套餐 | `ziikoo.app` 为 Free,状态 active |
+| Bot Fight Mode | 关闭(`fight_mode: false`),JavaScript 检测也关闭。匿名脚本不会被质询,无需改动 |
+| 边缘限速规则 | 该 zone 没有限速规则集。Free 只允许 1 条,这个名额是空的 |
+| 自定义 WAF 规则 | 没有 |
+| `gpt` 的 DNS 记录 | 不存在,自定义域部署时会新建 |
+| 该 zone 的其他内容 | 还有其他走代理的站点。Bot Fight Mode 是全区设置,以后任何人打开它,都会同时影响本站的匿名 API,改动前必须想到这一点 |
+
+核查命令:`cf zones list`、`cf bot-management get --zone`、`cf rulesets entrypoint get <phase> --zone`、`cf dns records list --zone`。
+
 ## 未核实,实现前必须验证
 
-1. `ziikoo.app` 这个 zone 当前 Bot Fight Mode 是开是关,以及该 zone 上是否还有别的站点依赖它。官方文档写明 Bot Fight Mode 不能被任何规则跳过,开着会质询匿名脚本,必须关。需要登录 `cf` 后用只读命令查看。
+1. (已在 P0 核查,见上。)
 2. Free zone 的 WAF 限速规则被触发时,响应头是否带 `Retry-After`。文档只写明默认响应码 429。
 3. 限速绑定在多节点下的实际放行量。P1 用压测确认,决定是否提前引入限速 Durable Object。
 4. `cloudflare.config.ts` 里 `triggers` 的字段形状(自定义域、`workers.dev` 开关)。
