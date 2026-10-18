@@ -10,9 +10,12 @@ type Answering = {
 	cached: boolean;
 	gapMs: number;
 	big: boolean;
+	empty: boolean;
 };
 type Failing = { kind: "fail"; status: number; echo: boolean };
-type Behavior = Answering | Failing;
+// Replies that are not OpenAI-shaped at all, as relays behind a WAF or a broken proxy send them.
+type Canned = { kind: "canned"; reply: () => Response };
+type Behavior = Answering | Failing | Canned;
 type Frame = { delayMs: number; text: string };
 
 type Completion = {
@@ -42,7 +45,27 @@ const ANSWER: Answering = {
 	cached: false,
 	gapMs: 0,
 	big: false,
+	empty: false,
 };
+
+const BLOCK_PAGE = "<!DOCTYPE html><html><head><title>Access denied</title></head><body><h1>403 Forbidden</h1></body></html>";
+
+function html(body: string, status: number): Response {
+	return new Response(body, { status, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
+function sseEvent(type: string, fields: object, sequence: number): Frame {
+	return { delayMs: 0, text: `event: ${type}\ndata: ${JSON.stringify({ type, sequence_number: sequence, ...fields })}\n\n` };
+}
+
+function streamFailure(): Response {
+	const response = { id: `resp_68${hex(23)}`, object: "response", status: "in_progress", error: null, output: [], usage: null };
+	const frames = [
+		sseEvent("response.created", { response }, 0),
+		sseEvent("error", { code: "server_error", message: "The server had an error while processing your request.", param: null }, 1),
+	];
+	return new Response(streamOf(frames), { headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+}
 
 const MODELS = new Map<string, Behavior>([
 	["mock-good", ANSWER],
@@ -54,10 +77,17 @@ const MODELS = new Map<string, Behavior>([
 	["mock-cached", { ...ANSWER, cached: true }],
 	["mock-slow", { ...ANSWER, gapMs: 400 }],
 	["mock-big", { ...ANSWER, big: true }],
+	["mock-empty", { ...ANSWER, empty: true }],
 	["mock-401", { kind: "fail", status: 401, echo: false }],
 	["mock-429", { kind: "fail", status: 429, echo: false }],
 	["mock-500", { kind: "fail", status: 500, echo: false }],
 	["mock-echo", { kind: "fail", status: 500, echo: true }],
+	["mock-403", { kind: "canned", reply: () => html(BLOCK_PAGE, 403) }],
+	["mock-html", { kind: "canned", reply: () => html("<html><body>OK</body></html>", 200) }],
+	// Points back at this mock so a worker that followed it would report 200, not the 302 itself.
+	["mock-redirect", { kind: "canned", reply: () => new Response(null, { status: 302, headers: { Location: "/healthz" } }) }],
+	["mock-stream-error", { kind: "canned", reply: streamFailure }],
+	// No timeout model: it would hold a probe for 120 seconds. test/worker/probe.test.ts covers that path.
 ]);
 
 const PATHS = new Map<string, Protocol>([
@@ -114,6 +144,7 @@ function responseId(protocol: Protocol, kind: IdKind): string {
 }
 
 function answerText(prompt: string, b: Answering): string {
+	if (b.empty) return "";
 	const pick = (topic: Topic) => (b.correct && !b.wrongFor.has(topic) ? ANSWERS[topic].right : ANSWERS[topic].wrong);
 	const text = prompt.includes("Thibault") ? pick("thibault") : prompt.includes("糖果") ? pick("candy") : "OK";
 	return b.big ? `${text} ${"x".repeat(BIG_FILLER_CHARS)}` : text;
@@ -330,6 +361,7 @@ export default {
 		if (typeof model !== "string" || !behavior) {
 			return openAiError(404, "The model does not exist or you do not have access to it.", "invalid_request_error", "model_not_found");
 		}
+		if (behavior.kind === "canned") return behavior.reply();
 		return behavior.kind === "fail" ? failure(behavior, auth) : answer(protocol, body, model, behavior);
 	},
 } satisfies ExportedHandler;

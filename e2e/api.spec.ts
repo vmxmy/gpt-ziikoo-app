@@ -1,5 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-import type { HistoryRawResponse, HistoryResponse, ProbeFail } from "../src/shared/types.ts";
+import type { HistoryRawResponse, HistoryResponse, ProbeFail, ProbeOk } from "../src/shared/types.ts";
 import { expect, test } from "./fixtures.ts";
 
 // .invalid never resolves, so a validation regression cannot send traffic to a real host.
@@ -98,6 +98,11 @@ test("站点失败状态映射为 reason 与 httpStatus", async ({ request, site
 		"mock-429": { reason: "rate_limited", httpStatus: 429 },
 		"mock-500": { reason: "upstream_error", httpStatus: 500 },
 		"mock-missing": { reason: "not_found", httpStatus: 404 },
+		"mock-403": { reason: "forbidden", httpStatus: 403 },
+		"mock-empty": { reason: "bad_response", httpStatus: 200 },
+		"mock-html": { reason: "bad_response", httpStatus: 200 },
+		"mock-redirect": { reason: "upstream_error", httpStatus: 302 },
+		"mock-stream-error": { reason: "upstream_error", httpStatus: 200 },
 	};
 	for (const [model, expected] of Object.entries(cases)) {
 		const res = await request.post("/api/probe", { data: { site, key, protocol: "responses", model, question: "thibault" } });
@@ -110,7 +115,15 @@ test("站点回显密钥时,原始数据已脱敏", async ({ request, site, key 
 	const runId = crypto.randomUUID();
 	const probe = (model: string, stage: number) =>
 		request.post("/api/probe", { data: { site, key, protocol: "responses", model, question: "thibault", runId, stage, seq: 1 } });
-	expect(await (await probe("mock-good", 1)).json()).toMatchObject({ ok: true, correct: true });
+	expect(await (await probe("mock-good", 1)).json()).toMatchObject({
+		ok: true,
+		correct: true,
+		idShape: "hex",
+		reasoningTokens: 192,
+		cachedTokens: 0,
+		streamed: true,
+		ttftMs: expect.any(Number),
+	});
 	// Only a valid response creates the object, and it is written after the reply; an echo call
 	// that lands before the object exists is dropped instead of stored.
 	await expect.poll(async () => (await history(request, site, key)).runs.length).toBe(1);
@@ -121,6 +134,24 @@ test("站点回显密钥时,原始数据已脱敏", async ({ request, site, key 
 	const stored = JSON.stringify(await raw(request, site, key, runId));
 	expect(stored).toContain("[REDACTED]");
 	expect(stored).not.toContain(key);
+});
+
+test("解析 id 形态、缓存用量、首字时间与超限截断", async ({ request, site, key }) => {
+	const probe = async (model: string, run: object = {}) =>
+		(await request.post("/api/probe", { data: { site, key, protocol: "responses", model, question: "thibault", ...run } })).json();
+	expect(await probe("mock-ft"), "mock-ft").toMatchObject({ ok: true, idShape: "ft" });
+	expect(await probe("mock-b64"), "mock-b64").toMatchObject({ ok: true, idShape: "base64" });
+	expect(await probe("mock-cached"), "mock-cached").toMatchObject({ ok: true, promptTokens: 1280, cachedTokens: 1024 });
+	// mock-slow waits 80 ms before the first delta and 400 ms before each of the other four.
+	const slow: ProbeOk = await probe("mock-slow");
+	expect(slow).toMatchObject({ ok: true, totalMs: expect.any(Number), ttftMs: expect.any(Number) });
+	expect(slow.ttftMs).toBeLessThan(slow.totalMs);
+	expect(slow.totalMs).toBeGreaterThanOrEqual(1600);
+	const runId = crypto.randomUUID();
+	expect(await probe("mock-big", { runId, stage: 1, seq: 1 }), "mock-big").toMatchObject({ ok: true });
+	await expect.poll(async () => (await raw(request, site, key, runId)).calls.length).toBe(1);
+	const [big] = (await raw(request, site, key, runId)).calls;
+	expect(big).toMatchObject({ truncated: true, usage: null });
 });
 
 test("只有带 runId 的有效响应才建立对象,不存在与删除后同形", async ({ request, site, key }) => {

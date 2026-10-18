@@ -10,7 +10,7 @@ test.describe.configure({ mode: "serial", retries: 0, timeout: 360_000 });
 // HOST_LIMITER allows 60 probes per minute per target host and every probe targets the same mock
 // host. A full ladder is 32 probes (31 plus the stage-1 race), at most 33 with one question
 // eliminated alongside it, so only one passing question runs per ladder. Full ladders are spaced
-// a window apart. api.spec runs first (workers: 1) and its 8 probes can only share a window with
+// a window apart. api.spec runs first (workers: 1) and its 18 probes can only share a window with
 // the first 32-probe ladder; the light tests between mock-partial and mock-nostream add at most 17
 // (3 + 2 + 6 + 6) and the history test 2, so any 60-second window stays at or below 50.
 const HOST_WINDOW_MS = 60_000;
@@ -91,6 +91,12 @@ test("mock-partial 一题通过一题首关淘汰,总评 partial", async ({ page
 		await expectFullLane(page, questions, select, "thibault");
 		await expectEliminated(page, questions, select, "candy");
 		await expectHistoryMatchesPage(page, request, site, key, select);
+		// "部分通过" is no question's label, so the history row can only match it through its overall
+		// label. The contract names the overall element, not its label, so it is read off the page.
+		const label = /：\s*([^（(\s]+)/.exec((await page.getByTestId("overall-result").textContent()) ?? "")?.[1];
+		expect(label).toBeTruthy();
+		await loadHistory(page);
+		await expect(page.getByTestId("history-section").getByTestId("history-run")).toContainText(label ?? "");
 	}));
 
 // The first stage needs 1 of 1, so a relay that is always wrong is eliminated there.
@@ -182,11 +188,7 @@ test("历史:跑完可取回一轮,重载后仍在,原始数据不含密钥,删�
 		const setup = { site, key, model: "mock-wrong", select: [only.id], questions };
 		await startRun(page, setup);
 		await expectOverall(page, "failed");
-		// The contract names the overall element, not its label, so the label is read off the page.
-		const label = /：\s*([^（(\s]+)/.exec((await page.getByTestId("overall-result").textContent()) ?? "")?.[1];
-		expect(label).toBeTruthy();
 		await loadHistory(page);
-		await expect(page.getByTestId("history-section").getByTestId("history-run")).toContainText(label ?? "");
 		// A reload drops page memory, so a run seen afterwards came from the server.
 		await fillForm(page, setup);
 		await loadHistory(page);
