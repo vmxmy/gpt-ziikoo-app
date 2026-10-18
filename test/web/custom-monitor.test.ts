@@ -10,6 +10,7 @@ import {
 	parseSite,
 	pickQuestion,
 	probeCard,
+	probeDue,
 	serializeCards,
 	statusNotice,
 	trimSamples,
@@ -21,7 +22,7 @@ const MIN = 60_000;
 const KEY = "sk-live-known-secret-0042";
 const IDS = ["candy", "thibault"];
 const card = (over: Partial<CustomCard> = {}): CustomCard => ({
-	...newCard({ id: "ab12cd34", site: "https://relay.example", model: "gpt-6-astra", intervalMin: 2, createdAt: NOW }, "relay.example"),
+	...newCard({ id: "ab12cd34", site: "https://relay.example", model: "gpt-6-astra", protocol: "responses", intervalMin: 2, createdAt: NOW }, "relay.example"),
 	...over,
 });
 const correct: ProbeResponse = {
@@ -89,6 +90,42 @@ describe("status", () => {
 	it("stops on a Worker 400 with its message", () => {
 		const c = applyOutcome(card(), "candy", { kind: "stop", status: 400, message: "目标地址不允许", retryAfterSec: null }, NOW);
 		expect(c.status).toEqual({ kind: "rejected", message: "目标地址不允许" });
+	});
+});
+
+describe("key hygiene", () => {
+	it("forgets the key once a card turns bad_key and never probes with it again", async () => {
+		const keys = new Map([["ab12cd34", KEY]]);
+		const sent: string[] = [];
+		const probe = async (body: ProbeRequest) => (sent.push(body.key), reply(unauthorized));
+		const update = await probeDue(card({ unauthorized: 4 }), keys, IDS, probe, NOW);
+		const bad = update!(card({ unauthorized: 4 }));
+		expect(bad.status).toEqual({ kind: "bad_key" });
+		expect(keys.has("ab12cd34")).toBe(false);
+		expect(await probeDue(card({ unauthorized: 4 }), keys, IDS, probe, NOW + 10 * MIN)).toBeNull();
+		expect(sent).toEqual([KEY]);
+	});
+
+	it("keeps the key while the card keeps running", async () => {
+		const keys = new Map([["ab12cd34", KEY]]);
+		await probeDue(card(), keys, IDS, async () => reply(unauthorized), NOW);
+		expect(keys.get("ab12cd34")).toBe(KEY);
+	});
+});
+
+describe("protocol", () => {
+	it("probes on the card's channel and stores it", async () => {
+		const calls: ProbeRequest[] = [];
+		const chat = card({ protocol: "chat" });
+		await probeCard(chat, KEY, IDS, async (b) => (calls.push(b), reply(correct)), NOW);
+		expect(calls.map((c) => c.protocol)).toEqual(["chat"]);
+		expect(deserializeCards(serializeCards([chat]), NOW)[0]!.protocol).toBe("chat");
+	});
+
+	it("defaults a missing channel to responses and drops an unknown one", () => {
+		const site = { id: "x", site: "https://a.example", model: "m", intervalMin: 1, createdAt: 1, samples: [] };
+		expect(deserializeCards(JSON.stringify({ sites: [site] }), NOW)[0]!.protocol).toBe("responses");
+		expect(deserializeCards(JSON.stringify({ sites: [{ ...site, protocol: "grpc" }] }), NOW)).toEqual([]);
 	});
 });
 

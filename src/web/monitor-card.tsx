@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorBucket, type MonitorState } from "../shared/monitor.ts";
+import type { Protocol } from "../shared/types.ts";
 import { CHART, chartModel, xOf, xTickIndexes, type Point } from "./chart.ts";
 import {
 	badgeLabel,
@@ -23,6 +24,7 @@ export type CardProps = {
 	rootTestId: string;
 	host: string;
 	source: string;
+	protocol?: Protocol;
 	view: MonitorView;
 	now: number;
 	actions?: ComponentChildren;
@@ -52,7 +54,7 @@ export function MonitorCard(props: CardProps) {
 				>
 					{badgeLabel(view)}
 				</p>
-				{data && <p class="meta">{metaLine(data, props.now)}</p>}
+				{data && <p class="meta">{metaLine(data, props.now, props.protocol)}</p>}
 			</div>
 			{props.children}
 			<Metrics t={t} uptime={data?.uptimePct ?? null} correct={data?.correctPct ?? null} p50={latencyP50(buckets)} />

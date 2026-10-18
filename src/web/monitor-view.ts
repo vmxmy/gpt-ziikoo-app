@@ -1,4 +1,5 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
+import type { Protocol } from "../shared/types.ts";
 
 export type MonitorView =
 	| { kind: "loading" }
@@ -43,9 +44,10 @@ export function agoText(ts: number, now: number): string {
 	return minutes < 60 ? `${minutes} 分钟前` : `${Math.floor(minutes / 60)} 小时前`;
 }
 
-export function metaLine(data: MonitorResponse, now: number): string {
+export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol): string {
 	const every = data.intervalSec >= 120 ? `${data.intervalSec / 60} 分钟` : `${data.intervalSec} 秒`;
 	const parts = [`目标 ${data.target}`, `每 ${every}一次`];
+	if (protocol) parts.push(`通道 ${protocol}`);
 	if (data.last) parts.push(`最近一次探测 ${agoText(data.last.ts, now)}`);
 	return parts.join(" · ");
 }

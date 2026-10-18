@@ -9,8 +9,11 @@ const CURL = `curl -s https://gpt.ziikoo.app/api/probe \\
 
 export function ApiDocs() {
 	return (
-		<section class="block docs col-12 col-md-6" id="api-docs" aria-labelledby="api-docs-h" data-testid="api-docs">
-			<h2 id="api-docs-h">API 说明</h2>
+		<details class="block docs col-12 col-md-6" id="api-docs" data-testid="api-docs">
+			<summary>
+				<h2>API 说明</h2>
+				<span class="muted small">接口约定、梯度规则、curl 示例、限额</span>
+			</summary>
 			<h3>接口约定</h3>
 			<ul>
 				<li>
@@ -45,6 +48,6 @@ export function ApiDocs() {
 				<li>每轮最多 200 次调用。回答只返回前 70 字，完整内容在历史原始数据里。</li>
 				<li>每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。</li>
 			</ul>
-		</section>
+		</details>
 	);
 }

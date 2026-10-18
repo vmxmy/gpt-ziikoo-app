@@ -1,5 +1,5 @@
 import { buildMonitor, type MonitorResponse, type MonitorSample } from "../shared/monitor.ts";
-import type { ProbeRequest, ProbeResponse } from "../shared/types.ts";
+import type { ProbeRequest, ProbeResponse, Protocol } from "../shared/types.ts";
 import type { ProbeOutcome } from "./runner.ts";
 
 export const STORAGE_KEY = "gpt.monitors.v1";
@@ -12,7 +12,7 @@ const DEFAULT_RETRY_SEC = 60;
 
 export type IntervalMin = (typeof INTERVALS)[number];
 
-export type SiteConfig = { id: string; site: string; model: string; intervalMin: IntervalMin; createdAt: number };
+export type SiteConfig = { id: string; site: string; model: string; protocol: Protocol; intervalMin: IntervalMin; createdAt: number };
 
 export type CardStatus =
 	| { kind: "running" }
@@ -31,6 +31,8 @@ export type CustomCard = SiteConfig & {
 };
 
 export type SiteProbe = (body: ProbeRequest) => Promise<ProbeOutcome>;
+
+export type KeyStore = Pick<Map<string, string>, "get" | "set" | "delete" | "has">;
 
 export type ParsedSite = { ok: true; site: string; host: string } | { ok: false; message: string };
 
@@ -94,8 +96,23 @@ export async function probeCard(
 	now: number,
 ): Promise<(latest: CustomCard) => CustomCard> {
 	const question = pickQuestion(questionIds, now);
-	const outcome = await probe({ site: card.site, key, model: card.model, question, protocol: "responses" });
+	const outcome = await probe({ site: card.site, key, model: card.model, question, protocol: card.protocol });
 	return (latest) => applyOutcome(latest, question, outcome, now);
+}
+
+// Probes a card that is due and has a key, and forgets the key as soon as the card stops accepting it.
+export async function probeDue(
+	card: CustomCard,
+	keys: KeyStore,
+	questionIds: readonly string[],
+	probe: SiteProbe,
+	now: number,
+): Promise<((latest: CustomCard) => CustomCard) | null> {
+	const key = keys.get(card.id);
+	if (!key || !isDue(card, now)) return null;
+	const update = await probeCard(card, key, questionIds, probe, now);
+	if (needsKey(update(card).status)) keys.delete(card.id);
+	return update;
 }
 
 export const pauseCard = (card: CustomCard): CustomCard => ({ ...card, status: { kind: "paused" } });
@@ -125,21 +142,26 @@ export function statusNotice(status: CardStatus, now: number): string | null {
 
 // Picks fields explicitly so nothing held only in memory, such as a key, can reach storage by accident.
 export function serializeCards(cards: CustomCard[]): string {
-	const sites = cards.map(({ id, site, model, intervalMin, createdAt, samples }) => ({ id, site, model, intervalMin, createdAt, samples }));
+	const sites = cards.map(({ id, site, model, protocol, intervalMin, createdAt, samples }) => ({ id, site, model, protocol, intervalMin, createdAt, samples }));
 	return JSON.stringify({ sites });
 }
 
 const isInterval = (v: unknown): v is IntervalMin => INTERVALS.some((i) => i === v);
+
+export const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
+const isProtocol = (v: unknown): v is Protocol => PROTOCOLS.some((p) => p === v);
 
 function restoreCard(raw: unknown, now: number): CustomCard | null {
 	if (typeof raw !== "object" || raw === null) return null;
 	const r = raw as Record<string, unknown>;
 	if (typeof r.id !== "string" || typeof r.site !== "string" || typeof r.model !== "string") return null;
 	if (!isInterval(r.intervalMin) || typeof r.createdAt !== "number" || !Array.isArray(r.samples)) return null;
+	const protocol = r.protocol ?? "responses";
+	if (!isProtocol(protocol)) return null;
 	const parsed = parseSite(r.site);
 	if (!parsed.ok) return null;
 	const samples = r.samples.filter((s): s is MonitorSample => typeof s === "object" && s !== null && "ts" in s && typeof s.ts === "number");
-	const config = { id: r.id, site: parsed.site, model: r.model, intervalMin: r.intervalMin, createdAt: r.createdAt };
+	const config = { id: r.id, site: parsed.site, model: r.model, protocol, intervalMin: r.intervalMin, createdAt: r.createdAt };
 	return { ...newCard(config, parsed.host), samples: trimSamples(samples, now), status: { kind: "needs_key" } };
 }
 

@@ -51,6 +51,24 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 	);
 }
 
+function FormActions(props: Props) {
+	return (
+		<>
+			<div class="actions">
+				<button type="submit" class="btn btn-primary" disabled={props.running || props.selectedCount === 0} data-testid="start-button">
+					开始测试
+				</button>
+				<button type="button" class="btn btn-secondary" disabled={!props.running} onClick={props.onCancel} data-testid="cancel-button">
+					取消
+				</button>
+			</div>
+			<p class="muted small" data-testid="cost-line">
+				{costLine(props.selectedCount)}
+			</p>
+		</>
+	);
+}
+
 export function TestForm(props: Props) {
 	const keyInput = useRef<HTMLInputElement>(null);
 
@@ -88,17 +106,7 @@ export function TestForm(props: Props) {
 						{props.error}
 					</p>
 				)}
-				<div class="actions">
-					<button type="submit" class="btn btn-primary" disabled={props.running || props.selectedCount === 0} data-testid="start-button">
-						开始测试
-					</button>
-					<button type="button" class="btn btn-secondary" disabled={!props.running} onClick={props.onCancel} data-testid="cancel-button">
-						取消
-					</button>
-				</div>
-				<p class="muted small" data-testid="cost-line">
-					{costLine(props.selectedCount)}
-				</p>
+				<FormActions {...props} />
 			</form>
 		</section>
 	);

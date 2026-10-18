@@ -57,8 +57,7 @@ export function History({ target }: { target: Target }) {
 	};
 
 	const load = () => act(async () => setRuns((await fetchHistory(target)).runs));
-	const raw = (runId: string) =>
-		act(async () => download(`gpt-test-${runId}.json`, await fetchHistoryRaw(target, runId)));
+	const raw = (runId: string) => act(async () => download(`gpt-test-${runId}.json`, await fetchHistoryRaw(target, runId)));
 	const remove = () => {
 		if (!confirm("确定删除此站点与密钥下的全部历史？删除后无法恢复。")) return;
 		act(async () => {
@@ -81,11 +80,7 @@ export function History({ target }: { target: Target }) {
 				</button>
 			</div>
 			{message && <p role="status">{message}</p>}
-			{runs?.length === 0 && (
-				<p class="muted" data-testid="history-empty">
-					暂无历史
-				</p>
-			)}
+			{runs?.length === 0 && <p class="muted" data-testid="history-empty">暂无历史</p>}
 			{runs && runs.length > 0 && (
 				<ul class="history">
 					{runs.map((r) => (

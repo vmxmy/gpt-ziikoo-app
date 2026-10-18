@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { INTERVALS, type IntervalMin } from "./custom-monitor.ts";
+import type { RefObject } from "preact";
+import type { Protocol } from "../shared/types.ts";
+import { INTERVALS, PROTOCOLS, type IntervalMin } from "./custom-monitor.ts";
 import { DEFAULT_MODEL } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 
-export type AddInput = { site: string; key: string; model: string; intervalMin: IntervalMin };
+export type AddInput = { site: string; key: string; model: string; protocol: Protocol; intervalMin: IntervalMin };
 export type FieldError = { field: "site" | "key" | "model"; message: string };
 
 const ERROR_ID = "monitor-add-error";
@@ -20,17 +22,40 @@ function FieldMessage({ error, field }: { error: FieldError | null; field: Field
 const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 	error?.field === field ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
 
-function IntervalField({ value, onChange }: { value: IntervalMin; onChange: (v: IntervalMin) => void }) {
+function ChoiceField<T extends string | number>(props: { label: string; testId: string; value: T; options: readonly T[]; text: (v: T) => string; onChange: (v: T) => void }) {
 	return (
 		<label class="field col-6 col-lg-2">
-			<span class="field-label">间隔</span>
-			<select value={value} onChange={(e) => onChange(INTERVALS.find((i) => i === Number(e.currentTarget.value)) ?? 1)} data-testid="monitor-add-interval">
-				{INTERVALS.map((i) => (
-					<option value={i} key={i}>
-						每 {i} 分钟
+			<span class="field-label">{props.label}</span>
+			<select
+				value={String(props.value)}
+				onChange={(e) => props.onChange(props.options.find((o) => String(o) === e.currentTarget.value) ?? props.options[0]!)}
+				data-testid={props.testId}
+			>
+				{props.options.map((o) => (
+					<option value={String(o)} key={String(o)}>
+						{props.text(o)}
 					</option>
 				))}
 			</select>
+		</label>
+	);
+}
+
+function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value: string; onInput: (v: string) => void; error: FieldError | null }) {
+	return (
+		<label class="field col-12 col-md-6 col-lg-3">
+			<span class="field-label">站点地址</span>
+			<input
+				ref={props.inputRef}
+				type="text"
+				inputMode="url"
+				placeholder="https://example.com"
+				value={props.value}
+				onInput={(e) => props.onInput(e.currentTarget.value)}
+				data-testid="monitor-add-site"
+				{...invalid(props.error, "site")}
+			/>
+			<FieldMessage error={props.error} field="site" />
 		</label>
 	);
 }
@@ -55,6 +80,7 @@ export function AddSiteForm({ onAdd, onClose }: { onAdd: (input: AddInput) => Pr
 	const [site, setSite] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [intervalMin, setIntervalMin] = useState<IntervalMin>(1);
+	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [error, setError] = useState<FieldError | null>(null);
 	const [busy, setBusy] = useState(false);
 	const siteInput = useRef<HTMLInputElement>(null);
@@ -65,7 +91,7 @@ export function AddSiteForm({ onAdd, onClose }: { onAdd: (input: AddInput) => Pr
 	const submit = async () => {
 		setBusy(true);
 		setError(null);
-		const result = await onAdd({ site, key: keyInput.current?.value ?? "", model, intervalMin });
+		const result = await onAdd({ site, key: keyInput.current?.value ?? "", model, protocol, intervalMin });
 		setBusy(false);
 		if (result) return setError(result);
 		if (keyInput.current) keyInput.current.value = "";
@@ -82,20 +108,7 @@ export function AddSiteForm({ onAdd, onClose }: { onAdd: (input: AddInput) => Pr
 				void submit();
 			}}
 		>
-			<label class="field col-12 col-md-6 col-lg-5">
-				<span class="field-label">站点地址</span>
-				<input
-					ref={siteInput}
-					type="text"
-					inputMode="url"
-					placeholder="https://example.com"
-					value={site}
-					onInput={(e) => setSite(e.currentTarget.value)}
-					data-testid="monitor-add-site"
-					{...invalid(error, "site")}
-				/>
-				<FieldMessage error={error} field="site" />
-			</label>
+			<SiteField inputRef={siteInput} value={site} onInput={setSite} error={error} />
 			<label class="field col-12 col-md-6 col-lg-3">
 				<span class="field-label">密钥</span>
 				<SecretInput inputRef={keyInput} testId="monitor-add-key" invalid={error?.field === "key"} describedBy={ERROR_ID} />
@@ -106,7 +119,8 @@ export function AddSiteForm({ onAdd, onClose }: { onAdd: (input: AddInput) => Pr
 				<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="monitor-add-model" {...invalid(error, "model")} />
 				<FieldMessage error={error} field="model" />
 			</label>
-			<IntervalField value={intervalMin} onChange={setIntervalMin} />
+			<ChoiceField label="通道" testId="monitor-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
+			<ChoiceField label="间隔" testId="monitor-add-interval" value={intervalMin} options={INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
 			<FormFoot busy={busy} onClose={onClose} />
 		</form>
 	);

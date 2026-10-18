@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMonitor, type MonitorSample } from "../../src/shared/monitor.ts";
+import { parseMonitor } from "../../src/web/api.ts";
 import { agoText, badgeLabel, latencyP50, metaLine, monitorView } from "../../src/web/monitor-view.ts";
 
 const NOW = 1_800_000_000_000;
@@ -32,6 +33,18 @@ describe("monitorView", () => {
 	});
 });
 
+describe("parseMonitor", () => {
+	it("treats a cached response without configured as configured", () => {
+		const { configured: _, ...old } = buildMonitor([sample(1, 900)], NOW, "gaoxin.net.cn", true);
+		const parsed = parseMonitor(old);
+		expect(parsed?.configured).toBe(true);
+		expect(monitorView(parsed).kind).toBe("live");
+		expect(parseMonitor(buildMonitor([], NOW, "t", false))?.configured).toBe(false);
+		expect(parseMonitor({ ...old, configured: "no" })).toBeNull();
+		expect(parseMonitor(null)).toBeNull();
+	});
+});
+
 describe("monitor text", () => {
 	it("says how long ago the last probe ran", () => {
 		expect(agoText(NOW - 30_000, NOW)).toBe("不到 1 分钟前");
@@ -49,6 +62,10 @@ describe("monitor text", () => {
 	it("states longer custom intervals in minutes", () => {
 		const custom = { ...buildMonitor([], NOW, "relay.example", true), intervalSec: 300 };
 		expect(metaLine(custom, NOW)).toBe("目标 relay.example · 每 5 分钟一次");
+	});
+
+	it("names the channel of a custom card", () => {
+		expect(metaLine(buildMonitor([], NOW, "relay.example", true), NOW, "chat")).toBe("目标 relay.example · 每 60 秒一次 · 通道 chat");
 	});
 
 	it("takes the median of the bucket medians", () => {

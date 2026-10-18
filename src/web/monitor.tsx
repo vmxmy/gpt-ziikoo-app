@@ -5,18 +5,19 @@ import {
 	canAdd,
 	cardMonitor,
 	deserializeCards,
-	isDue,
 	MAX_SITES,
 	needsKey,
 	newCard,
 	parseSite,
 	pauseCard,
 	probeCard,
+	probeDue,
 	resumeCard,
 	serializeCards,
 	statusNotice,
 	STORAGE_KEY,
 	type CustomCard,
+	type KeyStore,
 } from "./custom-monitor.ts";
 import { AddSiteForm, type AddInput, type FieldError } from "./monitor-add.tsx";
 import { MonitorCard } from "./monitor-card.tsx";
@@ -28,7 +29,7 @@ const TICK_MS = 1_000;
 const OFFICIAL_HOST = "gaoxin.net.cn";
 
 // Keys live only in this module-level map: never in component state, storage, the URL or the DOM.
-const keys = new Map<string, string>();
+const keys: KeyStore = new Map<string, string>();
 
 function useOfficialMonitor(): MonitorResponse | null | undefined {
 	const [data, setData] = useState<MonitorResponse | null | undefined>(undefined);
@@ -84,11 +85,10 @@ function useScheduler(cards: CustomCard[], questionIds: string[], setCards: (f: 
 			const { cards, questionIds } = latest.current;
 			if (questionIds.length === 0) return;
 			for (const card of cards) {
-				const key = keys.get(card.id);
-				if (!key || inflight.current.has(card.id) || !isDue(card, t)) continue;
+				if (inflight.current.has(card.id)) continue;
 				inflight.current.add(card.id);
-				probeCard(card, key, questionIds, probeSite, t)
-					.then((update) => setCards((prev) => prev.map((c) => (c.id === card.id ? update(c) : c))))
+				probeDue(card, keys, questionIds, probeSite, t)
+					.then((update) => update && setCards((prev) => prev.map((c) => (c.id === card.id ? update(c) : c))))
 					.finally(() => inflight.current.delete(card.id));
 			}
 		};
@@ -114,10 +114,12 @@ function useCustomMonitors(questionIds: string[]) {
 		if (input.model.trim() === "") return { field: "model", message: "请输入模型" };
 		if (questionIds.length === 0) return { field: "site", message: "题目还在加载，请稍后再试" };
 		const t = Date.now();
-		const config = { id: crypto.randomUUID().slice(0, 8), site: parsed.site, model: input.model.trim(), intervalMin: input.intervalMin, createdAt: t };
+		const id = crypto.randomUUID().slice(0, 8);
+		const config = { id, site: parsed.site, model: input.model.trim(), protocol: input.protocol, intervalMin: input.intervalMin, createdAt: t };
 		const card = newCard(config, parsed.host);
 		const first = (await probeCard(card, key, questionIds, probeSite, t))(card);
 		if (first.status.kind === "rejected") return { field: "site", message: first.status.message };
+		if (first.unauthorized > 0) return { field: "key", message: "密钥无效或模型无权限，请检查后重试" };
 		keys.set(card.id, key);
 		setCards((prev) => (canAdd(prev) ? [...prev, first] : prev));
 		return null;
@@ -195,9 +197,9 @@ function CustomMonitorCard(props: CardHandlers & { card: CustomCard; now: number
 	const t = `custom-${card.id}`;
 	const notice = statusNotice(card.status, now);
 	return (
-		<MonitorCard testPrefix={t} rootTestId={`${t}-card`} host={card.host} source="自定义" view={monitorView(cardMonitor(card, now))} now={now} actions={<CardActions {...props} />}>
+		<MonitorCard testPrefix={t} rootTestId={`${t}-card`} host={card.host} source="自定义" protocol={card.protocol} view={monitorView(cardMonitor(card, now))} now={now} actions={<CardActions {...props} />}>
 			{notice && (
-				<p class="card-notice" data-kind={card.status.kind} role="status">
+				<p class="card-notice" data-kind={card.status.kind} role="status" data-testid={`${t}-notice`}>
 					{notice}
 				</p>
 			)}

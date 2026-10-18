@@ -66,10 +66,18 @@ export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/histo
 export const fetchHistoryRaw = (t: Target, runId: string) => postJson<HistoryRawResponse>("/api/history/raw", { ...t, runId });
 export const deleteHistory = (t: Target) => postJson<{ deleted: boolean }>("/api/history/delete", t);
 
-// Any failure, including a response cached before `configured` existed, reads as "unavailable" rather than an error.
+// A response the edge cached before `configured` existed (up to 60 seconds after a deploy) counts as configured.
+export function parseMonitor(body: unknown): MonitorResponse | null {
+	if (typeof body !== "object" || body === null) return null;
+	const m = body as Partial<MonitorResponse>;
+	if (typeof m.state !== "string" || !Array.isArray(m.buckets)) return null;
+	if (m.configured !== undefined && typeof m.configured !== "boolean") return null;
+	return { ...(m as MonitorResponse), configured: m.configured ?? true };
+}
+
+// Any failure reads as "unavailable" rather than an error.
 export async function fetchMonitor(): Promise<MonitorResponse | null> {
 	const res = await fetch("/api/monitor").catch(() => null);
 	if (!res?.ok) return null;
-	const body: MonitorResponse | null = await res.json().catch(() => null);
-	return body && typeof body.state === "string" && typeof body.configured === "boolean" && Array.isArray(body.buckets) ? body : null;
+	return parseMonitor(await res.json().catch(() => null));
 }
