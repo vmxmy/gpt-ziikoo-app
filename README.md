@@ -8,7 +8,7 @@ GPT 降智测试。用户填入中转站地址和密钥,用可插拔题库检查
 
 ## 状态
 
-设计阶段,尚无实现代码。设计见 [`docs/design.md`](docs/design.md)。
+已上线:https://gpt.ziikoo.app 。设计见 [`docs/design.md`](docs/design.md),部署与运维见 [`docs/architecture.md`](docs/architecture.md)。
 
 ## 目录
 

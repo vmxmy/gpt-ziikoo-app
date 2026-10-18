@@ -71,40 +71,16 @@ DO 类用配置里的 `exports` 声明存储引擎,例如 `exports.durableObject
 - 页面的 CSP 等响应头写在 `_headers`。`_headers` 只作用于静态资源响应,不作用于 Worker 生成的响应,所以 `/api/*` 的响应头要在代码里设。
 - 不提供跨域头。
 
-## 配置草图
+## 配置
 
-草图。带 `[已核实]` 的字段名来自官方文档的示例或对照页,其余是意图,字段形状实现时读 `cf` 的配置参考页与配置浏览器再填。
+实际配置就是仓库根目录的 `cloudflare.config.ts`,以它为准。构建产物 `.cloudflare/output/v0/workers/default/worker.config.json` 能看到工具链实际识别出的字段。已核实的写法:
 
-```ts
-import { bindings, defineConfig, exports } from "cf/config"          // [已核实]
-import * as entrypoint from "./src/worker/index.ts" with { type: "cf-worker" }  // [已核实]
+- `domains`、`workersDev`、`previewUrls` 是 `worker` 下的字段;定时触发是 `triggers: [triggers.scheduled({ schedule })]`,`triggers` 从 `cf/config` 导入。
+- Durable Object 用 `exports: { Name: exports.durableObject({ storage: "sqlite" }) }` 声明,同一个 Worker 内通过 `ctx.exports.Name` 访问,需要兼容性标志 `enable_ctx_exports`。
+- 秘密用 `bindings.secret()` 声明,文本变量用 `bindings.text()`,限速用 `bindings.rateLimit({ namespace, simple })`,`namespace` 写成字符串即可,构建与部署都接受。
+- `worker.assets` 的键是 camelCase(`runWorkerFirst`),`worker.observability` 同理。
 
-export default defineConfig({                                         // [已核实]
-  worker: {
-    name: "gpt-ziikoo-app",
-    entrypoint,
-    compatibilityDate: "<当天或工具链支持的最新日期>",
-    // 自定义域 gpt.ziikoo.app 与 workers.dev 开关:写在 triggers,字段待查
-    assets: { runWorkerFirst: ["/api/*"] },                           // [已核实] 键名为 camelCase
-    exports: { Target: exports.durableObject({ storage: "sqlite" }) },// [已核实]
-    env: {                                                            // [已核实] 绑定放在 worker.env
-      IP_LIMITER: bindings.rateLimit({ namespace: "<唯一整数>",
-        simple: { limit: 150, period: 60 } }),                        // [已核实] 形状来自配置浏览器
-      HOST_LIMITER: bindings.rateLimit({ namespace: "<另一个唯一整数>",
-        simple: { limit: 60, period: 60 } }),
-    },
-    observability: {                                                  // [已核实] camelCase
-      enabled: true,
-      logs: { invocationLogs: false, headSamplingRate: 1 },
-      issues: { enabled: true },
-    },
-  },
-})
-```
-
-- pepper 秘密:`cf deploy` 有 `--secrets-file` 选项,可随版本上传 JSON 或 `.env` 格式的秘密文件。管理秘密的其他命令待查。pepper 不进配置文件,不进仓库。
-- `cf deploy` 能为省略了资源标识的绑定自动创建资源,但不会把标识写回 `cloudflare.config.ts`。限速绑定是否需要事先分配命名空间,待查。
-- 不使用多环境。官方说明 `cloudflare.config.ts` 不像 Wrangler 那样合并环境块,每个模式返回一份完整配置。首期只有生产一个模式。
+秘密的规矩:`cf deploy` 在任何已声明的秘密没有值时拒绝部署。`PEPPER` 与 `GAOXIN_KEY` 都通过 `--secrets-file` 随版本上传,文件放在 0600 权限的临时位置,用完即删。之后的部署不带 `--secrets-file` 也会保留已有的秘密值。
 
 ## 目录
 
@@ -150,11 +126,53 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 
 在 CI 里,没有 `cloudflare.config.ts` 的项目会先运行自动配置,它会改文件。所以配置必须在本地生成、审阅并提交,CI 里不依赖自动配置。
 
+实际状态(2026-10-18):`.github/workflows/ci.yml` 已作为 PR 门禁(类型检查、测试、构建、`cf deploy --dry-run`),在 GitHub 上实测通过。main 自动部署**没有启用**,因为它需要把一个限定范围的 Cloudflare API 令牌放进 GitHub 秘密,创建凭证需要维护者决定。目前由维护者在本机按「已部署资源与运维」里的命令部署。
 ## 测试
 
 - 纯函数(评分器、目标地址校验、脱敏、对象标识、梯度引擎、一轮结论计算)用 Vitest 在 Node 里测。
 - 保留最近 10 轮与闲置清空,把「删什么」写成纯函数测,DO 本身只留薄壳。
 - DO 的集成测试官方推荐 `@cloudflare/vitest-plugin`,它提供对实例的直接访问。它是否与 `cloudflare.config.ts` 配合,待查。查清前不引入,DO 薄壳用 `cf dev` 加手动检查覆盖。
+
+## 已部署资源与运维
+
+| 资源 | 说明 |
+| --- | --- |
+| Worker `gpt-ziikoo-app` | 自定义域 `gpt.ziikoo.app`,定时触发 `* * * * *`,`workers.dev` 与预览地址关闭 |
+| Durable Object `Target` | 每 [站点 × 密钥] 对象一实例,存最近 10 轮 |
+| Durable Object `Monitor` | 单例,名字 `gaoxin`,存 7 天监测样本 |
+| Worker `gpt-ziikoo-mock-relay` | e2e 用的 mock 中转站,`https://gpt-ziikoo-mock-relay.blueyang.workers.dev`,不绑域名。任何人都能访问,它不存任何东西 |
+| 秘密 `PEPPER` | 备份在维护者本机 `~/.config/gpt-ziikoo-app/pepper`,权限 0600。**不可轮换**:换掉它会让全部历史对象失联 |
+| 秘密 `GAOXIN_KEY` | 目前是占位 `unset`,监测静默跳过。换成真密钥的方法见下 |
+
+换入真正的监测密钥(密钥不会出现在命令行历史和对话里):
+
+```sh
+cd ~/github/gpt-ziikoo-app
+( umask 077; read -rs "K?监测密钥: "; echo; printf '{"GAOXIN_KEY":"%s"}' "$K" > "$TMPDIR/gk.json" )
+pnpm build && cf deploy --prebuilt --mode production --secrets-file "$TMPDIR/gk.json"; rm -f "$TMPDIR/gk.json"
+```
+
+之后约 1 分钟内就会有第一个样本。`GET /api/monitor` 有 60 秒边缘缓存,页面最多晚一分钟看到。
+
+日常部署:
+
+```sh
+git checkout main && git pull --ff-only
+pnpm build && cf deploy --prebuilt --mode production --message "说明"
+```
+
+跑线上 e2e(需要先 `pnpm exec playwright install chromium`):
+
+```sh
+BASE_URL=https://gpt.ziikoo.app MOCK_URL=https://gpt-ziikoo-mock-relay.blueyang.workers.dev pnpm e2e
+```
+
+e2e 满跑一次约 62 次调用,会撞 IP 每分钟 150 次的限速,页面会按 `Retry-After` 等待后继续,所以单次完整运行约 4 到 5 分钟。
+
+两个坑:
+
+- 维护者的全局 gitignore 有一条 `*.gitignore`,会把 `.gitignore` 自己也忽略。新增或修改 `.gitignore` 必须 `git add -f`。干净的 worktree 里没有它,构建产物会显示为未跟踪。
+- 本机另有会话也在用开发服务器,代理不要使用 `pkill` 或 `killall`。
 
 ## P0 核查结果
 
@@ -172,18 +190,17 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 
 核查命令:`cf zones list`、`cf bot-management get --zone`、`cf rulesets entrypoint get <phase> --zone`、`cf dns records list --zone`。
 
-## 未核实,实现前必须验证
+## 未核实,仍待验证
 
-1. (已在 P0 核查,见上。)
-2. Free zone 的 WAF 限速规则被触发时,响应头是否带 `Retry-After`。文档只写明默认响应码 429。
-3. 限速绑定在多节点下的实际放行量。P1 用压测确认,决定是否提前引入限速 Durable Object。
-4. `cloudflare.config.ts` 里 `triggers` 的字段形状(自定义域、`workers.dev` 开关)。
-5. 限速绑定的命名空间是否需要事先创建,`cf deploy` 能否自动处理。
-6. 秘密的管理命令,以及 pepper 如何设置与备份。
-7. `cf previews deploy` 对带 Durable Object 的 Worker 的支持。
-8. 回滚到旧版本对应的 `cf` 命令。
-9. `@cloudflare/vitest-plugin` 与 `cloudflare.config.ts` 的配合。
-10. `global_fetch_strictly_public` 兼容性标志的语义。启用前读文档。
-11. DO SQLite 的单行大小上限,我没有查到。原始数据单次上限 256KB,必须先确认在行限制之内。
-12. 流式请求的字段与选项名,以及缓存的前缀阈值,来自对 OpenAI 接口的了解,实现时核对官方文档。
-13. `cf` 与 `@cloudflare/vite-plugin` 都是测试版,以实现时的最新版本说明为准。
+已在上线中解决:`triggers` 与 `domains` 的字段形状、限速命名空间、秘密的设置与保留、pepper 的设置与备份、`enable_ctx_exports`、流式字段在 mock 上的解析路径。
+
+1. Free zone 的 WAF 限速规则被触发时,响应头是否带 `Retry-After`。文档只写明默认响应码 429。
+2. 限速绑定在多节点下的实际放行量,以及是否需要提前引入限速 Durable Object。
+3. `cf previews deploy` 对带 Durable Object 的 Worker 的支持。
+4. 回滚到旧版本对应的 `cf` 命令。
+5. `@cloudflare/vitest-plugin` 与 `cloudflare.config.ts` 的配合。
+6. `global_fetch_strictly_public` 兼容性标志的语义。
+7. DO SQLite 的单行大小上限没有查到。入库行超过约 1.9MB 时代码会先丢原始数据再标截断,但真实上限未确认。
+8. 流式请求的字段与选项名、缓存的前缀阈值,来自对 OpenAI 接口的了解,只在 mock 上走通,没有在真实站点上核对。**这是最大的未验证点,需要真实站点校准。**
+9. 真实站点上首字时延的表现,尤其是经过缓冲的中转站。
+10. `cf` 与 `@cloudflare/vite-plugin` 都是测试版,以实现时的最新版本说明为准。
