@@ -1,5 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-import type { HistoryRawResponse, HistoryResponse } from "../src/shared/types.ts";
+import type { HistoryRawResponse, HistoryResponse, ProbeFail } from "../src/shared/types.ts";
 import { expect, test } from "./fixtures.ts";
 
 // .invalid never resolves, so a validation regression cannot send traffic to a real host.
@@ -89,6 +89,20 @@ test("页面有 CSP,接口有 no-store 与 nosniff", async ({ request }) => {
 	for (const res of [await request.get("/api/questions"), await request.post("/api/probe", { data: {} })]) {
 		expect(res.headers()["cache-control"]).toContain("no-store");
 		expect(res.headers()["x-content-type-options"]).toBe("nosniff");
+	}
+});
+
+// No runId, so nothing is stored; one probe per failure keeps this within the host budget in run.spec.
+test("站点失败状态映射为 reason 与 httpStatus", async ({ request, site, key }) => {
+	const cases: Record<string, Omit<ProbeFail, "ok">> = {
+		"mock-429": { reason: "rate_limited", httpStatus: 429 },
+		"mock-500": { reason: "upstream_error", httpStatus: 500 },
+		"mock-missing": { reason: "not_found", httpStatus: 404 },
+	};
+	for (const [model, expected] of Object.entries(cases)) {
+		const res = await request.post("/api/probe", { data: { site, key, protocol: "responses", model, question: "thibault" } });
+		expect(res.status(), model).toBe(200);
+		expect(await res.json(), model).toMatchObject({ ok: false, ...expected });
 	}
 });
 

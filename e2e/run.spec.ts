@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { STAGES } from "../src/shared/ladder.ts";
-import type { OverallStatus, QuestionListItem } from "../src/shared/types.ts";
+import type { HistoryResponse, OverallStatus, QuestionListItem } from "../src/shared/types.ts";
 import { expect, expectOverall, fillForm, RUN_TIMEOUT_MS, type RunSetup, scrubbed, startRun, test } from "./fixtures.ts";
 
 // These drive real ladders against the live site. A retry of a serial group reruns every test in
@@ -10,8 +10,9 @@ test.describe.configure({ mode: "serial", retries: 0, timeout: 360_000 });
 // HOST_LIMITER allows 60 probes per minute per target host and every probe targets the same mock
 // host. A full ladder is 32 probes (31 plus the stage-1 race), at most 33 with one question
 // eliminated alongside it, so only one passing question runs per ladder. Full ladders are spaced
-// a window apart; the light tests in between add at most 13 probes and api.spec at most 5
-// (workers: 1), so any 60-second window stays below 60.
+// a window apart. api.spec runs first (workers: 1) and its 8 probes can only share a window with
+// the first 32-probe ladder; the light tests between mock-partial and mock-nostream add at most 17
+// (3 + 2 + 6 + 6) and the history test 2, so any 60-second window stays at or below 50.
 const HOST_WINDOW_MS = 60_000;
 let quietAt = 0;
 
@@ -43,13 +44,31 @@ async function expectFullLane(page: Page, questions: QuestionListItem[], select:
 	}
 }
 
+async function history(request: APIRequestContext, site: string, key: string): Promise<HistoryResponse> {
+	return (await request.post("/api/history", { data: { site, key } })).json();
+}
+
+// The worker recomputes each verdict from the stored calls with the shared ladder functions, so a
+// page that records the stage-1 race differently from what the worker expects shows up here.
+async function expectHistoryMatchesPage(page: Page, request: APIRequestContext, site: string, key: string, select: string[]) {
+	const overall = await page.getByTestId("overall-result").getAttribute("data-status");
+	const questions = await Promise.all(
+		select.map(async (id) => {
+			const status = await page.getByTestId(`verdict-${id}`).getAttribute("data-status");
+			return expect.objectContaining({ id, verdict: expect.objectContaining({ status }) });
+		}),
+	);
+	// The last call is persisted after its reply, so the newest run can briefly read as incomplete.
+	await expect.poll(async () => (await history(request, site, key)).runs[0]).toMatchObject({ overall, questions: expect.arrayContaining(questions) });
+}
+
 async function expectEliminated(page: Page, questions: QuestionListItem[], select: string[], id: string): Promise<void> {
 	const lane = page.getByTestId(`lane-${id}`);
 	await expect(lane.getByTestId("stage-1").locator(dots("wrong"))).toHaveCount(stageDots(questions, select, id, 0));
 	for (const n of [2, 3, 4]) await expect(lane.getByTestId(`stage-${n}`).locator(settledDots)).toHaveCount(0);
 }
 
-test("mock-good 每题单独满跑,全部通过,每关调用数符合梯度", async ({ page, site, key, questions }) => {
+test("mock-good 每题单独满跑,全部通过,每关调用数符合梯度", async ({ page, request, site, key, questions }) => {
 	test.setTimeout(questions.length * (HOST_WINDOW_MS + RUN_TIMEOUT_MS));
 	await scrubbed(page, async () => {
 		for (const q of questions) {
@@ -58,11 +77,12 @@ test("mock-good 每题单独满跑,全部通过,每关调用数符合梯度", as
 			await expect(page.getByTestId("snapshot-notice")).toBeVisible();
 			await expect(page.getByTestId(`verdict-${q.id}`)).toHaveAttribute("data-status", "passed");
 			await expectFullLane(page, questions, select, q.id);
+			await expectHistoryMatchesPage(page, request, site, key, select);
 		}
 	});
 });
 
-test("mock-partial 一题通过一题首关淘汰,总评 partial", async ({ page, site, key, questions }) =>
+test("mock-partial 一题通过一题首关淘汰,总评 partial", async ({ page, request, site, key, questions }) =>
 	scrubbed(page, async () => {
 		const select = ["thibault", "candy"];
 		await fullLadder(page, { site, key, model: "mock-partial", select, questions }, "partial");
@@ -70,10 +90,11 @@ test("mock-partial 一题通过一题首关淘汰,总评 partial", async ({ page
 		await expect(page.getByTestId("verdict-candy")).toHaveAttribute("data-status", "failed");
 		await expectFullLane(page, questions, select, "thibault");
 		await expectEliminated(page, questions, select, "candy");
+		await expectHistoryMatchesPage(page, request, site, key, select);
 	}));
 
 // The first stage needs 1 of 1, so a relay that is always wrong is eliminated there.
-test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({ page, site, key, questions }) =>
+test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({ page, request, site, key, questions }) =>
 	scrubbed(page, async () => {
 		const select = questions.map((q) => q.id);
 		await startRun(page, { site, key, model: "mock-wrong", select, questions });
@@ -82,7 +103,11 @@ test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({
 			await expect(page.getByTestId(`verdict-${q.id}`)).toHaveAttribute("data-status", "failed");
 			await expect(page.getByTestId(`diagnosis-${q.id}`)).toContainText(q.failureHint);
 			await expectEliminated(page, questions, select, q.id);
+			// AGENTS.md: relay answers are untrusted and rendered as text nodes only.
+			await expect(page.getByTestId(`detail-table-${q.id}`).locator("b, img")).toHaveCount(0);
 		}
+		await expect(page.getByTestId("detail-table-thibault")).toContainText("<b>bold</b>");
+		await expectHistoryMatchesPage(page, request, site, key, select);
 	}));
 
 test("单选一题,只跑该题", async ({ page, site, key, questions }) =>
@@ -109,6 +134,18 @@ test("mock-401 总评 unavailable 并显示原因", async ({ page, site, key, qu
 		await expectOverall(page, "unavailable");
 		await expect(page.getByTestId(`verdict-${only.id}`)).toHaveAttribute("data-status", "unavailable");
 		const reason = page.locator(`[data-testid="overall-result"], [data-testid="diagnosis-${only.id}"]`).filter({ hasText: "密钥" });
+		await expect(reason.first()).toBeVisible();
+	}));
+
+test("mock-429 总评 unavailable 并提示站点限流", async ({ page, site, key, questions }) =>
+	scrubbed(page, async () => {
+		const only = questions[0]!;
+		await startRun(page, { site, key, model: "mock-429", select: [only.id], questions });
+		await expectOverall(page, "unavailable");
+		await expect(page.getByTestId(`verdict-${only.id}`)).toHaveAttribute("data-status", "unavailable");
+		const reason = page
+			.locator(`[data-testid="overall-result"], [data-testid="diagnosis-${only.id}"]`)
+			.filter({ hasText: /限流|站点正忙/ });
 		await expect(reason.first()).toBeVisible();
 	}));
 
@@ -145,7 +182,11 @@ test("历史:跑完可取回一轮,重载后仍在,原始数据不含密钥,删�
 		const setup = { site, key, model: "mock-wrong", select: [only.id], questions };
 		await startRun(page, setup);
 		await expectOverall(page, "failed");
+		// The contract names the overall element, not its label, so the label is read off the page.
+		const label = /：\s*([^（(\s]+)/.exec((await page.getByTestId("overall-result").textContent()) ?? "")?.[1];
+		expect(label).toBeTruthy();
 		await loadHistory(page);
+		await expect(page.getByTestId("history-section").getByTestId("history-run")).toContainText(label ?? "");
 		// A reload drops page memory, so a run seen afterwards came from the server.
 		await fillForm(page, setup);
 		await loadHistory(page);

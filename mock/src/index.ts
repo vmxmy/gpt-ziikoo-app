@@ -68,7 +68,12 @@ const PATHS = new Map<string, Protocol>([
 const VALID_AUTH = /^Bearer sk-\S{5,}$/;
 
 const ANSWERS = {
-	thibault: { right: "Yes, I know who Thibault Sottiaux is.", wrong: "No, I don't know who that is." },
+	// The markup sits ahead of the worker's 70-character answer preview, so the e2e sees it intact and
+	// can prove the page renders relay answers as text; yes_no scoring only reads the leading "No".
+	thibault: {
+		right: "Yes, I know who Thibault Sottiaux is.",
+		wrong: `No <b>bold</b><img src=x onerror="document.title='x'"> I don't know who that is.`,
+	},
 	candy: {
 		right:
 			"答案：至少需要摸出 21 颗糖果，其中圆形 9 颗、五角星形 12 颗。推导：按最坏情况分别计算圆形与五角星形需要摸出的数量，再取总数最小的组合，得到 9 + 12 = 21。",
