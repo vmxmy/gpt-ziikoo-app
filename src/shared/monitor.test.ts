@@ -37,16 +37,21 @@ describe("bucketState", () => {
 
 describe("buildMonitor", () => {
 	it("always returns 48 half-hour buckets aligned to the clock", () => {
-		const m = buildMonitor([sample(1)], NOW, "gaoxin.net.cn");
+		const m = buildMonitor([sample(1)], NOW, "gaoxin.net.cn", true);
 		expect(m.buckets).toHaveLength(MONITOR.buckets);
 		expect(m.buckets.every((b) => b.start % (MONITOR.bucketMin * MIN) === 0)).toBe(true);
 	});
 
+	it("passes the configured flag through unchanged", () => {
+		expect(buildMonitor([], NOW, "t", false)).toMatchObject({ configured: false, state: "no_data", last: null });
+		expect(buildMonitor([], NOW, "t", true).configured).toBe(true);
+	});
+
 	it("reports the newest bucket state, and no_data once samples are stale", () => {
 		const healthy = Array.from({ length: 10 }, (_, i) => sample(i + 1));
-		const fresh = buildMonitor([...healthy, sample(12, { ok: false, correct: null, reason: "timeout" })], NOW, "t");
+		const fresh = buildMonitor([...healthy, sample(12, { ok: false, correct: null, reason: "timeout" })], NOW, "t", true);
 		expect(fresh.state).toBe("degraded");
-		const stale = buildMonitor([sample(30)], NOW, "t");
+		const stale = buildMonitor([sample(30)], NOW, "t", true);
 		expect(stale.state).toBe("no_data");
 	});
 
@@ -57,14 +62,14 @@ describe("buildMonitor", () => {
 			sample(3, { ok: false, correct: null, reason: "upstream_error", httpStatus: 502 }),
 			sample(25 * 60),
 		];
-		const m = buildMonitor(samples, NOW, "t");
+		const m = buildMonitor(samples, NOW, "t", true);
 		expect(m.uptimePct).toBeCloseTo(66.67, 1);
 		expect(m.correctPct).toBe(50);
 		expect(m.last?.ts).toBe(NOW - MIN);
 	});
 
 	it("gives percentile latency per bucket from valid calls only", () => {
-		const m = buildMonitor([sample(1, { totalMs: 100 }), sample(2, { totalMs: 300 }), sample(3, { ok: false, totalMs: null })], NOW, "t");
+		const m = buildMonitor([sample(1, { totalMs: 100 }), sample(2, { totalMs: 300 }), sample(3, { ok: false, totalMs: null })], NOW, "t", true);
 		const bucket = m.buckets.find((b) => b.total > 0)!;
 		expect(bucket.totalMs).toEqual({ min: 100, p50: 100, p95: 300, max: 300 });
 	});

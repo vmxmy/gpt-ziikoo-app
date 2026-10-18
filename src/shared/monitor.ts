@@ -29,6 +29,7 @@ export type MonitorResponse = {
 	intervalSec: number;
 	bucketMin: number;
 	generatedAt: number;
+	configured: boolean;
 	state: MonitorState;
 	uptimePct: number | null;
 	correctPct: number | null;
@@ -83,7 +84,7 @@ function summarizeBucket(start: number, samples: MonitorSample[]): MonitorBucket
 
 const pct = (part: number, whole: number): number | null => (whole === 0 ? null : (part / whole) * 100);
 
-export function buildMonitor(samples: MonitorSample[], now: number, target: string): MonitorResponse {
+export function buildMonitor(samples: MonitorSample[], now: number, target: string, configured: boolean): MonitorResponse {
 	const end = Math.ceil(now / BUCKET_MS) * BUCKET_MS;
 	const first = end - MONITOR.buckets * BUCKET_MS;
 	const inWindow = samples.filter((s) => s.ts >= first && s.ts < end);
@@ -101,6 +102,7 @@ export function buildMonitor(samples: MonitorSample[], now: number, target: stri
 		intervalSec: MONITOR.intervalSec,
 		bucketMin: MONITOR.bucketMin,
 		generatedAt: now,
+		configured,
 		state: fresh && latest ? latest.state : "no_data",
 		uptimePct: pct(valid.length, inWindow.length),
 		correctPct: pct(judged.filter((s) => s.correct === true).length, judged.length),
