@@ -1,9 +1,155 @@
+import { activeQuestions } from "../../questions/index.ts";
+import type { ApiError, HistoryDeleteResponse, HistoryRawResponse, HistoryResponse, Question } from "../shared/types.ts";
+import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
+import { objectId } from "./identity.ts";
+import { probe, type ProbeResult } from "./probe.ts";
+import {
+	type HistoryCommand,
+	parseHistoryRawRequest,
+	parseHistoryRequest,
+	parseProbeRequest,
+	type ProbeCommand,
+	type RunRef,
+} from "./request.ts";
+
+import type { Target } from "./target.ts";
+
 export { Target } from "./target.ts";
 
+type Handler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
+
+const API_HEADERS = {
+	"Content-Type": "application/json",
+	"Cache-Control": "no-store",
+	"X-Content-Type-Options": "nosniff",
+};
+const RETRY_AFTER_SEC = 60;
+
+function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+	return new Response(JSON.stringify(body), { status, headers: { ...API_HEADERS, ...headers } });
+}
+
+function apiError(status: number, body: ApiError, headers: Record<string, string> = {}): Response {
+	return json(body, status, headers);
+}
+
+async function readJson(request: Request): Promise<unknown> {
+	const text = await request.text();
+	try {
+		return JSON.parse(text);
+	} catch {
+		return undefined;
+	}
+}
+
+async function targetStub(ctx: ExecutionContext, env: Env, { origin, key }: HistoryCommand) {
+	const id = await objectId(env.PEPPER, origin, key);
+	return ctx.exports.Target.get(ctx.exports.Target.idFromName(id));
+}
+
+async function withinLimits(request: Request, env: Env, host: string): Promise<boolean> {
+	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+	if (!(await env.IP_LIMITER.limit({ key: ip })).success) return false;
+	return (await env.HOST_LIMITER.limit({ key: host })).success;
+}
+
+function outcome({ response }: ProbeResult): string {
+	if (!response.ok) return response.reason;
+	if (response.correct === null) return "unscored";
+	return response.correct ? "correct" : "wrong";
+}
+
+function logProbe(cmd: ProbeCommand, result: ProbeResult): void {
+	const { httpStatus, totalMs } = result.capture;
+	console.log(
+		JSON.stringify({ event: "probe", host: cmd.host, question: cmd.question.id, outcome: outcome(result), httpStatus, totalMs }),
+	);
+}
+
+async function persist(cmd: ProbeCommand, run: RunRef, startedAt: number, result: ProbeResult, stub: DurableObjectStub<Target>) {
+	const call = {
+		...run,
+		questionId: cmd.question.id,
+		questionVersion: cmd.question.version,
+		startedAt,
+		protocol: cmd.protocol,
+		model: cmd.model,
+		effort: cmd.effort,
+		...result.capture,
+	};
+	await stub.record(call, { allowCreate: result.response.ok }).catch((err: unknown) => {
+		const error = err instanceof Error && err.message === TOO_MANY_CALLS ? TOO_MANY_CALLS : "storage_error";
+		console.error(JSON.stringify({ event: "persist_failed", host: cmd.host, error }));
+	});
+}
+
+const handleProbe: Handler = async (request, env, ctx) => {
+	const parsed = parseProbeRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const cmd = parsed.value;
+	if (!(await withinLimits(request, env, cmd.host))) {
+		return apiError(
+			429,
+			{ error: "rate_limited", message: "请求过于频繁", retryAfterSec: RETRY_AFTER_SEC },
+			{ "Retry-After": String(RETRY_AFTER_SEC) },
+		);
+	}
+	const { run } = cmd;
+	const stub = run ? await targetStub(ctx, env, cmd) : null;
+	// Checked before the upstream call so a full run stops spending the caller's quota; record() re-checks.
+	if (run && stub && (await stub.callCount(run.runId)) >= MAX_CALLS_PER_RUN) {
+		return apiError(429, { error: "too_many_calls", message: `每轮最多 ${MAX_CALLS_PER_RUN} 次调用` });
+	}
+	const startedAt = Date.now();
+	const result = await probe(cmd);
+	logProbe(cmd, result);
+	if (run && stub) ctx.waitUntil(persist(cmd, run, startedAt, result, stub));
+	return json(result.response);
+};
+
+const handleQuestions: Handler = async () => {
+	const questions: Omit<Question, "scorer">[] = activeQuestions().map(({ scorer, ...rest }) => rest);
+	return json(questions);
+};
+
+const handleHistory: Handler = async (request, env, ctx) => {
+	const parsed = parseHistoryRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const stub = await targetStub(ctx, env, parsed.value);
+	return json({ runs: await stub.history() } satisfies HistoryResponse);
+};
+
+const handleHistoryRaw: Handler = async (request, env, ctx) => {
+	const parsed = parseHistoryRawRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const stub = await targetStub(ctx, env, parsed.value);
+	return json({ calls: await stub.raw(parsed.value.runId) } satisfies HistoryRawResponse);
+};
+
+const handleHistoryDelete: Handler = async (request, env, ctx) => {
+	const parsed = parseHistoryRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const stub = await targetStub(ctx, env, parsed.value);
+	await stub.deleteAll();
+	return json({ deleted: true } satisfies HistoryDeleteResponse);
+};
+
+const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
+	"/api/questions": { GET: handleQuestions },
+	"/api/probe": { POST: handleProbe },
+	"/api/history": { POST: handleHistory },
+	"/api/history/raw": { POST: handleHistoryRaw },
+	"/api/history/delete": { POST: handleHistoryDelete },
+};
+
 export default {
-	async fetch(request) {
-		const url = new URL(request.url);
-		if (url.pathname === "/api/ping") return Response.json({ ok: true });
-		return new Response("not found", { status: 404 });
+	async fetch(request, env, ctx) {
+		const route = ROUTES[new URL(request.url).pathname];
+		if (!route) return apiError(404, { error: "not_found", message: "未知接口" });
+		const handler = route[request.method];
+		if (!handler) {
+			return apiError(405, { error: "bad_request", message: "方法不允许" }, { Allow: Object.keys(route).join(", ") });
+		}
+		return handler(request, env, ctx);
 	},
-} satisfies ExportedHandler;
+} satisfies ExportedHandler<Env>;
