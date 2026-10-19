@@ -251,7 +251,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 		runLadder({
 			runId: crypto.randomUUID(),
 			questions: chosen.map((q) => q.id),
-			probe: makeProbe({ site: site.trim(), key }, model.trim()),
+			probe: makeProbe({ site: site.trim(), key }, model.trim(), crypto.getRandomValues(new Uint32Array(1))[0]),
 			signal: controller.signal,
 			protocol,
 			onUpdate: setRun,

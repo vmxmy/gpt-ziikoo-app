@@ -54,11 +54,12 @@ async function probeOnce(body: ProbeRequest, signal?: AbortSignal): Promise<Prob
 	return { kind: "response", response };
 }
 
-export function makeProbe(target: Target, model: string): Probe {
-	return (args, signal) => probeOnce({ ...target, model, ...args }, signal);
+// One seed per run: every call of the run asks the same generated question, so the ladder samples the model on one instance.
+export function makeProbe(target: Target, model: string, seed: number): Probe {
+	return (args, signal) => probeOnce({ ...target, model, seed, ...args }, signal);
 }
 
-// No runId, so the Worker answers without persisting anything for these calls.
+// No runId, so the Worker answers without persisting anything for these calls. No seed either, so generated questions use the sample seed.
 export const probeSite: SiteProbe = (body) => probeOnce(body);
 
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);
