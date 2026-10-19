@@ -36,7 +36,7 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 			<input
 				ref={inputRef}
 				type="password"
-				autocomplete="off"
+				autocomplete="current-password"
 				spellcheck={false}
 				placeholder="sk-..."
 				onInput={onInput && ((e) => onInput(e.currentTarget.value))}
@@ -87,6 +87,7 @@ export function TestForm(props: Props) {
 					<input
 						type="text"
 						inputMode="url"
+						autocomplete="username"
 						placeholder="https://example.com"
 						value={props.site}
 						onInput={(e) => props.setSite(e.currentTarget.value)}

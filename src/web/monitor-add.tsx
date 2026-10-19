@@ -49,6 +49,7 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 				ref={props.inputRef}
 				type="text"
 				inputMode="url"
+				autocomplete="username"
 				placeholder="https://example.com"
 				value={props.value}
 				onInput={(e) => props.onInput(e.currentTarget.value)}
