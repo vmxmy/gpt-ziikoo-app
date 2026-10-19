@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMonitor, type MonitorSample } from "../../src/shared/monitor.ts";
-import { agoText, badgeLabel, latencyP50, metaLine, monitorView } from "../../src/web/monitor-view.ts";
+import { agoText, badgeLabel, latencyP50, metaLine, monitorView, tableRows } from "../../src/web/monitor-view.ts";
 
 const NOW = 1_800_000_000_000;
 const sample = (minutesAgo: number, totalMs: number): MonitorSample => ({
@@ -26,6 +26,16 @@ describe("monitorView", () => {
 		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("调用数不足");
 		const enough = Array.from({ length: 10 }, (_, i) => sample(i + 1, 900));
 		expect(badgeLabel(monitorView(buildMonitor(enough, NOW, "t")))).toBe("运行正常");
+	});
+});
+
+describe("tableRows", () => {
+	it("keeps only buckets with calls and puts the newest first", () => {
+		const { buckets } = buildMonitor([sample(1, 900), sample(2, 800), sample(100, 700)], NOW, "t");
+		const rows = tableRows(buckets);
+		expect(rows.map((b) => b.total)).toEqual([2, 1]);
+		expect(rows[0]!.start).toBeGreaterThan(rows[1]!.start);
+		expect(buckets.filter((b) => b.total === 0).length).toBe(46);
 	});
 });
 
