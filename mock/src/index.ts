@@ -1,6 +1,8 @@
+import { solveBag } from "../../src/shared/candy-gen.ts";
+
 type Protocol = "responses" | "chat";
 type IdKind = "hex" | "ft" | "b64";
-type Topic = "thibault" | "candy";
+type Topic = "thibault" | "candy" | "candy-var";
 type Answering = {
 	kind: "answer";
 	correct: boolean;
@@ -97,19 +99,50 @@ const PATHS = new Map<string, Protocol>([
 
 const VALID_AUTH = /^Bearer sk-\S{5,}$/;
 
-const ANSWERS = {
+const CANDY_VAR_MARKER = "最后一行严格按此格式写：答案：";
+
+// Reads the bag back out of the generated prompt: the tab-separated table and pairing line 1.
+function solveCandyVar(prompt: string): { right: string; wrong: string } {
+	const lines = prompt.split("\n");
+	const [header, ...rows] = lines.filter((l) => l.includes("\t")).map((l) => l.split("\t"));
+	const hidden = header.slice(1);
+	const [pairing] = lines.filter((l) => l.startsWith("1. "));
+	const [first, second] = pairing.split("，和");
+	const [a, p] = [first, second].map((half) => hidden.findIndex((h) => half.includes(h)));
+	const [[t0, ...shape0], [t1, ...shape1]] = rows;
+	const { total, splits } = solveBag(shape0.map(Number), shape1.map(Number), [
+		[[0, a], [1, p]],
+		[[0, p], [1, a]],
+	]);
+	const [c, s] = splits[0];
+	const line = (n: number, x: number, y: number) => `答案：总数=${n}，${t0}=${x}，${t1}=${y}`;
+	return {
+		right: `按最坏情况逐一排除，取总数最小的组合。\n${line(total, c, s)}`,
+		wrong: `按最坏情况逐一排除。\n${line(total + 1, c + 1, s)}`,
+	};
+}
+
+const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string }> = {
 	// The markup sits ahead of the worker's 70-character answer preview, so the e2e sees it intact and
 	// can prove the page renders relay answers as text; yes_no scoring only reads the leading "No".
-	thibault: {
+	thibault: () => ({
 		right: "Yes, I know who Thibault Sottiaux is.",
 		wrong: `No <b>bold</b><img src=x onerror="document.title='x'"> I don't know who that is.`,
-	},
-	candy: {
+	}),
+	candy: () => ({
 		right:
 			"答案：至少需要摸出 21 颗糖果，其中圆形 9 颗、五角星形 12 颗。推导：按最坏情况分别计算圆形与五角星形需要摸出的数量，再取总数最小的组合，得到 9 + 12 = 21。",
 		wrong: "至少需要摸出 20 颗糖果。",
-	},
+	}),
+	"candy-var": solveCandyVar,
 };
+
+// The marker comes first: the generator can also draw 糖果 as its noun.
+function topicOf(prompt: string): Topic | null {
+	if (prompt.includes(CANDY_VAR_MARKER)) return "candy-var";
+	if (prompt.includes("Thibault")) return "thibault";
+	return prompt.includes("糖果") ? "candy" : null;
+}
 
 const FAILURES: Record<number, { message: string; type: string; code: string | null }> = {
 	401: { message: "Incorrect API key provided.", type: "invalid_request_error", code: "invalid_api_key" },
@@ -145,8 +178,9 @@ function responseId(protocol: Protocol, kind: IdKind): string {
 
 function answerText(prompt: string, b: Answering): string {
 	if (b.empty) return "";
-	const pick = (topic: Topic) => (b.correct && !b.wrongFor.has(topic) ? ANSWERS[topic].right : ANSWERS[topic].wrong);
-	const text = prompt.includes("Thibault") ? pick("thibault") : prompt.includes("糖果") ? pick("candy") : "OK";
+	const topic = topicOf(prompt);
+	const { right, wrong } = topic ? ANSWERS[topic](prompt) : { right: "OK", wrong: "OK" };
+	const text = b.correct && !(topic && b.wrongFor.has(topic)) ? right : wrong;
 	return b.big ? `${text} ${"x".repeat(BIG_FILLER_CHARS)}` : text;
 }
 
@@ -302,8 +336,8 @@ function field(value: unknown, key: string): unknown {
 }
 
 function answer(protocol: Protocol, body: unknown, model: string, b: Answering): Response {
-	// Keyword match only, so the serialized input is enough and both protocols' shapes work.
-	const prompt = JSON.stringify(field(body, protocol === "responses" ? "input" : "messages") ?? "");
+	const input = protocol === "responses" ? field(body, "input") : field(field(field(body, "messages"), "0"), "content");
+	const prompt = typeof input === "string" ? input : "";
 	const text = answerText(prompt, b);
 	const { usage, reasoning } = usageOf(protocol, prompt, text, b);
 	const c: Completion = {
