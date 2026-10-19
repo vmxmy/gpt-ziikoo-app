@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { ProbeRequest, ProbeResponse } from "../../src/shared/types.ts";
+import type { FailReason, ProbeRequest, ProbeResponse } from "../../src/shared/types.ts";
+import type { ProbeOutcome } from "../../src/web/runner.ts";
 import {
 	applyOutcome,
 	canAdd,
 	cardLabel,
 	deserializeCards,
 	isDue,
+	MONITOR_RETRIES,
 	MAX_ALIAS,
 	MAX_SITES,
 	newCard,
@@ -50,6 +52,36 @@ describe("scheduling", () => {
 		]);
 		expect(isDue(first, NOW + 3 * MIN - 1)).toBe(false);
 		expect(isDue(first, NOW + 3 * MIN)).toBe(true);
+	});
+});
+
+describe("retry", () => {
+	const run = async (outcomes: ProbeOutcome[]) => {
+		const calls: ProbeRequest[] = [];
+		const probe = async (body: ProbeRequest) => (calls.push(body), outcomes[Math.min(calls.length - 1, outcomes.length - 1)]!);
+		const update = await probeCard(card(), KEY, IDS, probe, NOW);
+		return { calls: calls.length, sample: update(card()).samples.at(-1) };
+	};
+	const failing = (reason: FailReason): ProbeOutcome => reply({ ok: false, reason, httpStatus: null });
+
+	it("retries a transient failure and records the first success", async () => {
+		const { calls, sample } = await run([failing("timeout"), failing("upstream_error"), reply(correct)]);
+		expect(calls).toBe(3);
+		expect(sample).toMatchObject({ ok: true, correct: true });
+	});
+
+	it("stops after three retries and records the last failure", async () => {
+		const { calls, sample } = await run([failing("timeout")]);
+		expect(calls).toBe(1 + MONITOR_RETRIES);
+		expect(sample).toMatchObject({ ok: false, reason: "timeout" });
+	});
+
+	it("retries a network error, but never a rejected key, a block, a missing address or a rate limit", async () => {
+		expect((await run([{ kind: "network_error" }, reply(correct)])).calls).toBe(2);
+		for (const reason of ["unauthorized", "forbidden", "not_found", "rate_limited"] as const) {
+			expect((await run([failing(reason)])).calls).toBe(1);
+		}
+		expect((await run([{ kind: "stop", status: 429, message: "x", retryAfterSec: 1 }])).calls).toBe(1);
 	});
 });
 

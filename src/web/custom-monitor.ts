@@ -1,5 +1,5 @@
 import { buildMonitor, type MonitorResponse, type MonitorSample } from "../shared/monitor.ts";
-import type { ProbeRequest, ProbeResponse, Protocol } from "../shared/types.ts";
+import type { FailReason, ProbeRequest, ProbeResponse, Protocol } from "../shared/types.ts";
 import type { ProbeOutcome } from "./runner.ts";
 
 export const STORAGE_KEY = "gpt.monitors.v1";
@@ -7,6 +7,7 @@ export const MAX_SITES = 6;
 export const MAX_ALIAS = 40;
 export const INTERVALS = [1, 2, 5] as const;
 export const UNAUTHORIZED_LIMIT = 5;
+export const MONITOR_RETRIES = 3;
 const MAX_SAMPLES = 1440;
 const DAY_MS = 24 * 60 * 60_000;
 const DEFAULT_RETRY_SEC = 60;
@@ -93,6 +94,19 @@ export function applyOutcome(card: CustomCard, question: string, outcome: ProbeO
 	return { ...card, samples, unauthorized, status, nextAt };
 }
 
+const TRANSIENT: readonly FailReason[] = ["timeout", "upstream_error", "bad_response"];
+
+const isTransient = (o: ProbeOutcome): boolean =>
+	o.kind === "network_error" || (o.kind === "response" && !o.response.ok && TRANSIENT.includes(o.response.reason));
+
+// A failed call is retried at once, up to MONITOR_RETRIES times, so the sample records the site's quality, not a passing hiccup.
+// A rejected key, a block, a missing address and any rate limit are not retried: another call cannot change them.
+async function probeWithRetry(probe: SiteProbe, body: ProbeRequest): Promise<ProbeOutcome> {
+	let outcome = await probe(body);
+	for (let n = 0; n < MONITOR_RETRIES && isTransient(outcome); n++) outcome = await probe(body);
+	return outcome;
+}
+
 // Returns an updater so the result lands on whatever the card looks like when the call settles.
 export async function probeCard(
 	card: CustomCard,
@@ -102,7 +116,7 @@ export async function probeCard(
 	now: number,
 ): Promise<(latest: CustomCard) => CustomCard> {
 	const question = pickQuestion(questionIds, now);
-	const outcome = await probe({ site: card.site, key, model: card.model, question, protocol: card.protocol });
+	const outcome = await probeWithRetry(probe, { site: card.site, key, model: card.model, question, protocol: card.protocol });
 	return (latest) => applyOutcome(latest, question, outcome, now);
 }
 

@@ -36,10 +36,11 @@ describe("bucketState", () => {
 		expect(bucketState({ total: 11, failed: 0, wrong: 2 })).toBe("fair");
 	});
 
-	it("is degraded at 5% failed calls or one fifth wrong answers, not on a single failure among 30", () => {
+	it("tells the causes apart: 5% failed calls is unstable, one fifth wrong answers is quality loss", () => {
 		expect(bucketState({ total: 15, failed: 1, wrong: 0 })).toBe("degraded");
 		expect(bucketState({ total: 30, failed: 1, wrong: 0 })).toBe("operational");
-		expect(bucketState({ total: 15, failed: 0, wrong: 3 })).toBe("degraded");
+		expect(bucketState({ total: 15, failed: 0, wrong: 3 })).toBe("quality");
+		expect(bucketState({ total: 20, failed: 1, wrong: 4 })).toBe("quality");
 	});
 
 	it("is down when one fifth of the calls failed", () => {
