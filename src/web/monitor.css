@@ -93,7 +93,7 @@
 }
 
 .status-badge[data-state="degraded"]::before {
-	background: var(--warn);
+	background: var(--degraded);
 }
 
 .status-badge[data-state="down"]::before {
@@ -207,7 +207,7 @@
 
 .segment[data-state="degraded"],
 .legend [data-state="degraded"]::before {
-	background: var(--warn);
+	background: var(--degraded);
 }
 
 .segment[data-state="down"],
