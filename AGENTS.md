@@ -42,3 +42,4 @@
 - 页面 CSP 是 `style-src 'self'`:不得出现内联 `style` 属性(包括 Preact 的 `style={{}}`)与内联 `<style>`。
 - e2e 用 `getByTestId`,同名多个会触发严格模式报错。监测卡片一律用 `custom-<id>-` 前缀。
 - 状态颜色只在 `src/web/styles.css` 的「语义表」里映射。组件 CSS 写 `background: var(--tone)` 或 `color: var(--tone-text)`,不要按状态值各写一份颜色规则,也不要在组件里写色值。新增状态词汇就在语义表加一行。
+- 界面文案的用词以 `docs/design.md` 的「界面用词」表为准:一个概念只用一个词,一个词只表一个意思。

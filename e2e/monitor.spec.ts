@@ -145,5 +145,5 @@ test("chat 通道也能添加并探测成功", async ({ page, site, key }) =>
 		await expect(page.locator(CARDS)).toHaveCount(1);
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
-		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("通道 chat");
+		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("协议 chat");
 	}));

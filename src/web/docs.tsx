@@ -12,7 +12,7 @@ export function ApiDocs() {
 		<details class="block docs col-12 col-md-6" id="api-docs" data-testid="api-docs">
 			<summary>
 				<h2>API 说明</h2>
-				<span class="muted small">接口约定、梯度规则、curl 示例、限额</span>
+				<span class="muted small">接口约定、分关规则、curl 示例、限额</span>
 			</summary>
 			<h3>接口约定</h3>
 			<ul>
@@ -29,22 +29,22 @@ export function ApiDocs() {
 				</li>
 				<li>不提供跨域头，第三方网页不能调用，脚本与命令行不受影响。</li>
 			</ul>
-			<h3>梯度规则</h3>
+			<h3>分关规则</h3>
 			<ul>
 				<li>
-					每道题各跑一条独立梯度：{STAGES.map((s) => s.calls).join("、")} 次调用，晋级所需正确数{" "}
-					{STAGES.map((s) => s.need).join("、")}。任何一关不达标即淘汰。
+					每道题单独分关：各关的调用数是 {STAGES.map((s) => s.calls).join("、")}，通过所需的答对数是{" "}
+					{STAGES.map((s) => s.need).join("、")}。任何一关未通过，该题停止。
 				</li>
-				<li>每关内并发 {CONCURRENCY}。某关已不可能达标时立即停掉本关剩余调用。</li>
+				<li>每关内同时发 {CONCURRENCY} 个调用。某关已不可能通过时，立即停止该关剩余调用。</li>
 				<li>单次调用最多尝试 {MAX_ATTEMPTS} 次，连续 {MAX_ATTEMPTS} 次没有有效响应判「无法测试」。</li>
-				<li>第 1 关同时用 responses 与 chat 各发一次，用返回有效答案的通道；都有效时用 responses。</li>
-				<li>梯度在调用方循环，脚本按上述规则自己驱动。</li>
+				<li>协议是站点接口的格式，有 responses 与 chat 两种。第 1 关两种协议各调用一次，用返回有效答案的那种；都有效时用 responses。</li>
+				<li>分关的循环由调用方负责，脚本按上述规则自己驱动。</li>
 			</ul>
 			<h3>curl 示例</h3>
 			<pre class="code">{CURL}</pre>
 			<h3>限额</h3>
 			<ul>
-				<li>每个调用方 IP 每 60 秒 150 次，每个目标站点每 60 秒 60 次。超出返回 429 并带 Retry-After。</li>
+				<li>每个调用方 IP 每 60 秒 150 次，每个站点每 60 秒 60 次。超出返回 429 并带 Retry-After。</li>
 				<li>每轮最多 200 次调用。回答只返回前 70 字，完整内容在历史原始数据里。</li>
 				<li>每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。</li>
 			</ul>

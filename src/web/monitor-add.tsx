@@ -64,7 +64,7 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 function FormFoot({ busy, ready, onClose }: { busy: boolean; ready: boolean; onClose: () => void }) {
 	return (
 		<div class="form-foot col-12">
-			<p class="muted">{ready ? "关闭页面后监测暂停。密钥不会被保存。站点与样本只保存在本浏览器。" : "题目加载中，加载完成后即可添加。"}</p>
+			<p class="muted">{ready ? "关闭页面后监测暂停。密钥不会被保存。站点与调用记录只保存在本浏览器。" : "题目加载中，加载完成后即可添加。"}</p>
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onClick={onClose}>
 					取消
@@ -121,7 +121,7 @@ export function AddSiteForm({ ready, onAdd, onClose }: { ready: boolean; onAdd: 
 				<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="monitor-add-model" {...invalid(error, "model")} />
 				<FieldMessage error={error} field="model" />
 			</label>
-			<ChoiceField label="通道" testId="monitor-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
+			<ChoiceField label="协议" testId="monitor-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
 			<ChoiceField label="间隔" testId="monitor-add-interval" value={intervalMin} options={INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
 			<label class="field col-12 col-md-6 col-lg-3">
 				<span class="field-label">别名（可选）</span>

@@ -31,7 +31,7 @@ function HistoryRun({ run: r, busy, onRaw }: { run: RunView; busy: boolean; onRa
 							{q.id} v{q.version}
 						</span>
 						：{q.verdict ? `${VERDICT_LABEL[q.verdict.status]} ${q.verdict.correct}/${q.verdict.total}` : "仅度量"}
-						，有效 {q.metrics.validCalls}/{q.metrics.calls}，总耗时 p50 {ms(q.metrics.totalMs?.p50)}，TTFT p50{" "}
+						，有效 {q.metrics.validCalls}/{q.metrics.calls}，总耗时中位数 {ms(q.metrics.totalMs?.p50)}，首字耗时中位数{" "}
 						{ms(q.metrics.ttftMs?.p50)}
 					</li>
 				))}

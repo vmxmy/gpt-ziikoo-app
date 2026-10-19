@@ -15,8 +15,8 @@ import {
 } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
 
-const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", degraded: "降级", down: "故障", insufficient: "样本不足", no_data: "无数据" };
-const BAR_HINT = "悬停或聚焦任一格查看详情。档位按截至该格的最近 60 分钟判定";
+const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", degraded: "降级", down: "故障", insufficient: "调用数不足", no_data: "无数据" };
+const BAR_HINT = "悬停或聚焦任一格查看详情。状态按截至该格的最近 60 分钟的调用判定";
 
 // `testPrefix` keeps the official card on its original test ids and gives each custom card its own.
 export type CardProps = {
@@ -83,7 +83,7 @@ function Metrics(props: { t: string; uptime: number | null; correct: number | nu
 				</dd>
 			</div>
 			<div>
-				<dt title="各半小时格总时延 p50 的中位数">总时延 p50</dt>
+				<dt title="各半小时格的总耗时中位数，再取中位数">总耗时中位数</dt>
 				<dd class="num">{ms(props.p50)}</dd>
 			</div>
 		</dl>
@@ -157,8 +157,8 @@ function ChartTable({ buckets }: { buckets: MonitorBucket[] }) {
 					<thead>
 						<tr>
 							<th>开始</th>
-							<th class="num">总时延 p50</th>
-							<th class="num">TTFT p50</th>
+							<th class="num">总耗时中位数</th>
+							<th class="num">首字耗时中位数</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -206,7 +206,7 @@ function Chart({ t, buckets }: { t: string; buckets: MonitorBucket[] }) {
 				<svg
 					viewBox={`0 0 ${width} ${CHART.height}`}
 					role="img"
-					aria-label={`近 24 小时每半小时总时延与首字时延的中位数，纵轴最大 ${m.maxMs} 毫秒`}
+					aria-label={`近 24 小时每半小时总耗时与首字耗时的中位数，纵轴最大 ${m.maxMs} 毫秒`}
 					data-testid={`${t}-chart`}
 				>
 					{m.yTicks.map((tick) => (
@@ -225,8 +225,8 @@ function Chart({ t, buckets }: { t: string; buckets: MonitorBucket[] }) {
 				</svg>
 			</div>
 			<figcaption>
-				<span class="key key-total">总时延 p50</span>
-				<span class="key key-ttft">TTFT p50</span>
+				<span class="key key-total">总耗时中位数</span>
+				<span class="key key-ttft">首字耗时中位数</span>
 				<span class="muted">断开处无数据</span>
 			</figcaption>
 			<ChartTable buckets={buckets} />

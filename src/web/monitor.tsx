@@ -133,7 +133,7 @@ function CardActions({ card, onPause, onResume, onRemove }: CardHandlers & { car
 			<button
 				type="button"
 				class="btn-text btn-text-danger"
-				onClick={() => confirm(`删除 ${cardLabel(card)} 的监测卡片和本地样本？`) && onRemove(card.id)}
+				onClick={() => confirm(`删除 ${cardLabel(card)} 的监测卡片和本地调用记录？`) && onRemove(card.id)}
 				data-testid={`${t}-remove`}
 			>
 				删除
@@ -216,7 +216,7 @@ export function Monitor({ questionIds }: { questionIds: string[] }) {
 				{!full && (
 					<button type="button" class="card-add" onClick={() => setAdding(true)} data-testid="monitor-add-card">
 						<span class="card-add-title">添加站点</span>
-						<span class="muted">监测你自己的中转站。站点与样本只存在本浏览器，密钥不保存。</span>
+						<span class="muted">监测你自己的站点。站点与调用记录只存在本浏览器，密钥不保存。</span>
 					</button>
 				)}
 			</div>
