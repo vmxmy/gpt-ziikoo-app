@@ -88,6 +88,10 @@
 	background: var(--fair);
 }
 
+.status-badge[data-state="insufficient"]::before {
+	background: var(--pending);
+}
+
 .status-badge[data-state="degraded"]::before {
 	background: var(--warn);
 }
@@ -194,6 +198,11 @@
 .segment[data-state="fair"],
 .legend [data-state="fair"]::before {
 	background: var(--fair);
+}
+
+.segment[data-state="insufficient"],
+.legend [data-state="insufficient"]::before {
+	background: var(--pending);
 }
 
 .segment[data-state="degraded"],

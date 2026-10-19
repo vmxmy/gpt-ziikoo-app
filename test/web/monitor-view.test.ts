@@ -21,9 +21,11 @@ describe("monitorView", () => {
 		expect(monitorView(buildMonitor([sample(1, 900)], NOW, "relay.example")).kind).toBe("live");
 	});
 
-	it("labels the badge from the newest state", () => {
+	it("labels the badge from the last hour", () => {
 		expect(badgeLabel(monitorView(buildMonitor([], NOW, "t")))).toBe("暂无数据");
-		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("运行正常");
+		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("样本不足");
+		const enough = Array.from({ length: 10 }, (_, i) => sample(i + 1, 900));
+		expect(badgeLabel(monitorView(buildMonitor(enough, NOW, "t")))).toBe("运行正常");
 	});
 });
 

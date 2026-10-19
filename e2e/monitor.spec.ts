@@ -48,7 +48,7 @@ async function addOneGood(page: Page, site: string, key: string): Promise<string
 	await addSite(page, { site, key });
 	await expect(page.locator(CARDS)).toHaveCount(1);
 	const id = await lastCardId(page);
-	await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "operational", { timeout: 30_000 });
+	await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 	return id;
 }
 
@@ -144,6 +144,6 @@ test("chat 通道也能添加并探测成功", async ({ page, site, key }) =>
 		await addSite(page, { site, key, protocol: "chat" });
 		await expect(page.locator(CARDS)).toHaveCount(1);
 		const id = await lastCardId(page);
-		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "operational", { timeout: 30_000 });
+		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("通道 chat");
 	}));

@@ -17,24 +17,28 @@ const sample = (minutesAgo: number, over: Partial<MonitorSample> = {}): MonitorS
 });
 
 describe("bucketState", () => {
-	it("is no_data for an empty bucket", () => {
+	it("is no_data for an empty window", () => {
 		expect(bucketState({ total: 0, failed: 0, wrong: 0 })).toBe("no_data");
+	});
+
+	it("gives no tier below the minimum sample count, even when every call failed", () => {
+		expect(bucketState({ total: MONITOR.minSamples - 1, failed: MONITOR.minSamples - 1, wrong: 0 })).toBe("insufficient");
 	});
 
 	it("does not flip on a single wrong answer among 15", () => {
 		expect(bucketState({ total: 15, failed: 0, wrong: 1 })).toBe("operational");
 	});
 
-	it("splits a clean bucket at 90% correct, keeping exactly 90% in the top tier", () => {
+	it("splits a clean window at 90% correct, keeping exactly 90% in the top tier", () => {
 		expect(bucketState({ total: 30, failed: 0, wrong: 3 })).toBe("operational");
 		expect(bucketState({ total: 30, failed: 0, wrong: 4 })).toBe("fair");
 		expect(bucketState({ total: 10, failed: 0, wrong: 1 })).toBe("operational");
-		expect(bucketState({ total: 9, failed: 0, wrong: 1 })).toBe("fair");
-		expect(bucketState({ total: 15, failed: 0, wrong: 2 })).toBe("fair");
+		expect(bucketState({ total: 11, failed: 0, wrong: 2 })).toBe("fair");
 	});
 
-	it("is degraded when any call failed or one fifth are wrong", () => {
+	it("is degraded at 5% failed calls or one fifth wrong answers, not on a single failure among 30", () => {
 		expect(bucketState({ total: 15, failed: 1, wrong: 0 })).toBe("degraded");
+		expect(bucketState({ total: 30, failed: 1, wrong: 0 })).toBe("operational");
 		expect(bucketState({ total: 15, failed: 0, wrong: 3 })).toBe("degraded");
 	});
 
@@ -50,12 +54,19 @@ describe("buildMonitor", () => {
 		expect(m.buckets.every((b) => b.start % (MONITOR.bucketMin * MIN) === 0)).toBe(true);
 	});
 
-	it("reports the newest bucket state, and no_data once samples are stale", () => {
+	it("judges the overall state on the last 60 minutes, and no_data once samples are stale", () => {
 		const healthy = Array.from({ length: 10 }, (_, i) => sample(i + 1));
 		const fresh = buildMonitor([...healthy, sample(12, { ok: false, correct: null, reason: "timeout" })], NOW, "t");
 		expect(fresh.state).toBe("degraded");
-		const stale = buildMonitor([sample(30)], NOW, "t");
-		expect(stale.state).toBe("no_data");
+		expect(buildMonitor([sample(1)], NOW, "t").state).toBe("insufficient");
+		expect(buildMonitor([sample(30)], NOW, "t").state).toBe("no_data");
+	});
+
+	it("tiers a half hour from the trailing hour, so a thin half hour is not judged alone", () => {
+		const earlier = Array.from({ length: 20 }, (_, i) => sample(31 + i));
+		const recent = Array.from({ length: 10 }, (_, i) => sample(1 + i, { correct: i >= 4 }));
+		const last = buildMonitor([...earlier, ...recent], NOW, "t").buckets.at(-1)!;
+		expect(last).toMatchObject({ total: 10, wrong: 4, windowTotal: 30, state: "fair" });
 	});
 
 	it("computes uptime and correctness over valid calls and ignores samples outside 24h", () => {

@@ -8,6 +8,7 @@ export const STATE_LABEL: Record<MonitorState, string> = {
 	fair: "基本正常",
 	degraded: "降级",
 	down: "故障",
+	insufficient: "样本不足",
 	no_data: "暂无数据",
 };
 
@@ -47,13 +48,14 @@ export const clock = (ts: number) =>
 export function segmentLabel(b: MonitorBucket): string {
 	if (b.start === 0) return STATE_LABEL.no_data;
 	const end = b.start + MONITOR.bucketMin * 60_000;
-	return `${clock(b.start)}–${clock(end)} · ${STATE_LABEL[b.state]} · 调用 ${b.total} · 失败 ${b.failed} · 答错 ${b.wrong}`;
+	return `${clock(b.start)}–${clock(end)} · ${STATE_LABEL[b.state]} · 调用 ${b.total} · 失败 ${b.failed} · 答错 ${b.wrong} · 判定依据 ${b.windowTotal} 次`;
 }
 
 export const emptyBuckets = (): MonitorBucket[] =>
 	Array.from({ length: MONITOR.buckets }, () => ({
 		start: 0,
 		state: "no_data",
+		windowTotal: 0,
 		total: 0,
 		failed: 0,
 		wrong: 0,
