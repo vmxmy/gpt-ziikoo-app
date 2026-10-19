@@ -46,6 +46,7 @@
 	--selected: #f0f4ff;
 	--ok: #15803d;
 	--fair: #65a30d;
+	--quality: #c026d3;
 	--warn: #e08a00;
 	--warn-text: #b45309;
 	--bad: #b91c1c;
@@ -73,6 +74,7 @@
 		--selected: #161c2b;
 		--ok: #3fb950;
 		--fair: #a3e635;
+		--quality: #e879f9;
 		--warn: #fbbf24;
 		--warn-text: #fbbf24;
 		--bad: #f87171;
@@ -90,6 +92,11 @@
 :is([data-state="ok"], [data-state="operational"], [data-status="passed"], [data-status="all_passed"]) {
 	--tone: var(--ok);
 	--tone-text: var(--ok);
+}
+
+:is([data-state="quality"]) {
+	--tone: var(--quality);
+	--tone-text: var(--quality);
 }
 
 :is([data-state="fair"]) {

@@ -6,7 +6,8 @@ export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };
 export const STATE_LABEL: Record<MonitorState, string> = {
 	operational: "运行正常",
 	fair: "基本正常",
-	degraded: "降级",
+	quality: "降智",
+	degraded: "不稳定",
 	down: "故障",
 	insufficient: "调用数不足",
 	no_data: "暂无数据",

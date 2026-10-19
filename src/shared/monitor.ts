@@ -1,6 +1,6 @@
 import type { FailReason, Stat } from "./types.ts";
 
-export type MonitorState = "operational" | "fair" | "degraded" | "down" | "insufficient" | "no_data";
+export type MonitorState = "operational" | "fair" | "quality" | "degraded" | "down" | "insufficient" | "no_data";
 
 export type MonitorSample = {
 	ts: number;
@@ -64,7 +64,8 @@ export function bucketState(c: Counts): MonitorState {
 	if (failedRatio >= MONITOR.downRatio) return "down";
 	const judged = c.total - c.failed;
 	const wrongRatio = judged > 0 ? c.wrong / judged : 0;
-	if (failedRatio >= MONITOR.failRatio || wrongRatio >= MONITOR.wrongRatio) return "degraded";
+	if (wrongRatio >= MONITOR.wrongRatio) return "quality";
+	if (failedRatio >= MONITOR.failRatio) return "degraded";
 	return wrongRatio > MONITOR.fairRatio ? "fair" : "operational";
 }
 
