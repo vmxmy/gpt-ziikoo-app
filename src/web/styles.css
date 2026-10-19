@@ -46,6 +46,7 @@
 	--selected: #f0f4ff;
 	--ok: #15803d;
 	--fair: #65a30d;
+	--degraded: #e08a00;
 	--warn: #b45309;
 	--bad: #b91c1c;
 	--none: #d4d4d8;
@@ -72,6 +73,7 @@
 		--selected: #161c2b;
 		--ok: #3fb950;
 		--fair: #a3e635;
+		--degraded: #fbbf24;
 		--warn: #fbbf24;
 		--bad: #f87171;
 		--none: #34373d;
