@@ -20,8 +20,11 @@ export function ApiDocs() {
 					<code>GET /api/questions</code>：题目清单，含题面。
 				</li>
 				<li>
-					<code>POST /api/probe</code>：请求体 <code>{"{ site, key, protocol, model, question, effort?, runId?, stage?, seq?, attempt? }"}</code>
-					。一次调用一道固定题。带 <code>runId</code> 时必须同时带 <code>stage</code> 与 <code>seq</code>，结果才保存。
+					<code>POST /api/probe</code>：请求体 <code>{"{ site, key, protocol, model, question, effort?, runId?, stage?, seq?, attempt?, seed? }"}</code>
+					。一次调用一道题。带 <code>runId</code> 时必须同时带 <code>stage</code> 与 <code>seq</code>，结果才保存。
+				</li>
+				<li>
+					生成题（目前只有 <code>candy-var</code>）按 <code>seed</code> 出题。同一轮的所有调用用同一个 <code>seed</code>，不带 <code>seed</code> 时用示例 seed 0。
 				</li>
 				<li>站点自身的失败返回 200 加 <code>ok:false</code> 与 <code>reason</code>；参数不合法返回 400；本站限流或超出每轮调用上限返回 429。</li>
 				<li>
