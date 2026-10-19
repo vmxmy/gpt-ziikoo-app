@@ -127,7 +127,7 @@ function CardActions({ card, onPause, onResume, onRemove }: CardHandlers & { car
 			)}
 			{!active && !needsKey(card.status) && (
 				<button type="button" class="btn-text" onClick={() => onResume(card.id)} data-testid={`${t}-resume`}>
-					继续
+					继续监测
 				</button>
 			)}
 			<button
@@ -136,7 +136,7 @@ function CardActions({ card, onPause, onResume, onRemove }: CardHandlers & { car
 				onClick={() => confirm(`删除 ${cardLabel(card)} 的监测卡片和本地调用记录？`) && onRemove(card.id)}
 				data-testid={`${t}-remove`}
 			>
-				删除
+				删除卡片
 			</button>
 		</>
 	);

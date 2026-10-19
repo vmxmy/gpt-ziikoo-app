@@ -9,9 +9,9 @@
     "type": "yes_no",
     "expected": "YES"
   },
-  "expectedLabel": "Yes(应认识此人)",
+  "expectedLabel": "Yes（应认识此人）",
   "calibratedModels": [
     "gpt-6-astra"
   ],
-  "failureHint": "回答不是 Yes。同模型的原装通道通常稳定回答认识"
+  "failureHint": "回答不是 Yes。已校准的模型稳定回答 Yes。"
 }

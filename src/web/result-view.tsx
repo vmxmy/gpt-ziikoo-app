@@ -9,10 +9,12 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 			<table data-testid={`detail-table-${id}`}>
 				<thead>
 					<tr>
-						<th>关·次·尝试</th>
+						<th class="num">关</th>
+						<th class="num">序号</th>
+						<th class="num">尝试</th>
 						<th>结果</th>
-						<th class="num">reasoning tokens</th>
-						<th>idShape</th>
+						<th class="num">推理 token 数</th>
+						<th>响应 ID 形态</th>
 						<th class="num">首字耗时</th>
 						<th class="num">总耗时</th>
 						<th>回答片段</th>
@@ -24,9 +26,9 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 						const r = a.response?.ok ? a.response : null;
 						return (
 							<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
-								<td class="mono">
-									{a.stage}·{a.seq}·{a.attempt}
-								</td>
+								<td class="num">{a.stage}</td>
+								<td class="num">{a.seq}</td>
+								<td class="num">{a.attempt}</td>
 								<td>{resultText(a)}</td>
 								<td class="num">{r?.reasoningTokens ?? "—"}</td>
 								<td class="mono">{r?.idShape ?? "—"}</td>
@@ -95,14 +97,14 @@ export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]
 				</p>
 			)}
 			<p class="notice" data-testid="snapshot-notice">
-				结果只代表此刻，同一站点一天内可能翻转。时延从 Cloudflare 边缘测到站点，不是你本机到站点；区域受限的站点结果可能与本机不同。
+				结果只代表此刻。同一站点一天内的结果会变化。耗时从本站服务器测到站点，不是从你的电脑测到站点。如果站点限制区域，结果会与你的电脑上的结果不同。
 			</p>
 			{verdicts.map(({ q, v }) => (
 				<QuestionResult key={q.id} q={q} v={v} attempts={run.attempts.filter((a) => a.question === q.id)} protocol={run.protocol} />
 			))}
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onClick={() => onRerun()}>
-					再测
+					重新测试
 				</button>
 				{run.protocol && (
 					<button type="button" class="btn btn-secondary" onClick={() => onRerun(other)}>
