@@ -64,7 +64,7 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 function FormFoot({ busy, ready, onClose }: { busy: boolean; ready: boolean; onClose: () => void }) {
 	return (
 		<div class="form-foot col-12">
-			<p class="muted">{ready ? "关闭页面后监测暂停。密钥不会被保存。站点与调用记录只保存在本浏览器。" : "题目加载中，加载完成后即可添加。"}</p>
+			<p class="muted">{ready ? "关闭页面后监测暂停。本站不保存密钥。站点与调用记录只保存在本浏览器。" : "题目加载中，加载完成后即可添加。"}</p>
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onClick={onClose}>
 					取消
@@ -114,6 +114,7 @@ export function AddSiteForm({ ready, onAdd, onClose }: { ready: boolean; onAdd: 
 			<label class="field col-12 col-md-6 col-lg-3">
 				<span class="field-label">密钥</span>
 				<SecretInput inputRef={keyInput} testId="monitor-add-key" invalid={error?.field === "key"} describedBy={ERROR_ID} />
+				<p class="muted small">本站不保存密钥，只在页面打开期间放在内存里。请使用有限额的密钥。</p>
 				<FieldMessage error={error} field="key" />
 			</label>
 			<label class="field col-6 col-lg-2">

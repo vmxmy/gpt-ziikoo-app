@@ -97,6 +97,7 @@ export function TestForm(props: Props) {
 				<label class="field">
 					<span class="field-label">密钥</span>
 					<SecretInput inputRef={keyInput} testId="key-input" onInput={(v) => props.setKey(normalizeKey(v))} />
+					<p class="muted small">密钥只在本次测试时转发给站点，不保存。请使用有限额的密钥。</p>
 				</label>
 				<label class="field">
 					<span class="field-label">模型</span>
