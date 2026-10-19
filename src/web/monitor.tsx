@@ -161,7 +161,8 @@ function KeyPrompt({ card, onResume }: { card: CustomCard; onResume: CardHandler
 				submit();
 			}}
 		>
-			<input ref={keyInput} type="password" autocomplete="off" spellcheck={false} aria-label={`${cardLabel(card)} 的密钥`} placeholder="重新输入密钥" data-testid={`${t}-key`} />
+			<input class="sr-only" type="text" autocomplete="username" value={cardLabel(card)} readOnly tabIndex={-1} aria-hidden="true" />
+			<input ref={keyInput} type="password" autocomplete="current-password" spellcheck={false} aria-label={`${cardLabel(card)} 的密钥`} placeholder="重新输入密钥" data-testid={`${t}-key`} />
 			<button type="submit" class="btn btn-primary" data-testid={`${t}-resume`}>
 				继续监测
 			</button>

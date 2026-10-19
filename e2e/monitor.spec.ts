@@ -68,6 +68,8 @@ test("刷新后保留样本并要求重新输入密钥,输入后继续", async (
 		await expect(page.getByTestId(`custom-${id}-card`)).toBeVisible();
 		await expect(page.getByTestId(`custom-${id}-uptime`)).not.toHaveText("—");
 		await expect(page.getByTestId(`custom-${id}-notice`)).toContainText("需要重新输入密钥");
+		await expect(page.getByTestId(`custom-${id}-key`)).toHaveAttribute("autocomplete", "current-password");
+		await expect(page.getByTestId(`custom-${id}-card`).locator('input[autocomplete="username"]')).toHaveCount(1);
 		await page.getByTestId(`custom-${id}-key`).fill(key);
 		await page.getByTestId(`custom-${id}-resume`).click();
 		await expect(page.getByTestId(`custom-${id}-key`)).toHaveCount(0);
