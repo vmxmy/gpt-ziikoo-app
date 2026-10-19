@@ -50,6 +50,7 @@ export type ProbeRequest = {
 	stage?: number;
 	seq?: number;
 	attempt?: number;
+	seed?: number;
 };
 
 export type ProbeOk = {
@@ -96,6 +97,7 @@ export type CallRecord = {
 	protocol: Protocol;
 	model: string;
 	effort: Effort | null;
+	seed: number | null;
 	streamed: boolean | null;
 	httpStatus: number | null;
 	ok: boolean;

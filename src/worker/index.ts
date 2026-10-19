@@ -81,6 +81,7 @@ async function persist(cmd: ProbeCommand, run: RunRef, startedAt: number, result
 		protocol: cmd.protocol,
 		model: cmd.model,
 		effort: cmd.effort,
+		seed: cmd.seed,
 		...result.capture,
 	};
 	await stub.record(call, { allowCreate: result.response.ok }).catch((err: unknown) => {

@@ -24,7 +24,7 @@ const GENERATORS: Record<GeneratorId, (seed: number) => Content> = {
 };
 
 // The listing shows this instance; a probe without a seed sends it too.
-const SAMPLE_SEED = 0;
+export const SAMPLE_SEED = 0;
 
 const KINDS: readonly QuestionKind[] = ["knowledge", "reasoning", "metrics"];
 const EFFORTS: readonly Effort[] = ["low", "medium", "high"];

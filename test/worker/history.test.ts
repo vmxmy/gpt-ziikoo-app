@@ -17,6 +17,7 @@ function call(overrides: Partial<CallRecord>): CallRecord {
 		protocol: "responses",
 		model: "gpt-6-astra",
 		effort: null,
+		seed: null,
 		streamed: true,
 		httpStatus: 200,
 		ok: true,
