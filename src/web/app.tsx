@@ -230,6 +230,7 @@ type RunInput = { site: string; key: string; model: string; questions: QuestionL
 function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 	const [run, setRun] = useState<RunSnapshot | null>(null);
 	const [runQuestions, setRunQuestions] = useState<QuestionListItem[]>([]);
+	const [runSeed, setRunSeed] = useState(0);
 	const [formError, setFormError] = useState("");
 	const ctrl = useRef<AbortController | null>(null);
 	const running = run !== null && !run.finished;
@@ -251,17 +252,19 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 		setFormError("");
 		const controller = new AbortController();
 		ctrl.current = controller;
+		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
 		setRunQuestions(chosen);
+		setRunSeed(seed);
 		runLadder({
 			runId: crypto.randomUUID(),
 			questions: chosen.map((q) => q.id),
-			probe: makeProbe({ site: site.trim(), key }, model.trim(), crypto.getRandomValues(new Uint32Array(1))[0]),
+			probe: makeProbe({ site: site.trim(), key }, model.trim(), seed),
 			signal: controller.signal,
 			protocol,
 			onUpdate: setRun,
 		}).catch((err: unknown) => setFormError(err instanceof Error ? err.message : "测试中断"));
 	};
-	return { run, runQuestions, running, formError, start, cancel: () => ctrl.current?.abort() };
+	return { run, runQuestions, runSeed, running, formError, start, cancel: () => ctrl.current?.abort() };
 }
 
 export function App() {
@@ -292,7 +295,7 @@ export function App() {
 				<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
 				<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
 				{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
-				{r.run?.finished && <Results run={r.run} questions={r.runQuestions} onRerun={r.start} />}
+				{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
 				<History target={{ site: site.trim(), key }} />
 				<ApiDocs />
 			</main>

@@ -188,6 +188,11 @@
 	border-top: var(--border-width) solid var(--border);
 }
 
+.usage-check summary {
+	font-weight: 600;
+	cursor: pointer;
+}
+
 .verdict-head {
 	display: flex;
 	flex-wrap: wrap;

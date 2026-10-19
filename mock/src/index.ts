@@ -13,6 +13,8 @@ type Answering = {
 	gapMs: number;
 	big: boolean;
 	empty: boolean;
+	// Extra input tokens reported per topic, as a relay that injects hidden instructions would bill them.
+	extraInput: Partial<Record<Topic, number>>;
 };
 type Failing = { kind: "fail"; status: number; echo: boolean };
 // Replies that are not OpenAI-shaped at all, as relays behind a WAF or a broken proxy send them.
@@ -48,6 +50,7 @@ const ANSWER: Answering = {
 	gapMs: 0,
 	big: false,
 	empty: false,
+	extraInput: {},
 };
 
 const BLOCK_PAGE = "<!DOCTYPE html><html><head><title>Access denied</title></head><body><h1>403 Forbidden</h1></body></html>";
@@ -80,6 +83,8 @@ const MODELS = new Map<string, Behavior>([
 	["mock-slow", { ...ANSWER, gapMs: 400 }],
 	["mock-big", { ...ANSWER, big: true }],
 	["mock-empty", { ...ANSWER, empty: true }],
+	["mock-inject-candy", { ...ANSWER, correct: false, extraInput: { candy: 300 } }],
+	["mock-inject-all", { ...ANSWER, correct: false, extraInput: { thibault: 200, candy: 200, "candy-var": 200 } }],
 	["mock-401", { kind: "fail", status: 401, echo: false }],
 	["mock-429", { kind: "fail", status: 429, echo: false }],
 	["mock-500", { kind: "fail", status: 500, echo: false }],
@@ -185,7 +190,8 @@ function answerText(prompt: string, b: Answering): string {
 }
 
 function usageOf(protocol: Protocol, prompt: string, text: string, b: Answering): { usage: object; reasoning: number } {
-	const input = b.cached ? 1280 : Math.ceil(prompt.length / 2);
+	const topic = topicOf(prompt);
+	const input = (b.cached ? 1280 : Math.ceil(prompt.length / 2)) + (topic ? (b.extraInput[topic] ?? 0) : 0);
 	const cached = b.cached ? 1024 : 0;
 	const reasoning = b.correct ? 192 : 0;
 	const output = reasoning + Math.ceil(text.length / 2);
