@@ -16,6 +16,13 @@ function numbers(answer: string, scorer: ScorerOf<"numbers">): ScoreResult {
 	return { correct: missing.length === 0, note: missing.length === 0 ? "ok" : `missing ${JSON.stringify(missing)}` };
 }
 
+function finalNumbers(answer: string, scorer: ScorerOf<"final_numbers">): ScoreResult {
+	const line = answer.split("\n").findLast((l) => /答案\s*[:：]/.test(l));
+	const got = line?.match(/\d+/g) ?? [];
+	const correct = got.length === scorer.expected.length && got.every((n, i) => n === scorer.expected[i]);
+	return { correct, note: correct ? "ok" : `want ${scorer.expected.join("/")} got ${got.join("/") || "none"}` };
+}
+
 function contains(answer: string, scorer: ScorerOf<"contains">): ScoreResult {
 	const correct = answer.includes(scorer.expected);
 	return { correct, note: correct ? "ok" : "not found" };
@@ -24,6 +31,7 @@ function contains(answer: string, scorer: ScorerOf<"contains">): ScoreResult {
 const SCORERS: { [K in Scorer["type"]]: (answer: string, scorer: ScorerOf<K>) => ScoreResult } = {
 	yes_no: yesNo,
 	numbers,
+	final_numbers: finalNumbers,
 	contains,
 };
 
