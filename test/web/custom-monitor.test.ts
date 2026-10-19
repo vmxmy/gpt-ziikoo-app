@@ -3,10 +3,13 @@ import type { ProbeRequest, ProbeResponse } from "../../src/shared/types.ts";
 import {
 	applyOutcome,
 	canAdd,
+	cardLabel,
 	deserializeCards,
 	isDue,
+	MAX_ALIAS,
 	MAX_SITES,
 	newCard,
+	normalizeAlias,
 	parseSite,
 	pickQuestion,
 	probeCard,
@@ -22,7 +25,7 @@ const MIN = 60_000;
 const KEY = "sk-live-known-secret-0042";
 const IDS = ["candy", "thibault"];
 const card = (over: Partial<CustomCard> = {}): CustomCard => ({
-	...newCard({ id: "ab12cd34", site: "https://relay.example", model: "gpt-6-astra", protocol: "responses", intervalMin: 2, createdAt: NOW }, "relay.example"),
+	...newCard({ id: "ab12cd34", site: "https://relay.example", alias: "", model: "gpt-6-astra", protocol: "responses", intervalMin: 2, createdAt: NOW }, "relay.example"),
 	...over,
 });
 const correct: ProbeResponse = {
@@ -152,6 +155,22 @@ describe("persistence", () => {
 		expect(canAdd(six.slice(0, 5))).toBe(true);
 		expect(canAdd(six)).toBe(false);
 		expect(deserializeCards(serializeCards([...six, card({ id: "seventh" })]), NOW)).toHaveLength(6);
+	});
+});
+
+describe("alias", () => {
+	it("trims, caps the length, and labels a card with host only when empty", () => {
+		expect(normalizeAlias("  通道 A  ")).toBe("通道 A");
+		expect(normalizeAlias("x".repeat(MAX_ALIAS + 10))).toHaveLength(MAX_ALIAS);
+		expect(cardLabel({ alias: "", host: "relay.example" })).toBe("relay.example");
+		expect(cardLabel({ alias: "备用", host: "relay.example" })).toBe("备用（relay.example）");
+	});
+
+	it("survives storage, and an entry saved without one restores as empty", () => {
+		const [restored] = deserializeCards(serializeCards([card({ alias: "备用" })]), NOW);
+		expect(restored!.alias).toBe("备用");
+		const old = { id: "x", site: "https://a.example", model: "m", intervalMin: 1, createdAt: 1, samples: [] };
+		expect(deserializeCards(JSON.stringify({ sites: [old] }), NOW)[0]!.alias).toBe("");
 	});
 });
 

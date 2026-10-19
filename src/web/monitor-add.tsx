@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 import type { Protocol } from "../shared/types.ts";
-import { INTERVALS, PROTOCOLS, type IntervalMin } from "./custom-monitor.ts";
+import { INTERVALS, MAX_ALIAS, PROTOCOLS, type IntervalMin } from "./custom-monitor.ts";
 import { DEFAULT_MODEL } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 
-export type AddInput = { site: string; key: string; model: string; protocol: Protocol; intervalMin: IntervalMin };
+export type AddInput = { site: string; alias: string; key: string; model: string; protocol: Protocol; intervalMin: IntervalMin };
 export type FieldError = { field: "site" | "key" | "model"; message: string };
 
 const ERROR_ID = "monitor-add-error";
@@ -78,6 +78,7 @@ function FormFoot({ busy, ready, onClose }: { busy: boolean; ready: boolean; onC
 
 export function AddSiteForm({ ready, onAdd, onClose }: { ready: boolean; onAdd: (input: AddInput) => Promise<FieldError | null>; onClose: () => void }) {
 	const [site, setSite] = useState("");
+	const [alias, setAlias] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [intervalMin, setIntervalMin] = useState<IntervalMin>(1);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
@@ -91,7 +92,7 @@ export function AddSiteForm({ ready, onAdd, onClose }: { ready: boolean; onAdd: 
 	const submit = async () => {
 		setBusy(true);
 		setError(null);
-		const result = await onAdd({ site, key: keyInput.current?.value ?? "", model, protocol, intervalMin });
+		const result = await onAdd({ site, alias, key: keyInput.current?.value ?? "", model, protocol, intervalMin });
 		setBusy(false);
 		if (result) return setError(result);
 		if (keyInput.current) keyInput.current.value = "";
@@ -121,6 +122,17 @@ export function AddSiteForm({ ready, onAdd, onClose }: { ready: boolean; onAdd: 
 			</label>
 			<ChoiceField label="通道" testId="monitor-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
 			<ChoiceField label="间隔" testId="monitor-add-interval" value={intervalMin} options={INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
+			<label class="field col-12 col-md-6 col-lg-3">
+				<span class="field-label">别名（可选）</span>
+				<input
+					value={alias}
+					maxLength={MAX_ALIAS}
+					placeholder="区分同一站点的不同通道"
+					autocomplete="off"
+					onInput={(e) => setAlias(e.currentTarget.value)}
+					data-testid="monitor-add-alias"
+				/>
+			</label>
 			<FormFoot busy={busy} ready={ready} onClose={onClose} />
 		</form>
 	);

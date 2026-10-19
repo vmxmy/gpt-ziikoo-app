@@ -9,11 +9,12 @@ test.describe.configure({ mode: "serial", retries: 0 });
 const STORAGE_KEY = "gpt.monitors.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
 
-type AddSetup = { site: string; key: string; model?: string; protocol?: "responses" | "chat" };
+type AddSetup = { site: string; key: string; alias?: string; model?: string; protocol?: "responses" | "chat" };
 
-async function addSite(page: Page, { site, key, model = "mock-good", protocol }: AddSetup): Promise<void> {
+async function addSite(page: Page, { site, key, alias, model = "mock-good", protocol }: AddSetup): Promise<void> {
 	await page.getByTestId("monitor-add-toggle").click();
 	await page.getByTestId("monitor-add-site").fill(site);
+	if (alias) await page.getByTestId("monitor-add-alias").fill(alias);
 	await page.getByTestId("monitor-add-key").fill(key);
 	await page.getByTestId("monitor-add-model").fill(model);
 	if (protocol) await page.getByTestId("monitor-add-protocol").selectOption(protocol);
@@ -82,6 +83,22 @@ test("暂停与删除,删除后本地数据清除", async ({ page, site, key }) 
 		await page.getByTestId(`custom-${id}-remove`).click();
 		await expect(page.locator(CARDS)).toHaveCount(0);
 		await expect.poll(() => stored(page)).not.toContain(id);
+	}));
+
+test("别名区分同一站点的两张卡片,可留空,刷新后保留", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await page.goto("/");
+		await addSite(page, { site, key, alias: "主通道" });
+		await expect(page.locator(CARDS)).toHaveCount(1);
+		await addSite(page, { site, key });
+		await expect(page.locator(CARDS)).toHaveCount(2);
+		const [first, second] = await page.locator(CARDS).all();
+		await expect(first!.locator(".card-alias")).toHaveText("主通道");
+		await expect(second!.locator(".card-alias")).toHaveCount(0);
+		await page.reload();
+		await expect(page.locator(CARDS)).toHaveCount(2);
+		await expect(page.locator(`${CARDS} .card-alias`)).toHaveText(["主通道"]);
+		expect(await stored(page)).toContain("主通道");
 	}));
 
 test("无效密钥:提示密钥无效且不建卡片", async ({ page, site, key }) =>

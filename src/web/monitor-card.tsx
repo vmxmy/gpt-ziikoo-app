@@ -23,6 +23,7 @@ export type CardProps = {
 	testPrefix: string;
 	rootTestId: string;
 	host: string;
+	alias?: string;
 	source: string;
 	protocol?: Protocol;
 	view: MonitorView;
@@ -40,7 +41,8 @@ export function MonitorCard(props: CardProps) {
 		<section class="card monitor-card" aria-labelledby={headingId} data-testid={props.rootTestId}>
 			<header class="card-head">
 				<h3 id={headingId} class="card-title">
-					<span class="mono">{props.host}</span>
+					{props.alias && <span class="card-alias">{props.alias}</span>}
+					<span class={props.alias ? "mono muted" : "mono"}>{props.host}</span>
 					<span class="tag">{props.source}</span>
 				</h3>
 				{props.actions && <div class="card-actions">{props.actions}</div>}
