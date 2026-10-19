@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Scorer } from "../../src/shared/types.ts";
 import { objectId } from "../../src/worker/identity.ts";
 import { redact } from "../../src/worker/redact.ts";
-import { parseHistoryRequest } from "../../src/worker/request.ts";
+import { parseHistoryRequest, parseProbeRequest } from "../../src/worker/request.ts";
 import { score } from "../../src/worker/scorers.ts";
 import { parseSite } from "../../src/worker/target-url.ts";
 
@@ -121,5 +121,34 @@ describe("objectId", () => {
 		expect(await objectId(pepper, b.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, c.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, b.origin, "sk-test-87654321")).not.toBe(idA);
+	});
+});
+
+describe("parseProbeRequest seed", () => {
+	const body = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m", question: "candy-var" };
+
+	it.each([-1, 1.5, 4294967296, "1", null])("rejects seed %s", (seed) => {
+		expect(parseProbeRequest({ ...body, seed })).toEqual({ ok: false, message: "seed 必须是 0 到 4294967295 的整数" });
+	});
+
+	it("instantiates a generator question for the seed, defaulting to 0", () => {
+		const parsed = (b: object) => {
+			const result = parseProbeRequest(b);
+			if (!result.ok) throw new Error(result.message);
+			const { seed, question } = result.value;
+			return { seed, prompt: question.prompt, scorer: question.scorer };
+		};
+		const one = parsed({ ...body, seed: 1 });
+		expect(one).toMatchObject({ seed: 1, scorer: { type: "final_numbers", expected: ["25", "6", "19"] } });
+		expect(one.prompt).toContain("三种口味的巧克力：榛子味、草莓味、抹茶味");
+		expect(parsed({ ...body, seed: 1 }).prompt).toBe(one.prompt);
+		const sample = parsed(body);
+		expect(sample).toMatchObject({ seed: 0, scorer: { type: "final_numbers", expected: ["24", "4", "20"] } });
+		expect(sample.prompt).toContain("三种口味的软糖：葡萄味、橙子味、柠檬味");
+		expect(parsed({ ...body, question: "thibault", seed: 5 })).toEqual({
+			seed: null,
+			prompt: "don't search the internet, do you know Thibault Sottiaux on X. answer yes or no",
+			scorer: { type: "yes_no", expected: "YES" },
+		});
 	});
 });

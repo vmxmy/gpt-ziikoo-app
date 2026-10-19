@@ -108,7 +108,9 @@ type QuestionManifest = {
   scorer?:                         // metrics 类型没有评分器
     | { type: "yes_no"; expected: "YES" | "NO" }
     | { type: "numbers"; expected: string[] }
+    | { type: "final_numbers"; expected: string[] }   // 只读最后一行「答案:」,按顺序逐个比对
     | { type: "contains"; expected: string }
+  generator?: "candy"              // 生成器题:题面与评分由服务端按 seed 生成
   expectedLabel: string            // 给人看的答案说明,评分不用它
   defaultEffort?: "low" | "medium" | "high"
   calibratedModels: string[]
@@ -166,6 +168,16 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - 题面公开意味着站长可以预置答案。应对只有换题并升 `version`,页面标出版本。
 - 加长版 Thibault(绕开短输入拦截)首期不上。短输入被拦时,诊断必须说明是被拦截,不能写成模型差。
 
+### 生成器题 `candy-var`
+
+站点可以对公开的固定题预置答案。`candy-var` 每轮换一道同构的糖果题,物品、属性与数字都从封闭词表和随机数里取,预置答案就失效。固定的 `candy` 保留作对照。
+
+- 清单里没有 `prompt.txt`,只写 `generator: "candy"`。题面与评分器由 `src/shared/candy-gen.ts` 按 seed 生成,求解器算出总数和两个数量。
+- 评分 `final_numbers`:最后一行「答案:总数=?,X=?,Y=?」的三个数字须按顺序全部答对。判错时 note 为 `want 24/11/13 got 25/12/13`。
+- seed 是 0 到 4294967295 的整数。一轮用一个 seed,由页面选定;监测和命令行不带 seed 时用 0。题目清单展示的题面就是 seed 0 的实例。
+- seed 随每次调用落库,原始数据里能看到。同一 seed 总是生成同一道题。
+- 生成器或求解器一改,同一 seed 的题就变了,题的 `version` 加 1。
+
 ## 分关规则
 
 每道题单独分关:各关的调用数是 1、5、10、15,通过所需的答对数是 1、4、9、14。任何一关未通过,该题停止。全部低空过关总分 28/31,约 90.3%。
@@ -222,7 +234,7 @@ POST /api/probe   (Worker,匿名,限速)
 每次调用保存的字段:
 
 ```
-runId、题 id 与版本、关卡、序号、开始时间
+runId、题 id 与版本、seed(固定题为 null)、关卡、序号、开始时间
 协议、模型、推理强度、是否流式
 HTTP 状态、错误类别
 耗时标记(ttfbMs、firstEventMs、ttftMs、totalMs)
@@ -291,13 +303,14 @@ usage 原文
 ```
 GET /api/questions
 200 [{ id, version, title, measures, kind, prompt, expectedLabel,
-       calibratedModels, defaultEffort }]
+       calibratedModels, defaultEffort, generator }]     // generator 只在生成器题上出现
 
 POST /api/probe
 { "site": "https://example.com", "key": "sk-...",
   "protocol": "responses" | "chat", "model": "gpt-6-astra",
   "question": "<题库 id>", "effort": "low" | "medium" | "high",   // effort 可省
-  "runId": "<uuid>", "stage": 2, "seq": 3 }      // 三项可省,带 runId 才持久化
+  "runId": "<uuid>", "stage": 2, "seq": 3,      // 三项可省,带 runId 才持久化
+  "seed": 12345 }                                // 可省,默认 0;只对生成器题生效,固定题忽略
 
 200 { "ok": true, "questionVersion": 1, "correct": false, "note": "NO",
       "reasoningTokens": 12, "idShape": "hex" | "ft" | "base64" | "other",
@@ -307,7 +320,7 @@ POST /api/probe
 200 { "ok": false, "reason": "unauthorized" | "forbidden" | "not_found" |
       "rate_limited" | "upstream_error" | "timeout" | "bad_response",
       "httpStatus": 401 }
-400 参数不合法或地址被拒
+400 参数不合法或地址被拒,含 seed 不是 0 到 4294967295 的整数
 429 本站限流或超出每轮调用上限,带重试时间
 
 POST /api/history          { site, key }            最近 10 轮的汇总与指标

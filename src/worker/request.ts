@@ -1,4 +1,4 @@
-import { getQuestion } from "../../questions/index.ts";
+import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import type { Effort, Protocol, Question } from "../shared/types.ts";
 import { parseSite } from "./target-url.ts";
 
@@ -14,6 +14,7 @@ export type ProbeCommand = {
 	model: string;
 	question: Question;
 	effort: Effort | null;
+	seed: number | null;
 	run: RunRef | null;
 };
 
@@ -25,6 +26,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // No character JSON or HTML encoders escape: redact() matches the key literally, so an escaped echo would slip through.
 const KEY = /^[A-Za-z0-9_.-]{8,1024}$/;
 const MAX_MODEL_LENGTH = 100;
+const MAX_SEED = 4294967295;
 
 function bad<T>(message: string): Result<T> {
 	return { ok: false, message };
@@ -65,7 +67,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	if (!f) return bad("请求体必须是 JSON 对象");
 	const target = parseTarget(f);
 	if (!target.ok) return target;
-	const { protocol, model, effort } = f;
+	const { protocol, model, effort, seed } = f;
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
@@ -73,11 +75,21 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	const question = typeof f.question === "string" ? getQuestion(f.question) : undefined;
 	if (question?.status !== "active") return bad("question 不是已登记的题");
 	if (effort !== undefined && !isOneOf(EFFORTS, effort)) return bad("effort 必须是 low、medium 或 high");
+	if (seed !== undefined && !isIntIn(seed, 0, MAX_SEED)) return bad("seed 必须是 0 到 4294967295 的整数");
+	const effectiveSeed = seed ?? SAMPLE_SEED;
 	const run = parseRun(f);
 	if (!run.ok) return run;
 	return {
 		ok: true,
-		value: { ...target.value, protocol, model, question, effort: effort ?? question.defaultEffort ?? null, run: run.value },
+		value: {
+			...target.value,
+			protocol,
+			model,
+			question: instantiate(question, effectiveSeed),
+			effort: effort ?? question.defaultEffort ?? null,
+			seed: question.generator ? effectiveSeed : null,
+			run: run.value,
+		},
 	};
 }
 

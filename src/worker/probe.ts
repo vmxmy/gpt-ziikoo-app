@@ -19,7 +19,7 @@ export type ProbeInput = {
 
 export type ProbeCapture = Omit<
 	RawCall,
-	"runId" | "questionId" | "questionVersion" | "stage" | "seq" | "attempt" | "startedAt" | "protocol" | "model" | "effort"
+	"runId" | "questionId" | "questionVersion" | "stage" | "seq" | "attempt" | "startedAt" | "protocol" | "model" | "effort" | "seed"
 >;
 
 export type ProbeResult = { response: ProbeResponse; capture: ProbeCapture };
