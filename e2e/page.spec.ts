@@ -20,6 +20,17 @@ test("页面加载,题目清单,题面展开与复制和接口逐字节一致", 
 	}
 });
 
+test("默认只选中 thibault,其余题可手动勾选", async ({ page, questions }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("question-thibault-toggle")).toBeChecked();
+	for (const q of questions.filter((x) => x.id !== "thibault")) {
+		const toggle = page.getByTestId(`question-${q.id}-toggle`);
+		await expect(toggle).not.toBeChecked();
+		await toggle.check();
+		await expect(toggle).toBeChecked();
+	}
+});
+
 test("首屏在 CSP 下无违规", async ({ page }) => {
 	const violations: string[] = [];
 	// Chrome logs blocked resources as console errors; the init script also reports violation events.
