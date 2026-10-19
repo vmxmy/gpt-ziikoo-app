@@ -3,6 +3,7 @@ export type QuestionKind = "knowledge" | "reasoning" | "metrics";
 export type Scorer =
 	| { type: "yes_no"; expected: "YES" | "NO" }
 	| { type: "numbers"; expected: string[] }
+	| { type: "final_numbers"; expected: readonly string[] }
 	| { type: "contains"; expected: string };
 
 export type Effort = "low" | "medium" | "high";

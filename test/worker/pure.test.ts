@@ -21,6 +21,22 @@ describe("score", () => {
 		});
 	});
 
+	it("final_numbers reads only the last 答案 line, in order", () => {
+		const scorer: Scorer = { type: "final_numbers", expected: ["21", "9", "12"] };
+		expect(score("先摸 3 颗试试，共 24 种情况\n答案：总数=21，圆形=9，五角星形=12", scorer)).toEqual({ correct: true, note: "ok" });
+		expect(score("推理…\n**答案: 总数=21，圆形=9，五角星形=12**", scorer)).toEqual({ correct: true, note: "ok" });
+		expect(score("答案：总数=21，圆形=9，五角星形=12\n答案：总数=21，圆形=12，五角星形=9", scorer)).toEqual({
+			correct: false,
+			note: "want 21/9/12 got 21/12/9",
+		});
+		expect(score("答案：总数=21，圆形=9", scorer)).toEqual({ correct: false, note: "want 21/9/12 got 21/9" });
+		expect(score("答案：总数=21，圆形=9，五角星形=12，另需 1 颗", scorer)).toEqual({
+			correct: false,
+			note: "want 21/9/12 got 21/9/12/1",
+		});
+		expect(score("21 颗：9 颗圆形，12 颗五角星", scorer)).toEqual({ correct: false, note: "want 21/9/12 got none" });
+	});
+
 	it("contains matches a substring", () => {
 		expect(score("the answer is 42", { type: "contains", expected: "42" })).toEqual({ correct: true, note: "ok" });
 		expect(score("the answer is 41", { type: "contains", expected: "42" })).toEqual({ correct: false, note: "not found" });
