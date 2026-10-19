@@ -10,9 +10,9 @@ test.describe.configure({ mode: "serial", retries: 0, timeout: 360_000 });
 // HOST_LIMITER allows 60 probes per minute per target host and every probe targets the same mock
 // host. A full ladder is 32 probes (31 plus the stage-1 race), at most 33 with one question
 // eliminated alongside it, so only one passing question runs per ladder. Full ladders are spaced
-// a window apart. api.spec runs first (workers: 1) and its 18 probes can only share a window with
-// the first 32-probe ladder; the light tests between mock-partial and mock-nostream add at most 17
-// (3 + 2 + 6 + 6) and the history test 2, so any 60-second window stays at or below 50.
+// a window apart. api.spec runs first (workers: 1) and its 20 probes can only share a window with
+// the first 32-probe ladder; the light tests between mock-partial and mock-nostream add at most 18
+// (4 + 2 + 6 + 6) and the history test 2, so any 60-second window stays at or below 52.
 const HOST_WINDOW_MS = 60_000;
 let quietAt = 0;
 
