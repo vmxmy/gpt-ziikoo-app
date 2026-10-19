@@ -53,7 +53,7 @@ describe("failure mapping", () => {
 	});
 
 	it("reports our own endpoint when every attempt was a network error", () => {
-		expect(failureAdvice([failed(null, 1)])).toEqual({ reason: "连不上本站接口", next: "检查网络后重测" });
+		expect(failureAdvice([failed(null, 1)])).toEqual({ reason: "连不上本站接口", next: "检查网络后重新测试" });
 	});
 
 	it("writes a diagnosis per verdict", () => {
@@ -61,9 +61,9 @@ describe("failure mapping", () => {
 		expect(diagnosis(verdict("unavailable", 1, 0, 0), forbidden, "hint")).toBe(
 			"第 1 关连续 3 次没有有效响应：站点拒绝了来自服务器的请求。下一步：联系站点，或换网络自测。",
 		);
-		expect(diagnosis(verdict("failed", 2, 4, 6), [], "回答不是 Yes。")).toBe("第 2 关未达标，答对 4/6。回答不是 Yes。");
+		expect(diagnosis(verdict("failed", 2, 4, 6), [], "回答不是 Yes。")).toBe("第 2 关未通过，答对 4/6。回答不是 Yes。");
 		expect(diagnosis(verdict("passed", 4, 31, 31), [], "")).toBe("四关全部通过，答对 31/31。");
-		expect(diagnosis(verdict("incomplete", 2, 1, 1), [], "")).toBe("停在第 2 关，测试没有跑完。");
+		expect(diagnosis(verdict("incomplete", 2, 1, 1), [], "")).toBe("测试停在第 2 关，没有完成。");
 	});
 });
 

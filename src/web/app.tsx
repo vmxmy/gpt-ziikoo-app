@@ -239,8 +239,9 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 
 	const start = (protocol?: Protocol) => {
 		const chosen = (questions ?? []).filter((q) => selected.includes(q.id));
-		if (site.trim() === "" || key === "" || model.trim() === "") {
-			setFormError("请填写站点、密钥和模型");
+		const missing = [site.trim() === "" && "站点", key === "" && "密钥", model.trim() === "" && "模型"].filter(Boolean);
+		if (missing.length > 0) {
+			setFormError(`请填写${missing.join("、")}`);
 			return;
 		}
 		setFormError("");

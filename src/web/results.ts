@@ -27,15 +27,15 @@ export const VERDICT_LABEL: Record<QuestionStatus, string> = {
 
 export type FailureAdvice = { reason: string; next: string };
 
-const NETWORK: FailureAdvice = { reason: "连不上本站接口", next: "检查网络后重测" };
+const NETWORK: FailureAdvice = { reason: "连不上本站接口", next: "检查网络后重新测试" };
 
 export const FAILURE_ADVICE: Record<FailReason, FailureAdvice> = {
 	unauthorized: { reason: "密钥无效或模型无权限", next: "检查密钥" },
 	forbidden: { reason: "站点拒绝了来自服务器的请求", next: "联系站点，或换网络自测" },
 	not_found: { reason: "地址或协议不对", next: "检查是否多填了路径" },
-	rate_limited: { reason: "站点正忙或限流", next: "几分钟后再测" },
-	upstream_error: { reason: "站点推理接口不可用", next: "等恢复后重测" },
-	timeout: { reason: "站点响应太慢", next: "稍后重测" },
+	rate_limited: { reason: "站点返回忙或限流", next: "几分钟后重新测试" },
+	upstream_error: { reason: "站点推理接口不可用", next: "等站点恢复后重新测试" },
+	timeout: { reason: "站点响应太慢", next: "稍后重新测试" },
 	bad_response: { reason: "站点返回无效内容", next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址" },
 };
 
@@ -58,12 +58,12 @@ export function failureAdvice(attempts: Attempt[]): FailureAdvice {
 
 export function diagnosis(verdict: QuestionVerdict, attempts: Attempt[], failureHint: string): string {
 	if (verdict.status === "passed") return `四关全部通过，答对 ${verdict.correct}/${verdict.total}。`;
-	if (verdict.status === "failed") return `第 ${verdict.stage} 关未达标，答对 ${verdict.correct}/${verdict.total}。${failureHint}`;
+	if (verdict.status === "failed") return `第 ${verdict.stage} 关未通过，答对 ${verdict.correct}/${verdict.total}。${failureHint}`;
 	if (verdict.status === "unavailable") {
 		const { reason, next } = failureAdvice(attempts);
 		return `第 ${verdict.stage} 关连续 3 次没有有效响应：${reason}。下一步：${next}。`;
 	}
-	return `停在第 ${verdict.stage} 关，测试没有跑完。`;
+	return `测试停在第 ${verdict.stage} 关，没有完成。`;
 }
 
 // Couples to the "missing [...]" note format written by the numbers scorer in src/worker/scorers.ts.

@@ -45,7 +45,7 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 				data-testid={testId}
 			/>
 			<button type="button" class="btn-text" aria-pressed={shown} onClick={toggle}>
-				{shown ? "隐藏" : "显示"}
+				{shown ? "隐藏密钥" : "显示密钥"}
 			</button>
 		</span>
 	);
