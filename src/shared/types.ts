@@ -8,6 +8,7 @@ export type Scorer =
 
 export type Effort = "low" | "medium" | "high";
 export type Protocol = "responses" | "chat";
+export type GeneratorId = "candy";
 
 export type QuestionMeta = {
 	id: string;
@@ -17,6 +18,7 @@ export type QuestionMeta = {
 	measures: string;
 	kind: QuestionKind;
 	scorer?: Scorer;
+	generator?: GeneratorId;
 	expectedLabel: string;
 	defaultEffort?: Effort;
 	calibratedModels: string[];

@@ -1,0 +1,13 @@
+{
+  "id": "candy-var",
+  "version": 1,
+  "status": "active",
+  "title": "糖果变体推理测试",
+  "measures": "测模型在换了物品、属性和数字后，是否仍能做对需要推理的组合题",
+  "kind": "reasoning",
+  "generator": "candy",
+  "expectedLabel": "每轮不同，由求解器按本轮参数算出。最后一行的总数和两个数量都要答对",
+  "defaultEffort": "low",
+  "calibratedModels": [],
+  "failureHint": "最后一行没有给出正确的总数和两个数量。请看逐次明细里的 want 与 got"
+}
