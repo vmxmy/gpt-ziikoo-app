@@ -6,6 +6,7 @@ const stat = (p50: number) => ({ min: p50, p50, p95: p50, max: p50 });
 const bucket = (total: number | null, ttft: number | null): MonitorBucket => ({
 	start: 1,
 	state: "operational",
+	windowTotal: 1,
 	total: 1,
 	failed: 0,
 	wrong: 0,
