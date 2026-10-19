@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { probeSite } from "./api.ts";
 import {
 	canAdd,
+	cardLabel,
 	cardMonitor,
 	deserializeCards,
 	MAX_SITES,
 	needsKey,
 	newCard,
+	normalizeAlias,
 	parseSite,
 	pauseCard,
 	probeCard,
@@ -90,7 +92,7 @@ function useCustomMonitors(questionIds: string[]) {
 		if (questionIds.length === 0) return { field: "site", message: "题目还在加载，请稍后再试" };
 		const t = Date.now();
 		const id = crypto.randomUUID().slice(0, 8);
-		const config = { id, site: parsed.site, model: input.model.trim(), protocol: input.protocol, intervalMin: input.intervalMin, createdAt: t };
+		const config = { id, site: parsed.site, alias: normalizeAlias(input.alias), model: input.model.trim(), protocol: input.protocol, intervalMin: input.intervalMin, createdAt: t };
 		const card = newCard(config, parsed.host);
 		const first = (await probeCard(card, key, questionIds, probeSite, t))(card);
 		if (first.status.kind === "rejected") return { field: "site", message: first.status.message };
@@ -131,7 +133,7 @@ function CardActions({ card, onPause, onResume, onRemove }: CardHandlers & { car
 			<button
 				type="button"
 				class="btn-text btn-text-danger"
-				onClick={() => confirm(`删除 ${card.host} 的监测卡片和本地样本？`) && onRemove(card.id)}
+				onClick={() => confirm(`删除 ${cardLabel(card)} 的监测卡片和本地样本？`) && onRemove(card.id)}
 				data-testid={`${t}-remove`}
 			>
 				删除
@@ -159,7 +161,7 @@ function KeyPrompt({ card, onResume }: { card: CustomCard; onResume: CardHandler
 				submit();
 			}}
 		>
-			<input ref={keyInput} type="password" autocomplete="off" spellcheck={false} aria-label={`${card.host} 的密钥`} placeholder="重新输入密钥" data-testid={`${t}-key`} />
+			<input ref={keyInput} type="password" autocomplete="off" spellcheck={false} aria-label={`${cardLabel(card)} 的密钥`} placeholder="重新输入密钥" data-testid={`${t}-key`} />
 			<button type="submit" class="btn btn-primary" data-testid={`${t}-resume`}>
 				继续监测
 			</button>
@@ -172,7 +174,7 @@ function CustomMonitorCard(props: CardHandlers & { card: CustomCard; now: number
 	const t = `custom-${card.id}`;
 	const notice = statusNotice(card.status, now);
 	return (
-		<MonitorCard testPrefix={t} rootTestId={`${t}-card`} host={card.host} source="自定义" protocol={card.protocol} view={monitorView(cardMonitor(card, now))} now={now} actions={<CardActions {...props} />}>
+		<MonitorCard testPrefix={t} rootTestId={`${t}-card`} host={card.host} alias={card.alias} source="自定义" protocol={card.protocol} view={monitorView(cardMonitor(card, now))} now={now} actions={<CardActions {...props} />}>
 			{notice && (
 				<p class="card-notice" data-kind={card.status.kind} role="status" data-testid={`${t}-notice`}>
 					{notice}

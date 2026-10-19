@@ -4,6 +4,7 @@ import type { ProbeOutcome } from "./runner.ts";
 
 export const STORAGE_KEY = "gpt.monitors.v1";
 export const MAX_SITES = 6;
+export const MAX_ALIAS = 40;
 export const INTERVALS = [1, 2, 5] as const;
 export const UNAUTHORIZED_LIMIT = 5;
 const MAX_SAMPLES = 1440;
@@ -12,7 +13,7 @@ const DEFAULT_RETRY_SEC = 60;
 
 export type IntervalMin = (typeof INTERVALS)[number];
 
-export type SiteConfig = { id: string; site: string; model: string; protocol: Protocol; intervalMin: IntervalMin; createdAt: number };
+export type SiteConfig = { id: string; site: string; alias: string; model: string; protocol: Protocol; intervalMin: IntervalMin; createdAt: number };
 
 export type CardStatus =
 	| { kind: "running" }
@@ -48,6 +49,11 @@ export function parseSite(input: string): ParsedSite {
 export function newCard(config: SiteConfig, host: string): CustomCard {
 	return { ...config, host, samples: [], status: { kind: "running" }, nextAt: 0, unauthorized: 0 };
 }
+
+export const normalizeAlias = (input: string): string => input.trim().slice(0, MAX_ALIAS);
+
+// The alias tells apart cards for the same host, so confirmations and labels name both.
+export const cardLabel = ({ alias, host }: { alias: string; host: string }): string => (alias === "" ? host : `${alias}（${host}）`);
 
 export const canAdd = (cards: CustomCard[]) => cards.length < MAX_SITES;
 
@@ -142,7 +148,7 @@ export function statusNotice(status: CardStatus, now: number): string | null {
 
 // Picks fields explicitly so nothing held only in memory, such as a key, can reach storage by accident.
 export function serializeCards(cards: CustomCard[]): string {
-	const sites = cards.map(({ id, site, model, protocol, intervalMin, createdAt, samples }) => ({ id, site, model, protocol, intervalMin, createdAt, samples }));
+	const sites = cards.map(({ id, site, alias, model, protocol, intervalMin, createdAt, samples }) => ({ id, site, alias, model, protocol, intervalMin, createdAt, samples }));
 	return JSON.stringify({ sites });
 }
 
@@ -161,7 +167,8 @@ function restoreCard(raw: unknown, now: number): CustomCard | null {
 	const parsed = parseSite(r.site);
 	if (!parsed.ok) return null;
 	const samples = r.samples.filter((s): s is MonitorSample => typeof s === "object" && s !== null && "ts" in s && typeof s.ts === "number");
-	const config = { id: r.id, site: parsed.site, model: r.model, protocol, intervalMin: r.intervalMin, createdAt: r.createdAt };
+	const alias = typeof r.alias === "string" ? normalizeAlias(r.alias) : "";
+	const config = { id: r.id, site: parsed.site, alias, model: r.model, protocol, intervalMin: r.intervalMin, createdAt: r.createdAt };
 	return { ...newCard(config, parsed.host), samples: trimSamples(samples, now), status: { kind: "needs_key" } };
 }
 
