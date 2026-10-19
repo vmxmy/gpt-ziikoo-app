@@ -12,7 +12,8 @@ test.describe.configure({ mode: "serial", retries: 0, timeout: 360_000 });
 // eliminated alongside it, so only one passing question runs per ladder. Full ladders are spaced
 // a window apart. api.spec runs first (workers: 1) and its 20 probes can only share a window with
 // the first 32-probe ladder; the light tests between mock-partial and mock-nostream add at most 18
-// (4 + 2 + 6 + 6) and the history test 2, so any 60-second window stays at or below 52.
+// (4 + 2 + 6 + 6), so any 60-second window stays at or below 51. The tests after mock-nostream add
+// at most 10 (history 2, then the two usage checks at 4 each) to its window, which stays at or below 42.
 const HOST_WINDOW_MS = 60_000;
 let quietAt = 0;
 
@@ -128,6 +129,8 @@ test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({
 			await expect(page.getByTestId(`detail-table-${q.id}`).locator("b, img")).toHaveCount(0);
 		}
 		await expect(page.getByTestId("detail-table-thibault")).toContainText("<b>bold</b>");
+		await expect(page.getByTestId("usage-check")).toHaveCount(1);
+		await expect(page.locator('[data-testid^="usage-finding-"]')).toHaveCount(0);
 		await expectHistoryMatchesPage(page, request, site, key, select);
 		if (firstGeneratedSeed) {
 			expect(await runSeed(request, site, key, firstGeneratedSeed.id), "新一轮抽新 seed").not.toBe(firstGeneratedSeed.seed);
@@ -224,4 +227,25 @@ test("历史:跑完可取回一轮,重载后仍在,原始数据不含密钥,删�
 		await expect(section.getByTestId("history-empty")).toBeVisible();
 		await expect(section.getByTestId("history-run")).toHaveCount(0);
 		expect(await (await request.post("/api/history", { data: { site, key } })).json()).toEqual({ runs: [] });
+	}));
+
+// The findings sit inside a collapsed <details>, so presence is checked by count, not visibility.
+const USAGE_SELECT = ["thibault", "candy", "candy-var"];
+
+test("mock-inject-candy 只在原题多报输入,显示定向发现", async ({ page, site, key, questions }) =>
+	scrubbed(page, async () => {
+		await startRun(page, { site, key, model: "mock-inject-candy", select: USAGE_SELECT, questions });
+		await expectOverall(page, "failed");
+		await expect(page.getByTestId("usage-finding-targeted")).toHaveCount(1);
+		await expect(page.getByTestId("usage-finding-global")).toHaveCount(0);
+	}));
+
+// The mock bills about half a token per character, so +200 on every call puts candy and candy-var
+// within 8% of each other for every generated length (297 to 329 characters); targeted stays absent.
+test("mock-inject-all 每次调用都多报输入,显示全局发现", async ({ page, site, key, questions }) =>
+	scrubbed(page, async () => {
+		await startRun(page, { site, key, model: "mock-inject-all", select: USAGE_SELECT, questions });
+		await expectOverall(page, "failed");
+		await expect(page.getByTestId("usage-finding-global")).toHaveCount(1);
+		await expect(page.getByTestId("usage-finding-targeted")).toHaveCount(0);
 	}));
