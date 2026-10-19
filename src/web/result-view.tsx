@@ -74,7 +74,7 @@ function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attemp
 
 const findingText = (f: UsageFinding): string =>
 	f.kind === "global"
-		? `thibault 的输入 token 数是 ${f.tokens}，正常约 20 到 35。每次调用都可能被加了额外内容。在历史里下载原始数据，或测另一个站点对比，可以确认。`
+		? `thibault 的输入 token 数是 ${f.tokens}，正常约 20 到 35。站点可能给每次调用加了额外内容。在历史里下载原始数据，或测另一个站点对比，可以确认。`
 		: `原题的输入比同结构的变体题多约 ${f.percent}%（参考阈值 ${TARGETED_RATIO * 100}%）。`;
 
 function UsageCheck(props: { run: RunSnapshot; questions: QuestionListItem[]; seed: number }) {
