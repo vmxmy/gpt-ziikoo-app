@@ -10,6 +10,8 @@ import {
 	latencyP50,
 	metaLine,
 	segmentLabel,
+	stamp,
+	tableRows,
 	type MonitorView,
 	WAITING_NOTICE,
 } from "./monitor-view.ts";
@@ -157,20 +159,24 @@ function ChartTable({ buckets }: { buckets: MonitorBucket[] }) {
 					<thead>
 						<tr>
 							<th>开始</th>
+							<th class="num">调用</th>
+							<th class="num">失败</th>
+							<th class="num">答错</th>
 							<th class="num">总耗时中位数</th>
 							<th class="num">首字耗时中位数</th>
 						</tr>
 					</thead>
 					<tbody>
-						{buckets
-							.filter((b) => b.start > 0)
-							.map((b) => (
-								<tr key={b.start}>
-									<td class="mono">{clock(b.start)}</td>
-									<td class="num">{ms(b.totalMs?.p50)}</td>
-									<td class="num">{ms(b.ttftMs?.p50)}</td>
-								</tr>
-							))}
+						{tableRows(buckets).map((b) => (
+							<tr key={b.start}>
+								<td class="mono">{stamp(b.start)}</td>
+								<td class="num">{b.total}</td>
+								<td class="num">{b.failed}</td>
+								<td class="num">{b.wrong}</td>
+								<td class="num">{ms(b.totalMs?.p50)}</td>
+								<td class="num">{ms(b.ttftMs?.p50)}</td>
+							</tr>
+						))}
 					</tbody>
 				</table>
 			</div>

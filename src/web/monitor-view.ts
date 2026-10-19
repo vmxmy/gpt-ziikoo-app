@@ -45,6 +45,12 @@ export function latencyP50(buckets: MonitorBucket[]): number | null {
 export const clock = (ts: number) =>
 	new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
 
+export const stamp = (ts: number) =>
+	new Date(ts).toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Buckets without a call carry no numbers; the newest come first so the table opens on data.
+export const tableRows = (buckets: MonitorBucket[]): MonitorBucket[] => buckets.filter((b) => b.total > 0).reverse();
+
 export function segmentLabel(b: MonitorBucket): string {
 	if (b.start === 0) return STATE_LABEL.no_data;
 	const end = b.start + MONITOR.bucketMin * 60_000;
