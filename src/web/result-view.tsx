@@ -1,6 +1,7 @@
 import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
 import { diagnosis, failureAdvice, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
+import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
 import { ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
 
 function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
@@ -71,8 +72,53 @@ function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attemp
 	);
 }
 
-export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]; onRerun: (protocol?: Protocol) => void }) {
-	const { run, questions, onRerun } = props;
+const findingText = (f: UsageFinding): string =>
+	f.kind === "global"
+		? `thibault 的输入 token 数是 ${f.tokens}，正常约 20 到 35。每次调用都可能被加了额外内容。在历史里下载原始数据，或测另一个站点对比，可以确认。`
+		: `原题的输入比同结构的变体题多约 ${f.percent}%（参考阈值 ${TARGETED_RATIO * 100}%）。`;
+
+function UsageCheck(props: { run: RunSnapshot; questions: QuestionListItem[]; seed: number }) {
+	const { rows, findings } = promptUsage(props.run.attempts, props.questions, props.seed, props.run.protocol);
+	if (rows.every((r) => r.medianTokens === null)) return null;
+	return (
+		<details class="verdict usage-check" data-testid="usage-check">
+			<summary>输入用量核对（参考）</summary>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>题</th>
+							<th class="num">调用</th>
+							<th class="num">输入字数</th>
+							<th class="num">输入 token 数中位数</th>
+							<th class="num">每字 token</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.map((r) => (
+							<tr key={r.question}>
+								<td>{r.title}</td>
+								<td class="num">{r.calls}</td>
+								<td class="num">{r.chars}</td>
+								<td class="num">{r.medianTokens ?? "—"}</td>
+								<td class="num">{r.perChar === null ? "—" : r.perChar.toFixed(2)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{findings.map((f) => (
+				<p class="warn" key={f.kind} data-testid={`usage-finding-${f.kind}`}>
+					{findingText(f)}
+				</p>
+			))}
+			<p class="muted">参考指标，没有用真实站点校准。</p>
+		</details>
+	);
+}
+
+export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]; seed: number; onRerun: (protocol?: Protocol) => void }) {
+	const { run, questions, seed, onRerun } = props;
 	const verdicts = questions.map((q) => ({ q, v: evaluateQuestion(ladderCalls(run.attempts, q.id, run.protocol)) }));
 	const overall = summarizeRun(verdicts.map(({ v }) => v.status));
 	const passed = verdicts.filter(({ v }) => v.status === "passed").length;
@@ -102,6 +148,7 @@ export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]
 			{verdicts.map(({ q, v }) => (
 				<QuestionResult key={q.id} q={q} v={v} attempts={run.attempts.filter((a) => a.question === q.id)} protocol={run.protocol} />
 			))}
+			<UsageCheck run={run} questions={questions} seed={seed} />
 			<div class="actions">
 				<button type="button" class="btn btn-secondary" onClick={() => onRerun()}>
 					重新测试
