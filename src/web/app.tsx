@@ -127,6 +127,12 @@ const DOT_LEGEND = [
 	["pending", "进行中"],
 ] as const;
 
+const DEFAULT_QUESTION = "thibault";
+
+// Selects the default question alone; a bank without it falls back to every question so the selection is never empty.
+const defaultSelection = (ladder: QuestionListItem[]): string[] =>
+	ladder.some((q) => q.id === DEFAULT_QUESTION) ? [DEFAULT_QUESTION] : ladder.map((q) => q.id);
+
 function useQuestions() {
 	const [questions, setQuestions] = useState<QuestionListItem[] | null>(null);
 	const [loadError, setLoadError] = useState("");
@@ -136,7 +142,7 @@ function useQuestions() {
 			(list) => {
 				const ladder = list.filter((q) => q.kind !== "metrics");
 				setQuestions(ladder);
-				setSelected(ladder.map((q) => q.id));
+				setSelected(defaultSelection(ladder));
 			},
 			(err: unknown) => setLoadError(err instanceof Error ? err.message : "题目加载失败"),
 		);

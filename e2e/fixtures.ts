@@ -50,7 +50,9 @@ export type RunSetup = { site: string; key: string; model: string; select: strin
 
 export async function fillForm(page: Page, { site, key, model, select, questions }: RunSetup): Promise<void> {
 	await page.goto("/");
-	for (const q of questions) await page.getByTestId(`question-${q.id}-toggle`).setChecked(select.includes(q.id));
+	// Check first, then uncheck: the last checked box is locked, so unchecking first can hit a disabled input.
+	const [wanted, unwanted] = [questions.filter((q) => select.includes(q.id)), questions.filter((q) => !select.includes(q.id))];
+	for (const q of [...wanted, ...unwanted]) await page.getByTestId(`question-${q.id}-toggle`).setChecked(select.includes(q.id));
 	await page.getByTestId("site-input").fill(site);
 	await page.getByTestId("key-input").fill(key);
 	await page.getByTestId("model-input").fill(model);
