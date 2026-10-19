@@ -7,7 +7,7 @@
 }
 
 .warn {
-	color: var(--warn);
+	color: var(--warn-text);
 }
 
 .mono {
@@ -33,7 +33,7 @@
 }
 
 .tag-warn {
-	color: var(--warn);
+	color: var(--warn-text);
 	background: transparent;
 }
 

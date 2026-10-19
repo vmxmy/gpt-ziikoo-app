@@ -124,16 +124,11 @@
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
-	background: var(--none);
-}
-
-.call-dot[data-state="ok"] {
-	background: var(--ok);
+	background: var(--tone, var(--none));
 }
 
 .call-dot[data-state="wrong"] {
 	border-radius: 1px;
-	background: var(--bad);
 }
 
 .call-dot[data-state="fail"] {
@@ -141,13 +136,12 @@
 	height: 9px;
 	margin: 0 1px;
 	border-radius: 1px;
-	background: var(--warn);
 	transform: rotate(45deg);
 }
 
 .call-dot[data-state="pending"] {
 	background: transparent;
-	box-shadow: inset 0 0 0 2px var(--pending);
+	box-shadow: inset 0 0 0 2px var(--tone);
 }
 
 .overall-block {
@@ -178,28 +172,12 @@
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
-	background: var(--none);
+	background: var(--tone, var(--none));
 }
 
 .overall .muted {
 	font-size: var(--fs-13);
 	font-weight: 400;
-}
-
-.overall[data-status="all_passed"]::before,
-.pill[data-status="passed"]::before {
-	background: var(--ok);
-}
-
-.overall[data-status="failed"]::before,
-.pill[data-status="failed"]::before {
-	background: var(--bad);
-}
-
-.overall[data-status="partial"]::before,
-.overall[data-status="unavailable"]::before,
-.pill[data-status="unavailable"]::before {
-	background: var(--warn);
 }
 
 .verdict {

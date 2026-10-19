@@ -41,3 +41,4 @@
 - 自定义监测的密钥只允许存在于内存里的 Map。任何新代码都不得把密钥写入 `localStorage`、`sessionStorage`、URL、DOM 属性或日志;序列化只显式挑选字段。
 - 页面 CSP 是 `style-src 'self'`:不得出现内联 `style` 属性(包括 Preact 的 `style={{}}`)与内联 `<style>`。
 - e2e 用 `getByTestId`,同名多个会触发严格模式报错。监测卡片一律用 `custom-<id>-` 前缀。
+- 状态颜色只在 `src/web/styles.css` 的「语义表」里映射。组件 CSS 写 `background: var(--tone)` 或 `color: var(--tone-text)`,不要按状态值各写一份颜色规则,也不要在组件里写色值。新增状态词汇就在语义表加一行。

@@ -77,27 +77,7 @@
 	width: 10px;
 	height: 10px;
 	border-radius: 50%;
-	background: var(--none);
-}
-
-.status-badge[data-state="operational"]::before {
-	background: var(--ok);
-}
-
-.status-badge[data-state="fair"]::before {
-	background: var(--fair);
-}
-
-.status-badge[data-state="insufficient"]::before {
-	background: var(--pending);
-}
-
-.status-badge[data-state="degraded"]::before {
-	background: var(--degraded);
-}
-
-.status-badge[data-state="down"]::before {
-	background: var(--bad);
+	background: var(--tone, var(--none));
 }
 
 .meta,
@@ -114,17 +94,8 @@
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-2);
 	background: var(--surface-2);
-	color: var(--fg-2);
+	color: var(--tone-text, var(--fg-2));
 	font-size: var(--fs-13);
-}
-
-.card-notice[data-kind="rate_limited"] {
-	color: var(--warn);
-}
-
-.card-notice[data-kind="bad_key"],
-.card-notice[data-kind="rejected"] {
-	color: var(--bad);
 }
 
 .key-row {
@@ -186,33 +157,8 @@
 	flex: 1 1 0;
 	min-width: 0;
 	border-radius: var(--radius-1);
-	background: var(--none);
+	background: var(--tone, var(--none));
 	cursor: default;
-}
-
-.segment[data-state="operational"],
-.legend [data-state="operational"]::before {
-	background: var(--ok);
-}
-
-.segment[data-state="fair"],
-.legend [data-state="fair"]::before {
-	background: var(--fair);
-}
-
-.segment[data-state="insufficient"],
-.legend [data-state="insufficient"]::before {
-	background: var(--pending);
-}
-
-.segment[data-state="degraded"],
-.legend [data-state="degraded"]::before {
-	background: var(--degraded);
-}
-
-.segment[data-state="down"],
-.legend [data-state="down"]::before {
-	background: var(--bad);
 }
 
 .segment:hover {
@@ -269,7 +215,7 @@
 	width: 8px;
 	height: 8px;
 	border-radius: var(--radius-1);
-	background: var(--none);
+	background: var(--tone, var(--none));
 }
 
 .chart {
