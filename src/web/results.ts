@@ -66,10 +66,16 @@ export function diagnosis(verdict: QuestionVerdict, attempts: Attempt[], failure
 	return `测试停在第 ${verdict.stage} 关，没有完成。`;
 }
 
-// Couples to the "missing [...]" note format written by the numbers scorer in src/worker/scorers.ts.
-export function missingNumbers(response: ProbeResponse | null): string {
-	if (!response?.ok || !response.note.startsWith("missing ")) return "";
-	return (response.note.match(/\d+/g) ?? []).join("、");
+// Couples to the note formats in src/worker/scorers.ts: numbers writes `missing ["9","12"]`,
+// final_numbers writes `want 24/11/13 got 25/12/13` or `got none` when there is no 答案 line.
+export function numberCheck(response: ProbeResponse | null): string {
+	if (!response?.ok) return "";
+	const { note } = response;
+	if (note.startsWith("missing ")) return `缺 ${(note.match(/\d+/g) ?? []).join("、")}`;
+	const final = /^want (\S+) got (\S+)$/.exec(note);
+	if (!final) return "";
+	const [, want, got] = final.map((part) => part.replaceAll("/", "、"));
+	return got === "none" ? `应为 ${want}，没有「答案」行` : `应为 ${want}，实际 ${got}`;
 }
 
 export function ms(value: number | null | undefined): string {

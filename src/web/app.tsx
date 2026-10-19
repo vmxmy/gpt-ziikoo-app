@@ -21,16 +21,17 @@ const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知�
 
 type CopyStatus = "copied" | "failed";
 
-type ActionsProps = { id: string; open: boolean; copy: CopyStatus | null; onOpen: () => void; onCopy: () => void };
+type ActionsProps = { id: string; generated: boolean; open: boolean; copy: CopyStatus | null; onOpen: () => void; onCopy: () => void };
 
-function QuestionActions({ id, open, copy, onOpen, onCopy }: ActionsProps) {
+function QuestionActions({ id, generated, open, copy, onOpen, onCopy }: ActionsProps) {
+	const noun = generated ? "示例题面" : "题面";
 	return (
 		<div class="question-actions">
 			<button type="button" class="btn-text" aria-expanded={open} onClick={onOpen} data-testid={`question-${id}-prompt-toggle`}>
-				{open ? "收起题面" : "查看题面"}
+				{open ? `收起${noun}` : `查看${noun}`}
 			</button>
 			<button type="button" class="btn-text" onClick={onCopy} data-testid={`question-${id}-copy`}>
-				复制题面
+				复制{noun}
 			</button>
 			<span class="muted small" role="status" data-testid={`question-${id}-copy-status`}>
 				{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
@@ -57,6 +58,7 @@ function QuestionRow(props: {
 		);
 	};
 	const calibrated = q.calibratedModels.includes(model.trim());
+	const generated = q.generator !== undefined;
 	return (
 		<li class={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
 			<input
@@ -71,6 +73,7 @@ function QuestionRow(props: {
 				<label class="question-head" for={`q-${q.id}`}>
 					<span class="question-title">{q.title}</span>
 					<span class="tag">{KIND_LABEL[q.kind]}</span>
+					{generated && <span class="tag">每轮随机生成</span>}
 					<span class="mono muted">v{q.version}</span>
 					{!calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
 				</label>
@@ -78,7 +81,8 @@ function QuestionRow(props: {
 				<p class="muted small">
 					标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
 				</p>
-				<QuestionActions id={q.id} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
+				<QuestionActions id={q.id} generated={generated} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
+				{generated && <p class="muted small">每轮的物品、属性和数字都会变，下面是一个示例。</p>}
 				{open && (
 					<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
 						{q.prompt}
@@ -251,7 +255,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 		runLadder({
 			runId: crypto.randomUUID(),
 			questions: chosen.map((q) => q.id),
-			probe: makeProbe({ site: site.trim(), key }, model.trim()),
+			probe: makeProbe({ site: site.trim(), key }, model.trim(), crypto.getRandomValues(new Uint32Array(1))[0]),
 			signal: controller.signal,
 			protocol,
 			onUpdate: setRun,

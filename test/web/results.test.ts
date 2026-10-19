@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProbeResponse, QuestionVerdict } from "../../src/shared/types.ts";
-import { costLine, diagnosis, dotLabel, failureAdvice, MAX_CALLS_PER_QUESTION, missingNumbers, normalizeKey } from "../../src/web/results.ts";
+import { costLine, diagnosis, dotLabel, failureAdvice, MAX_CALLS_PER_QUESTION, normalizeKey, numberCheck } from "../../src/web/results.ts";
 import type { Attempt } from "../../src/web/runner.ts";
 
 const base = { question: "candy", protocol: "responses" as const, runId: "r", stage: 1, seq: 1, attempt: 1, done: true };
@@ -76,11 +76,18 @@ describe("dotLabel", () => {
 	});
 });
 
-describe("missingNumbers", () => {
+describe("numberCheck", () => {
 	it("lists the numbers the numbers scorer reported missing", () => {
-		expect(missingNumbers(okWith('missing ["9","12"]'))).toBe("9、12");
-		expect(missingNumbers(okWith("ok"))).toBe("");
-		expect(missingNumbers(null)).toBe("");
+		expect(numberCheck(okWith('missing ["9","12"]'))).toBe("缺 9、12");
+		expect(numberCheck(okWith("ok"))).toBe("");
+		expect(numberCheck(okWith("NO"))).toBe("");
+		expect(numberCheck(null)).toBe("");
+	});
+
+	it("compares the final numbers the final_numbers scorer wanted and got", () => {
+		expect(numberCheck(okWith("want 24/11/13 got 25/12/13"))).toBe("应为 24、11、13，实际 25、12、13");
+		expect(numberCheck(okWith("want 24/11/13 got 25/12"))).toBe("应为 24、11、13，实际 25、12");
+		expect(numberCheck(okWith("want 24/11/13 got none"))).toBe("应为 24、11、13，没有「答案」行");
 	});
 });
 

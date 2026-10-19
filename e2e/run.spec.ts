@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { STAGES } from "../src/shared/ladder.ts";
-import type { HistoryResponse, OverallStatus, QuestionListItem } from "../src/shared/types.ts";
+import type { HistoryRawResponse, HistoryResponse, OverallStatus, QuestionListItem } from "../src/shared/types.ts";
 import { expect, expectOverall, fillForm, RUN_TIMEOUT_MS, type RunSetup, scrubbed, startRun, test } from "./fixtures.ts";
 
 // These drive real ladders against the live site. A retry of a serial group reruns every test in
@@ -62,6 +62,20 @@ async function expectHistoryMatchesPage(page: Page, request: APIRequestContext, 
 	await expect.poll(async () => (await history(request, site, key)).runs[0]).toMatchObject({ overall, questions: expect.arrayContaining(questions) });
 }
 
+// A run sends one seed on every call, so each stored call of a generated question carries it.
+async function runSeed(request: APIRequestContext, site: string, key: string, id: string): Promise<number> {
+	const { runId } = (await history(request, site, key)).runs[0]!;
+	const { calls }: HistoryRawResponse = await (await request.post("/api/history/raw", { data: { site, key, runId } })).json();
+	const seeds = calls.filter((c) => c.questionId === id).map((c) => c.seed);
+	expect(seeds.length).toBeGreaterThan(0);
+	expect(new Set(seeds).size).toBe(1);
+	expect(Number.isInteger(seeds[0])).toBe(true);
+	return seeds[0]!;
+}
+
+// Set by the mock-good test, which runs before mock-wrong in this serial group.
+let firstGeneratedSeed: { id: string; seed: number } | null = null;
+
 async function expectEliminated(page: Page, questions: QuestionListItem[], select: string[], id: string): Promise<void> {
 	const lane = page.getByTestId(`lane-${id}`);
 	await expect(lane.getByTestId("stage-1").locator(dots("wrong"))).toHaveCount(stageDots(questions, select, id, 0));
@@ -78,6 +92,7 @@ test("mock-good 每题单独满跑,全部通过,每关调用数符合梯度", as
 			await expect(page.getByTestId(`verdict-${q.id}`)).toHaveAttribute("data-status", "passed");
 			await expectFullLane(page, questions, select, q.id);
 			await expectHistoryMatchesPage(page, request, site, key, select);
+			if (q.generator) firstGeneratedSeed = { id: q.id, seed: await runSeed(request, site, key, q.id) };
 		}
 	});
 });
@@ -114,6 +129,9 @@ test("mock-wrong 首关淘汰,早停,显示 failureHint,总评 failed", async ({
 		}
 		await expect(page.getByTestId("detail-table-thibault")).toContainText("<b>bold</b>");
 		await expectHistoryMatchesPage(page, request, site, key, select);
+		if (firstGeneratedSeed) {
+			expect(await runSeed(request, site, key, firstGeneratedSeed.id), "新一轮抽新 seed").not.toBe(firstGeneratedSeed.seed);
+		}
 	}));
 
 test("单选一题,只跑该题", async ({ page, site, key, questions }) =>

@@ -1,6 +1,6 @@
 import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
-import { diagnosis, failureAdvice, missingNumbers, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
+import { diagnosis, failureAdvice, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
 
 function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
@@ -18,7 +18,7 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 						<th class="num">首字耗时</th>
 						<th class="num">总耗时</th>
 						<th>回答片段</th>
-						<th>缺失数字</th>
+						<th>数字核对</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -35,7 +35,7 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 								<td class="num">{ms(r?.ttftMs)}</td>
 								<td class="num">{ms(r?.totalMs)}</td>
 								<td class="answer">{r?.answer ?? ""}</td>
-								<td class="num">{missingNumbers(a.response)}</td>
+								<td class="num">{numberCheck(a.response)}</td>
 							</tr>
 						);
 					})}

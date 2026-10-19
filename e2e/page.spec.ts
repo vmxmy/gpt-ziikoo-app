@@ -10,6 +10,9 @@ test("页面加载,题目清单,题面展开与复制和接口逐字节一致", 
 	expect(questions.length).toBeGreaterThan(0);
 	for (const q of questions) {
 		await expect(page.getByTestId(`question-${q.id}`)).toBeVisible();
+		const generated = q.generator !== undefined;
+		await expect(page.getByTestId(`question-${q.id}`).getByText("每轮随机生成")).toHaveCount(generated ? 1 : 0);
+		await expect(page.getByTestId(`question-${q.id}-prompt-toggle`)).toHaveText(generated ? "查看示例题面" : "查看题面");
 		await page.getByTestId(`question-${q.id}-prompt-toggle`).click();
 		const prompt = page.getByTestId(`question-${q.id}-prompt`);
 		await expect(prompt).toBeVisible();
