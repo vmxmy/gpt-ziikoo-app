@@ -1,6 +1,6 @@
 import type { FailReason, Stat } from "./types.ts";
 
-export type MonitorState = "operational" | "degraded" | "down" | "no_data";
+export type MonitorState = "operational" | "fair" | "degraded" | "down" | "no_data";
 
 export type MonitorSample = {
 	ts: number;
@@ -44,6 +44,7 @@ export const MONITOR = {
 	staleMs: 10 * 60_000,
 	downRatio: 0.2,
 	wrongRatio: 0.2,
+	fairRatio: 0.1,
 } as const;
 
 const BUCKET_MS = MONITOR.bucketMin * 60_000;
@@ -52,8 +53,9 @@ export function bucketState(c: { total: number; failed: number; wrong: number })
 	if (c.total === 0) return "no_data";
 	if (c.failed / c.total >= MONITOR.downRatio) return "down";
 	const judged = c.total - c.failed;
-	if (c.failed > 0 || (judged > 0 && c.wrong / judged >= MONITOR.wrongRatio)) return "degraded";
-	return "operational";
+	const wrongRatio = judged > 0 ? c.wrong / judged : 0;
+	if (c.failed > 0 || wrongRatio >= MONITOR.wrongRatio) return "degraded";
+	return wrongRatio > MONITOR.fairRatio ? "fair" : "operational";
 }
 
 function stat(values: number[]): Stat | null {

@@ -25,6 +25,14 @@ describe("bucketState", () => {
 		expect(bucketState({ total: 15, failed: 0, wrong: 1 })).toBe("operational");
 	});
 
+	it("splits a clean bucket at 90% correct, keeping exactly 90% in the top tier", () => {
+		expect(bucketState({ total: 30, failed: 0, wrong: 3 })).toBe("operational");
+		expect(bucketState({ total: 30, failed: 0, wrong: 4 })).toBe("fair");
+		expect(bucketState({ total: 10, failed: 0, wrong: 1 })).toBe("operational");
+		expect(bucketState({ total: 9, failed: 0, wrong: 1 })).toBe("fair");
+		expect(bucketState({ total: 15, failed: 0, wrong: 2 })).toBe("fair");
+	});
+
 	it("is degraded when any call failed or one fifth are wrong", () => {
 		expect(bucketState({ total: 15, failed: 1, wrong: 0 })).toBe("degraded");
 		expect(bucketState({ total: 15, failed: 0, wrong: 3 })).toBe("degraded");

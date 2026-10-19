@@ -15,7 +15,7 @@ import {
 } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
 
-const LEGEND: Record<MonitorState, string> = { operational: "正常", degraded: "降级", down: "故障", no_data: "无数据" };
+const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", degraded: "降级", down: "故障", no_data: "无数据" };
 const BAR_HINT = "悬停或聚焦任一格查看该半小时的详情";
 
 // `testPrefix` keeps the official card on its original test ids and gives each custom card its own.
