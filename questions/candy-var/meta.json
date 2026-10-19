@@ -9,5 +9,5 @@
   "expectedLabel": "每轮不同，由求解器按本轮参数算出。最后一行的总数和两个数量都要答对",
   "defaultEffort": "low",
   "calibratedModels": [],
-  "failureHint": "最后一行没有给出正确的总数和两个数量。请看逐次明细里的 want 与 got"
+  "failureHint": "最后一行没有给出正确的总数和两个数量。请看逐次明细里的数字核对"
 }
