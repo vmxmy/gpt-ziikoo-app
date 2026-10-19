@@ -10,8 +10,12 @@ import { Results } from "./result-view.tsx";
 import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
 
-const PRIVACY =
-	"本站不保存你的密钥。为了对比历史，本站保存站点主机名、测试结果和站点返回的原始响应，最近 10 轮，闲置 90 天后自动删除。凭同一站点和同一密钥可查看或立即删除。密钥只在每次测试时转发给你填写的站点。自定义监测的站点与调用记录只保存在你的浏览器里，密钥不保存。建议使用有限额的测试密钥。";
+const PRIVACY = [
+	["密钥", "本站不保存密钥。密钥只在每次测试时转发给你填写的站点。"],
+	["保存的内容", "站点主机名、测试结果和站点返回的原始响应，最近 10 轮。"],
+	["删除", "闲置 90 天后自动删除。凭同一站点和同一密钥可查看，也可立即删除。"],
+	["自定义监测", "站点与调用记录只保存在你的浏览器里，密钥不保存。"],
+] as const;
 
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 
@@ -268,10 +272,17 @@ export function App() {
 		<div class="container">
 			<SiteHeader />
 			<Monitor questionIds={monitorIds} />
-			<p class="privacy">
-				<strong>隐私</strong>
-				<span>{PRIVACY}</span>
-			</p>
+			<section class="privacy" aria-labelledby="privacy-h">
+				<h2 id="privacy-h">隐私</h2>
+				<dl>
+					{PRIVACY.map(([term, text]) => (
+						<div key={term}>
+							<dt>{term}</dt>
+							<dd>{text}</dd>
+						</div>
+					))}
+				</dl>
+			</section>
 			<main class="grid main-grid">
 				<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
 				<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />

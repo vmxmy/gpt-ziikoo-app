@@ -245,8 +245,6 @@ a {
 }
 
 .privacy {
-	display: flex;
-	gap: var(--space-3);
 	margin: var(--space-6) 0;
 	padding: var(--space-3) 0;
 	border-block: var(--border-width) solid var(--border);
@@ -254,10 +252,31 @@ a {
 	font-size: var(--fs-12);
 }
 
-.privacy strong {
-	flex: none;
+.privacy h2 {
+	margin: 0 0 var(--space-2);
+	color: var(--fg);
+	font-size: var(--fs-13);
+	font-weight: 600;
+}
+
+.privacy dl {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: var(--space-2) var(--space-4);
+	margin: 0;
+}
+
+.privacy dl > div {
+	display: contents;
+}
+
+.privacy dt {
 	color: var(--fg);
 	font-weight: 600;
+}
+
+.privacy dd {
+	margin: 0;
 }
 
 .main-grid {

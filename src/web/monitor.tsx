@@ -220,7 +220,7 @@ export function Monitor({ questionIds }: { questionIds: string[] }) {
 					</button>
 				)}
 			</div>
-			{m.cards.length > 0 && <p class="footnote">关闭页面后自定义监测暂停。密钥不会被保存。</p>}
+			{m.cards.length > 0 && <p class="footnote">关闭页面后自定义监测暂停。本站不保存密钥。</p>}
 			{!m.stored && <p class="warn">浏览器存储不可用，刷新页面后自定义监测卡片会消失。</p>}
 		</section>
 	);
