@@ -84,6 +84,10 @@
 	background: var(--ok);
 }
 
+.status-badge[data-state="fair"]::before {
+	background: var(--fair);
+}
+
 .status-badge[data-state="degraded"]::before {
 	background: var(--warn);
 }
@@ -185,6 +189,11 @@
 .segment[data-state="operational"],
 .legend [data-state="operational"]::before {
 	background: var(--ok);
+}
+
+.segment[data-state="fair"],
+.legend [data-state="fair"]::before {
+	background: var(--fair);
 }
 
 .segment[data-state="degraded"],
@@ -351,10 +360,6 @@
 	color: var(--fg-2);
 	font-size: var(--fs-13);
 	text-align: center;
-}
-
-.chart-empty[data-kind="unavailable"] {
-	color: var(--warn);
 }
 
 .card-add {
