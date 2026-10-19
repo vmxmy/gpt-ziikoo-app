@@ -31,7 +31,7 @@ const verdict = (status: QuestionVerdict["status"], stage: number, correct: numb
 describe("costLine", () => {
 	it("counts 31 calls per selected question", () => {
 		expect(MAX_CALLS_PER_QUESTION).toBe(31);
-		expect(costLine(2)).toBe("已选 2 题，最多 62 次调用。差的站点第一关就停，第 1 关另加 1 次协议探测。");
+		expect(costLine(2)).toBe("已选 2 题，最多 62 次调用。第 1 关未通过时，测试在第 1 关停止。第 1 关另加 1 次调用，用来确认协议。");
 	});
 });
 
@@ -47,7 +47,7 @@ describe("failure mapping", () => {
 	// A first-run object is only created by an ok call, so failed calls may have no history to download.
 	it("makes the raw-download hint conditional because first-run failures are not persisted", () => {
 		expect(failureAdvice([failed({ ok: false, reason: "bad_response", httpStatus: 200 }, 1)])).toEqual({
-			reason: "站点返回异常",
+			reason: "站点返回无效内容",
 			next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址",
 		});
 	});
@@ -69,10 +69,10 @@ describe("failure mapping", () => {
 
 describe("dotLabel", () => {
 	it("names the call position and its state for screen readers", () => {
-		expect(dotLabel({ ...base, stage: 2, seq: 3, done: false, response: null })).toBe("第 2 关第 3 次 尝试 1 · responses：进行中");
-		expect(dotLabel(failed(okWith("ok"), 2))).toBe("第 1 关第 1 次 尝试 2 · responses：正确");
-		expect(dotLabel(failed(okWith("NO"), 1))).toBe("第 1 关第 1 次 尝试 1 · responses：错误");
-		expect(dotLabel(failed({ ok: false, reason: "timeout", httpStatus: null }, 1))).toBe("第 1 关第 1 次 尝试 1 · responses：失败 timeout");
+		expect(dotLabel({ ...base, stage: 2, seq: 3, done: false, response: null })).toBe("第 2 关，第 3 个调用，第 1 次尝试 · responses：进行中");
+		expect(dotLabel(failed(okWith("ok"), 2))).toBe("第 1 关，第 1 个调用，第 2 次尝试 · responses：答对");
+		expect(dotLabel(failed(okWith("NO"), 1))).toBe("第 1 关，第 1 个调用，第 1 次尝试 · responses：答错");
+		expect(dotLabel(failed({ ok: false, reason: "timeout", httpStatus: null }, 1))).toBe("第 1 关，第 1 个调用，第 1 次尝试 · responses：失败 timeout");
 	});
 });
 

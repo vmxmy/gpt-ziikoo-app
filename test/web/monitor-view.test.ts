@@ -23,7 +23,7 @@ describe("monitorView", () => {
 
 	it("labels the badge from the last hour", () => {
 		expect(badgeLabel(monitorView(buildMonitor([], NOW, "t")))).toBe("暂无数据");
-		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("样本不足");
+		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("调用数不足");
 		const enough = Array.from({ length: 10 }, (_, i) => sample(i + 1, 900));
 		expect(badgeLabel(monitorView(buildMonitor(enough, NOW, "t")))).toBe("运行正常");
 	});
@@ -37,19 +37,19 @@ describe("monitor text", () => {
 	});
 
 	it("omits the last probe when there is none", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW)).toBe("目标 relay.example · 每 60 秒一次");
+		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW)).toBe("站点 relay.example · 每 60 秒一次");
 		expect(metaLine(buildMonitor([sample(2, 900)], NOW, "relay.example"), NOW)).toBe(
-			"目标 relay.example · 每 60 秒一次 · 最近一次探测 2 分钟前",
+			"站点 relay.example · 每 60 秒一次 · 最近一次调用 2 分钟前",
 		);
 	});
 
 	it("states longer custom intervals in minutes", () => {
 		const custom = { ...buildMonitor([], NOW, "relay.example"), intervalSec: 300 };
-		expect(metaLine(custom, NOW)).toBe("目标 relay.example · 每 5 分钟一次");
+		expect(metaLine(custom, NOW)).toBe("站点 relay.example · 每 5 分钟一次");
 	});
 
 	it("names the channel of a custom card", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW, "chat")).toBe("目标 relay.example · 每 60 秒一次 · 通道 chat");
+		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW, "chat")).toBe("站点 relay.example · 每 60 秒一次 · 协议 chat");
 	});
 
 	it("takes the median of the bucket medians", () => {

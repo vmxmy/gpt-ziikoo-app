@@ -11,7 +11,7 @@ import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.t
 import { TestForm } from "./test-form.tsx";
 
 const PRIVACY =
-	"本站不保存你的密钥。为了对比历史，我们保存站点主机名、测试结果和站点返回的原始响应，最近 10 轮，闲置 90 天后自动删除。凭同一站点和同一密钥可查看或立即删除。密钥只在每次测试时转发给你填写的站点。自定义监测的站点与样本只保存在你的浏览器里，密钥不保存。建议使用有限额的测试密钥。";
+	"本站不保存你的密钥。为了对比历史，本站保存站点主机名、测试结果和站点返回的原始响应，最近 10 轮，闲置 90 天后自动删除。凭同一站点和同一密钥可查看或立即删除。密钥只在每次测试时转发给你填写的站点。自定义监测的站点与调用记录只保存在你的浏览器里，密钥不保存。建议使用有限额的测试密钥。";
 
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 
@@ -190,7 +190,7 @@ function RunSection({ run, running, questions }: { run: RunSnapshot; running: bo
 				</ul>
 			</div>
 			<p class="muted" aria-live="polite">
-				{running ? `进行中${run.protocol ? `，通道 ${run.protocol}` : "，正在探测通道"}` : "已结束"}
+				{running ? `进行中${run.protocol ? `，协议 ${run.protocol}` : "，正在确认协议"}` : "已结束"}
 			</p>
 			<ul class="lanes">
 				{questions.map((q) => (
@@ -206,7 +206,7 @@ function SiteHeader() {
 		<header class="site-header">
 			<div>
 				<h1>GPT 降智测试</h1>
-				<p class="lead">用固定题目多次调用你的中转站，看所买的 GPT 模型是不是原装、有没有被换成弱模型。</p>
+				<p class="lead">用固定题目调用你的站点，检查它返回的是不是你购买的 GPT 模型，有没有换成较弱的模型。</p>
 			</div>
 			<nav class="site-nav" aria-label="页内导航">
 				<a href="#monitor">监测</a>

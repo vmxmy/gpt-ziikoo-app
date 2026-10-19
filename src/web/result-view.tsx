@@ -13,7 +13,7 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 						<th>结果</th>
 						<th class="num">reasoning tokens</th>
 						<th>idShape</th>
-						<th class="num">TTFT</th>
+						<th class="num">首字耗时</th>
 						<th class="num">总耗时</th>
 						<th>回答片段</th>
 						<th>缺失数字</th>
@@ -81,7 +81,7 @@ export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]
 			<div class="overall-block">
 				<p class="overall" data-testid="overall-result" data-status={overall}>
 					总评：{OVERALL_LABEL[overall]}
-					{run.protocol && <span class="muted"> （通道 {run.protocol}）</span>}
+					{run.protocol && <span class="muted"> （协议 {run.protocol}）</span>}
 				</p>
 				<p class="muted">
 					共 {verdicts.length} 题，通过 {passed} 题。
@@ -106,7 +106,7 @@ export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]
 				</button>
 				{run.protocol && (
 					<button type="button" class="btn btn-secondary" onClick={() => onRerun(other)}>
-						也测另一通道（{other}）
+						也测另一协议（{other}）
 					</button>
 				)}
 			</div>

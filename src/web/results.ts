@@ -7,7 +7,7 @@ export const DEFAULT_MODEL = "gpt-6-astra";
 export const MAX_CALLS_PER_QUESTION = STAGES.reduce((n, s) => n + s.calls, 0);
 
 export function costLine(selected: number): string {
-	return `已选 ${selected} 题，最多 ${selected * MAX_CALLS_PER_QUESTION} 次调用。差的站点第一关就停，第 1 关另加 1 次协议探测。`;
+	return `已选 ${selected} 题，最多 ${selected * MAX_CALLS_PER_QUESTION} 次调用。第 1 关未通过时，测试在第 1 关停止。第 1 关另加 1 次调用，用来确认协议。`;
 }
 
 export const OVERALL_LABEL: Record<OverallStatus, string> = {
@@ -32,22 +32,22 @@ const NETWORK: FailureAdvice = { reason: "连不上本站接口", next: "检查�
 export const FAILURE_ADVICE: Record<FailReason, FailureAdvice> = {
 	unauthorized: { reason: "密钥无效或模型无权限", next: "检查密钥" },
 	forbidden: { reason: "站点拒绝了来自服务器的请求", next: "联系站点，或换网络自测" },
-	not_found: { reason: "地址或通道不对", next: "检查是否多填了路径" },
+	not_found: { reason: "地址或协议不对", next: "检查是否多填了路径" },
 	rate_limited: { reason: "站点正忙或限流", next: "几分钟后再测" },
 	upstream_error: { reason: "站点推理接口不可用", next: "等恢复后重测" },
 	timeout: { reason: "站点响应太慢", next: "稍后重测" },
-	bad_response: { reason: "站点返回异常", next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址" },
+	bad_response: { reason: "站点返回无效内容", next: "若该站点与密钥此前已有历史，可在历史里点「下载原始数据」查看站点返回内容；否则请在本机用 curl 自测该地址" },
 };
 
 export function resultText(a: Attempt): string {
-	if (!a.response) return "网络异常";
+	if (!a.response) return "网络失败";
 	if (!a.response.ok) return `失败 ${a.response.reason}${a.response.httpStatus ? ` ${a.response.httpStatus}` : ""}`;
 	if (a.response.correct === null) return "不评分";
-	return a.response.correct ? "正确" : "错误";
+	return a.response.correct ? "答对" : "答错";
 }
 
 export function dotLabel(a: Attempt): string {
-	return `第 ${a.stage} 关第 ${a.seq} 次 尝试 ${a.attempt} · ${a.protocol}：${a.done ? resultText(a) : "进行中"}`;
+	return `第 ${a.stage} 关，第 ${a.seq} 个调用，第 ${a.attempt} 次尝试 · ${a.protocol}：${a.done ? resultText(a) : "进行中"}`;
 }
 
 export function failureAdvice(attempts: Attempt[]): FailureAdvice {
