@@ -20,7 +20,7 @@ async function addWatch(page: Page, { site, key, alias, model = "mock-good", pro
 	await page.getByTestId("watch-add-model").fill(model);
 	if (protocol) await page.getByTestId("watch-add-protocol").selectOption(protocol);
 	if (intervalMin) await page.getByTestId("watch-add-interval").selectOption(String(intervalMin));
-	if (!consent) await page.getByTestId("watch-add-consent").uncheck();
+	await page.getByTestId("watch-add-consent").setChecked(consent);
 	await page.getByTestId("watch-add-submit").click();
 }
 

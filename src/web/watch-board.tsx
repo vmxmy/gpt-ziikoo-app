@@ -155,7 +155,7 @@ export function WatchBoard() {
 		}
 		if (!result.ok) return { field: result.error.field ?? "form", message: result.error.message };
 		const { token, watch } = result.value;
-		setCards((prev) => [{ kind: "live", token, view: watch, actionError: null }, ...prev]);
+		setCards((prev) => [...prev, { kind: "live", token, view: watch, actionError: null }]);
 		return null;
 	};
 
