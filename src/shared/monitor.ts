@@ -38,11 +38,8 @@ export type MonitorResponse = {
 };
 
 export const MONITOR = {
-	intervalSec: 60,
 	bucketMin: 30,
 	buckets: 48,
-	retentionMs: 7 * 24 * 60 * 60_000,
-	staleMs: 10 * 60_000,
 	windowMin: 60,
 	minSamples: 10,
 	downRatio: 0.2,
@@ -99,10 +96,12 @@ function summarizeBucket(start: number, samples: MonitorSample[], windowSamples:
 
 const pct = (part: number, whole: number): number | null => (whole === 0 ? null : (part / whole) * 100);
 
-export function buildMonitor(samples: MonitorSample[], now: number, target: string): MonitorResponse {
+// A slow interval needs a longer window to collect minSamples, and a sample counts as fresh for two intervals.
+export function buildMonitor(samples: MonitorSample[], now: number, target: string, intervalSec: number): MonitorResponse {
+	const windowMs = Math.max(WINDOW_MS, MONITOR.minSamples * intervalSec * 1000);
 	const end = Math.ceil(now / BUCKET_MS) * BUCKET_MS;
 	const first = end - MONITOR.buckets * BUCKET_MS;
-	const pool = samples.filter((s) => s.ts >= first - WINDOW_MS && s.ts < end);
+	const pool = samples.filter((s) => s.ts >= first - windowMs && s.ts < end);
 	const inWindow = pool.filter((s) => s.ts >= first);
 	const buckets = Array.from({ length: MONITOR.buckets }, (_, i) => {
 		const start = first + i * BUCKET_MS;
@@ -110,19 +109,19 @@ export function buildMonitor(samples: MonitorSample[], now: number, target: stri
 		return summarizeBucket(
 			start,
 			inWindow.filter((s) => s.ts >= start && s.ts < close),
-			pool.filter((s) => s.ts >= close - WINDOW_MS && s.ts < close),
+			pool.filter((s) => s.ts >= close - windowMs && s.ts < close),
 		);
 	});
 	const last = inWindow.reduce<MonitorSample | null>((a, s) => (a === null || s.ts > a.ts ? s : a), null);
-	const fresh = last !== null && now - last.ts <= MONITOR.staleMs;
+	const fresh = last !== null && now - last.ts <= 2 * intervalSec * 1000;
 	const valid = inWindow.filter((s) => s.ok);
 	const judged = valid.filter((s) => s.correct !== null);
 	return {
 		target,
-		intervalSec: MONITOR.intervalSec,
+		intervalSec,
 		bucketMin: MONITOR.bucketMin,
 		generatedAt: now,
-		state: fresh ? bucketState(countsOf(pool.filter((s) => s.ts > now - WINDOW_MS && s.ts <= now))) : "no_data",
+		state: fresh ? bucketState(countsOf(pool.filter((s) => s.ts > now - windowMs && s.ts <= now))) : "no_data",
 		uptimePct: pct(valid.length, inWindow.length),
 		correctPct: pct(judged.filter((s) => s.correct === true).length, judged.length),
 		last,

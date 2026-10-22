@@ -30,6 +30,9 @@ export function ApiDocs() {
 				<li>
 					<code>POST /api/history</code>、<code>/api/history/raw</code>、<code>/api/history/delete</code>：请求体带同一站点与密钥。密钥只放请求体，不放请求头和 URL。
 				</li>
+				<li>
+					<code>POST /api/watch</code>、<code>/api/watch/view</code>、<code>/api/watch/state</code>、<code>/api/watch/delete</code>：持续监测的建立、读取、暂停与删除，凭建立时签发的随机令牌，供页面使用。
+				</li>
 				<li>不提供跨域头，第三方网页不能调用，脚本与命令行不受影响。</li>
 			</ul>
 			<h3>分关规则</h3>
@@ -47,7 +50,7 @@ export function ApiDocs() {
 			<pre class="code">{CURL}</pre>
 			<h3>限额</h3>
 			<ul>
-				<li>每个调用方 IP 每 60 秒 150 次，每个站点每 60 秒 60 次。超出返回 429 并带 Retry-After。</li>
+				<li>每个调用方 IP 每 60 秒 150 次，每个站点每 60 秒 120 次。超出返回 429 并带 Retry-After。</li>
 				<li>每轮最多 200 次调用。回答只返回前 70 字，完整内容在历史原始数据里。</li>
 				<li>每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。</li>
 			</ul>

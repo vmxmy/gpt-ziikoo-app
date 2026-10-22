@@ -50,23 +50,23 @@ describe("bucketState", () => {
 
 describe("buildMonitor", () => {
 	it("always returns 48 half-hour buckets aligned to the clock", () => {
-		const m = buildMonitor([sample(1)], NOW, "relay.example");
+		const m = buildMonitor([sample(1)], NOW, "relay.example", 60);
 		expect(m.buckets).toHaveLength(MONITOR.buckets);
 		expect(m.buckets.every((b) => b.start % (MONITOR.bucketMin * MIN) === 0)).toBe(true);
 	});
 
 	it("judges the overall state on the last 60 minutes, and no_data once samples are stale", () => {
 		const healthy = Array.from({ length: 10 }, (_, i) => sample(i + 1));
-		const fresh = buildMonitor([...healthy, sample(12, { ok: false, correct: null, reason: "timeout" })], NOW, "t");
+		const fresh = buildMonitor([...healthy, sample(12, { ok: false, correct: null, reason: "timeout" })], NOW, "t", 60);
 		expect(fresh.state).toBe("degraded");
-		expect(buildMonitor([sample(1)], NOW, "t").state).toBe("insufficient");
-		expect(buildMonitor([sample(30)], NOW, "t").state).toBe("no_data");
+		expect(buildMonitor([sample(1)], NOW, "t", 60).state).toBe("insufficient");
+		expect(buildMonitor([sample(30)], NOW, "t", 60).state).toBe("no_data");
 	});
 
 	it("tiers a half hour from the trailing hour, so a thin half hour is not judged alone", () => {
 		const earlier = Array.from({ length: 20 }, (_, i) => sample(31 + i));
 		const recent = Array.from({ length: 10 }, (_, i) => sample(1 + i, { correct: i >= 4 }));
-		const last = buildMonitor([...earlier, ...recent], NOW, "t").buckets.at(-1)!;
+		const last = buildMonitor([...earlier, ...recent], NOW, "t", 60).buckets.at(-1)!;
 		expect(last).toMatchObject({ total: 10, wrong: 4, windowTotal: 30, state: "fair" });
 	});
 
@@ -77,14 +77,14 @@ describe("buildMonitor", () => {
 			sample(3, { ok: false, correct: null, reason: "upstream_error", httpStatus: 502 }),
 			sample(25 * 60),
 		];
-		const m = buildMonitor(samples, NOW, "t");
+		const m = buildMonitor(samples, NOW, "t", 60);
 		expect(m.uptimePct).toBeCloseTo(66.67, 1);
 		expect(m.correctPct).toBe(50);
 		expect(m.last?.ts).toBe(NOW - MIN);
 	});
 
 	it("gives percentile latency per bucket from valid calls only", () => {
-		const m = buildMonitor([sample(1, { totalMs: 100 }), sample(2, { totalMs: 300 }), sample(3, { ok: false, totalMs: null })], NOW, "t");
+		const m = buildMonitor([sample(1, { totalMs: 100 }), sample(2, { totalMs: 300 }), sample(3, { ok: false, totalMs: null })], NOW, "t", 60);
 		const bucket = m.buckets.find((b) => b.total > 0)!;
 		expect(bucket.totalMs).toEqual({ min: 100, p50: 100, p95: 300, max: 300 });
 	});

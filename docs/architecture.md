@@ -80,7 +80,7 @@ DO 类用配置里的 `exports` 声明存储引擎,例如 `exports.durableObject
 - 秘密用 `bindings.secret()` 声明,文本变量用 `bindings.text()`,限速用 `bindings.rateLimit({ namespace, simple })`,`namespace` 写成字符串即可,构建与部署都接受。
 - `worker.assets` 的键是 camelCase(`runWorkerFirst`),`worker.observability` 同理。
 
-秘密的规矩:`cf deploy` 在任何已声明的秘密没有值时拒绝部署。`PEPPER` 通过 `--secrets-file` 随版本上传,文件放在 0600 权限的临时位置,用完即删。之后的部署不带 `--secrets-file` 也会保留已有的秘密值。
+秘密的规矩:`cf deploy` 在任何已声明的秘密没有值时拒绝部署。`PEPPER` 通过 `--secrets-file` 随版本上传,文件放在 0600 权限的临时位置,用完即删。之后的部署不带 `--secrets-file` 也会保留已有的秘密值。`WATCH_ENC_KEY` 用 `npx cf workers secrets bulk --worker gpt-ziikoo-app --secrets @/dev/stdin` 写入,JSON 喂 stdin,值不进命令行参数、不落文件。
 
 ## 目录
 
@@ -139,8 +139,10 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 | --- | --- |
 | Worker `gpt-ziikoo-app` | 自定义域 `gpt.ziikoo.app`,`workers.dev` 与预览地址关闭 |
 | Durable Object `Target` | 每 [站点 × 密钥] 对象一实例,存最近 10 轮 |
+| Durable Object `Watch` / `WatchRegistry` | 每个持续监测一实例,存加密密钥与 24 小时样本;Registry 是名为 `global` 的单例,只存上限计数行 |
 | Worker `gpt-ziikoo-mock-relay` | e2e 用的 mock 中转站,`https://gpt-ziikoo-mock-relay.blueyang.workers.dev`,不绑域名。任何人都能访问,它不存任何东西 |
 | 秘密 `PEPPER` | 备份在维护者本机 `~/.config/gpt-ziikoo-app/pepper`,权限 0600。**不可轮换**:换掉它会让全部历史对象失联 |
+| 秘密 `WATCH_ENC_KEY` | `Watch` 对象里密钥的 AES-GCM 加密密钥(取 SHA-256 后使用)。**不可轮换**:换掉它会让全部持续监测的密钥失联。备份方式由维护者定,建议与 PEPPER 同放 |
 
 日常部署:
 

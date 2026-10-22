@@ -10,10 +10,16 @@ import {
 	parseProbeRequest,
 	type ProbeCommand,
 	type RunRef,
+	parseWatchCreate,
+	parseWatchState,
+	parseWatchToken,
 } from "./request.ts";
 import type { Target } from "./target.ts";
+import { ipHash, newToken, watchId } from "./watch.ts";
+import { WATCH_MAX_PER_IP, type WatchCreateError, type WatchCreateResponse, type WatchDeleteResponse } from "../shared/watch.ts";
 
 export { Target } from "./target.ts";
+export { Watch, WatchRegistry } from "./watch.ts";
 
 type Handler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
 
@@ -46,10 +52,18 @@ async function targetStub(ctx: ExecutionContext, env: Env, { origin, key }: Hist
 	return ctx.exports.Target.get(ctx.exports.Target.idFromName(id));
 }
 
+const clientIp = (request: Request) => request.headers.get("CF-Connecting-IP") ?? "unknown";
+
 async function ipAllowed(request: Request, env: Env): Promise<boolean> {
-	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-	return (await env.IP_LIMITER.limit({ key: ip })).success;
+	return (await env.IP_LIMITER.limit({ key: clientIp(request) })).success;
 }
+
+async function watchStub(ctx: ExecutionContext, env: Env, token: string) {
+	const id = await watchId(env.PEPPER, token);
+	return { id, stub: ctx.exports.Watch.get(ctx.exports.Watch.idFromName(id)) };
+}
+
+const registryStub = (ctx: ExecutionContext) => ctx.exports.WatchRegistry.get(ctx.exports.WatchRegistry.idFromName("global"));
 
 function rateLimited(): Response {
 	return apiError(
@@ -138,12 +152,75 @@ const handleHistoryDelete: Handler = async (request, env, ctx) => {
 	return json({ deleted: true } satisfies HistoryDeleteResponse);
 };
 
+const LIMIT_MESSAGES = {
+	ip_limit: `每个网络最多 ${WATCH_MAX_PER_IP} 个持续监测`,
+	total_limit: "本站持续监测已满，请稍后再试",
+} as const;
+
+const handleWatchCreate: Handler = async (request, env, ctx) => {
+	const parsed = parseWatchCreate(await readJson(request));
+	if (!parsed.ok) {
+		const { message, field } = parsed;
+		return field ? json({ error: "bad_request", message, field } satisfies WatchCreateError, 400) : apiError(400, { error: "bad_request", message });
+	}
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const cmd = parsed.value;
+	const token = newToken();
+	const { id, stub } = await watchStub(ctx, env, token);
+	const registry = registryStub(ctx);
+	const now = Date.now();
+	const reserved = await registry.reserve(id, await ipHash(env.PEPPER, clientIp(request)), cmd.host, now);
+	if (reserved !== "ok") return json({ error: "watch_limit", message: LIMIT_MESSAGES[reserved] } satisfies WatchCreateError, 429);
+	const created = await stub.create(cmd, id, now);
+	if (created.kind === "unauthorized") {
+		await registry.release(id);
+		return json({ error: "bad_request", message: "站点拒绝了这个密钥", field: "key" } satisfies WatchCreateError, 400);
+	}
+	return json({ token, watch: created.watch } satisfies WatchCreateResponse);
+};
+
+const handleWatchView: Handler = async (request, env, ctx) => {
+	const parsed = parseWatchToken(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const { id, stub } = await watchStub(ctx, env, parsed.value);
+	const watch = await stub.view(Date.now());
+	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
+	await registryStub(ctx).touch(id, watch.expiresAt);
+	return json(watch);
+};
+
+const handleWatchState: Handler = async (request, env, ctx) => {
+	const parsed = parseWatchState(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const { id, stub } = await watchStub(ctx, env, parsed.value.token);
+	const watch = await stub.setState(parsed.value.action, Date.now());
+	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
+	await registryStub(ctx).touch(id, watch.expiresAt);
+	return json(watch);
+};
+
+const handleWatchDelete: Handler = async (request, env, ctx) => {
+	const parsed = parseWatchToken(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const { id, stub } = await watchStub(ctx, env, parsed.value);
+	await stub.deleteAll();
+	await registryStub(ctx).release(id);
+	return json({ deleted: true } satisfies WatchDeleteResponse);
+};
+
 const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/questions": { GET: handleQuestions },
 	"/api/probe": { POST: handleProbe },
 	"/api/history": { POST: handleHistory },
 	"/api/history/raw": { POST: handleHistoryRaw },
 	"/api/history/delete": { POST: handleHistoryDelete },
+	"/api/watch": { POST: handleWatchCreate },
+	"/api/watch/view": { POST: handleWatchView },
+	"/api/watch/state": { POST: handleWatchState },
+	"/api/watch/delete": { POST: handleWatchDelete },
 };
 
 export default {

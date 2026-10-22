@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { STAGES } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem } from "../shared/types.ts";
 import { fetchQuestions, makeProbe } from "./api.ts";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
-import { Monitor } from "./monitor.tsx";
 import { DEFAULT_MODEL, dotLabel, MAX_CALLS_PER_QUESTION } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
+import { WatchBoard } from "./watch-board.tsx";
 
 const PRIVACY = [
-	["密钥", "本站不保存密钥。密钥只在每次测试时转发给你填写的站点。"],
+	["密钥", "实时测试不保存密钥。密钥只在每次测试时转发给你填写的站点。持续监测在你同意后加密保存密钥，仅用于服务器定时调用。"],
 	["保存的内容", "站点主机名、测试结果和站点返回的原始响应，最近 10 轮。"],
 	["删除", "闲置 90 天后自动删除。凭同一站点和同一密钥可查看，也可立即删除。"],
-	["自定义监测", "站点与调用记录只保存在你的浏览器里，密钥不保存。"],
+	["持续监测", "密钥加密后存在服务器，凭页面保存的令牌读取与删除。闲置 7 天无人查看自动删除。"],
 ] as const;
 
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
@@ -216,12 +216,49 @@ function SiteHeader() {
 				<h1>GPT 降智测试</h1>
 				<p class="lead">用固定题目调用你的站点，检查它返回的是不是你购买的 GPT 模型，有没有换成较弱的模型。</p>
 			</div>
-			<nav class="site-nav" aria-label="页内导航">
-				<a href="#monitor">监测</a>
-				<a href="#history">历史</a>
-				<a href="#api-docs">API 说明</a>
-			</nav>
 		</header>
+	);
+}
+
+type TabId = "live" | "watch";
+
+// The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
+function useTab(): [TabId, (tab: TabId) => void] {
+	const read = (): TabId => (location.hash === "#watch" ? "watch" : "live");
+	const [tab, setTab] = useState<TabId>(read);
+	useEffect(() => {
+		const onHash = () => setTab(read());
+		addEventListener("hashchange", onHash);
+		return () => removeEventListener("hashchange", onHash);
+	}, []);
+	return [tab, (next) => {
+		location.hash = next === "live" ? "#live" : "#watch";
+	}];
+}
+
+function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void }) {
+	const tabs: [TabId, string][] = [
+		["live", "实时测试"],
+		["watch", "持续监测"],
+	];
+	return (
+		<div class="tabs" role="tablist" aria-label="测试方式">
+			{tabs.map(([id, label]) => (
+				<button
+					type="button"
+					role="tab"
+					id={`tab-${id}`}
+					aria-selected={tab === id}
+					aria-controls={id === "live" ? "live-pane" : "watch-pane"}
+					class={tab === id ? "tab is-active" : "tab"}
+					onClick={() => onSwitch(id)}
+					data-testid={`tab-${id}`}
+					key={id}
+				>
+					{label}
+				</button>
+			))}
+		</div>
 	);
 }
 
@@ -273,35 +310,43 @@ export function App() {
 	const [key, setKey] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const r = useLadderRun({ site, key, model, questions: q.questions, selected: q.selected });
-	const monitorIds = useMemo(() => (q.questions ?? []).map((x) => x.id).sort(), [q.questions]);
+	const [tab, switchTab] = useTab();
 	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
 	return (
 		<div class="container">
 			<SiteHeader />
-			<Monitor questionIds={monitorIds} />
-			<section class="privacy" aria-labelledby="privacy-h">
-				<h2 id="privacy-h">隐私</h2>
-				<dl>
-					{PRIVACY.map(([term, text]) => (
-						<div key={term}>
-							<dt>{term}</dt>
-							<dd>{text}</dd>
-						</div>
-					))}
-				</dl>
-			</section>
-			<main class="grid main-grid">
-				<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
-				<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-				{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
-				{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
-				<History target={{ site: site.trim(), key }} />
-				<ApiDocs />
-			</main>
+			<Tabs tab={tab} onSwitch={switchTab} />
+			{tab === "live" ? (
+				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live">
+					<section class="privacy" aria-labelledby="privacy-h">
+						<h2 id="privacy-h">隐私</h2>
+						<dl>
+							{PRIVACY.map(([term, text]) => (
+								<div key={term}>
+									<dt>{term}</dt>
+									<dd>{text}</dd>
+								</div>
+							))}
+						</dl>
+					</section>
+					<main class="grid main-grid">
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
+						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
+						{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
+						{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						<History target={{ site: site.trim(), key }} />
+						<ApiDocs />
+					</main>
+				</div>
+			) : (
+				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">
+					<WatchBoard />
+				</div>
+			)}
 			<footer class="site-footer">
 				<span>GPT 降智测试</span>
-				<span>不保存密钥 · 结果只代表测试当时的站点表现</span>
+				<span>实时测试不保存密钥 · 结果只代表测试当时的站点表现</span>
 			</footer>
 		</div>
 	);
