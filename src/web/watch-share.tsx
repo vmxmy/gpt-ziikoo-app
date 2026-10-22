@@ -8,7 +8,7 @@ type Props = {
 	onReset: (newBoard: string) => void;
 };
 
-function renderQR(data: string): string {
+function QRCode({ data }: { data: string }) {
 	const result = encode(data, { ecc: "M" });
 	const size = result.size;
 	const quiet = 4;
@@ -22,10 +22,12 @@ function renderQR(data: string): string {
 			}
 		}
 	}
-	return `<svg viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="看板二维码" data-testid="watch-share-qr">
-<rect class="qr-bg" width="${total}" height="${total}"/>
-<path class="qr-fg" d="${path}"/>
-</svg>`;
+	return (
+		<svg viewBox={`0 0 ${total} ${total}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="看板二维码" data-testid="watch-share-qr">
+			<rect class="qr-bg" width={total} height={total} />
+			<path class="qr-fg" d={path} />
+		</svg>
+	);
 }
 
 function downloadQR(board: string): void {
@@ -98,7 +100,9 @@ export function WatchShare({ board, onReset }: Props) {
 			</button>
 			{open && (
 				<div class="watch-share" data-testid="watch-share">
-					<div class="watch-share-qr" dangerouslySetInnerHTML={{ __html: renderQR(link) }} />
+					<div class="watch-share-qr">
+						<QRCode data={link} />
+					</div>
 					<input type="text" value={link} readonly class="watch-share-link" data-testid="watch-share-link" />
 					<div class="watch-share-actions">
 						<button type="button" class="btn btn-secondary" onClick={() => void copy()}>
