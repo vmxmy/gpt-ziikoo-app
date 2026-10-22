@@ -2,7 +2,7 @@ import { solveBag } from "../../src/shared/candy-gen.ts";
 
 type Protocol = "responses" | "chat";
 type IdKind = "hex" | "ft" | "b64";
-type Topic = "thibault" | "candy" | "candy-var";
+type Topic = "thibault" | "candy" | "candy-var" | "ciallo";
 type Answering = {
 	kind: "answer";
 	correct: boolean;
@@ -140,12 +140,19 @@ const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string 
 		wrong: "至少需要摸出 20 颗糖果。",
 	}),
 	"candy-var": solveCandyVar,
+	// The stock persona's greeting, as the original model replies; a swapped model answers in plain English.
+	ciallo: () => ({
+		right: "Ciallo～(∠・ω< )⌒☆ 今天想一起做点什么？",
+		wrong: "Hello! How can I help you today?",
+	}),
 };
 
 // The marker comes first: the generator can also draw 糖果 as its noun.
 function topicOf(prompt: string): Topic | null {
 	if (prompt.includes(CANDY_VAR_MARKER)) return "candy-var";
 	if (prompt.includes("Thibault")) return "thibault";
+	// The ciallo prompt is the bare word on its own line; every other prompt is a longer sentence.
+	if (/^ciallo\s*$/m.test(prompt)) return "ciallo";
 	return prompt.includes("糖果") ? "candy" : null;
 }
 

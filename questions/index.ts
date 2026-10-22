@@ -3,6 +3,8 @@ import type { Effort, GeneratorId, Question, QuestionKind, QuestionMeta, Scorer 
 import candyMeta from "./candy/meta.json";
 import candyPrompt from "./candy/prompt.txt?raw";
 import candyVarMeta from "./candy-var/meta.json";
+import cialloMeta from "./ciallo/meta.json";
+import cialloPrompt from "./ciallo/prompt.txt?raw";
 import thibaultMeta from "./thibault/meta.json";
 import thibaultPrompt from "./thibault/prompt.txt?raw";
 
@@ -67,6 +69,7 @@ export const QUESTIONS: readonly Question[] = [
 	defineQuestion(thibaultMeta, thibaultPrompt),
 	defineQuestion(candyMeta, candyPrompt),
 	defineQuestion(candyVarMeta),
+	defineQuestion(cialloMeta, cialloPrompt),
 ];
 
 export function instantiate(question: Question, seed: number): Question {

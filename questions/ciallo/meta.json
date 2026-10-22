@@ -1,0 +1,15 @@
+{
+  "id": "ciallo",
+  "version": 1,
+  "status": "active",
+  "title": "Ciallo 角色扮演测试",
+  "measures": "测模型是否保留了原厂角色扮演人设，替换模型的回复通常没有人设标记",
+  "kind": "knowledge",
+  "scorer": {
+    "type": "contains",
+    "expected": "Ciallo"
+  },
+  "expectedLabel": "回答含 Ciallo（原厂人设的打招呼方式）",
+  "calibratedModels": [],
+  "failureHint": "回答里没有 Ciallo。已校准的模型以人设回复；替换或降智的模型常回复英文或通用句子"
+}

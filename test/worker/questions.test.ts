@@ -22,7 +22,11 @@ it("keeps prompt text byte-for-byte", () => {
 });
 
 it("lists only active questions", () => {
-	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var"]);
+	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo"]);
+});
+
+it("keeps the ciallo prompt byte-for-byte", () => {
+	expect(getQuestion("ciallo")?.prompt).toBe("ciallo\n");
 });
 
 it("instantiates a generator question per seed and leaves fixed questions as they are", () => {
