@@ -1,6 +1,6 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import type { Effort, Protocol, Question } from "../shared/types.ts";
-import { isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
+import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { parseSite } from "./target-url.ts";
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -107,10 +107,12 @@ export type WatchCreateCommand = HistoryCommand & {
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
 	alias: string;
+	board?: string;
 };
 export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: false; message: string; field?: WatchField };
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const BOARD = /^[A-Za-z0-9_-]{22}$/;
 
 export function parseWatchCreate(body: unknown): WatchCreateResult {
 	const f = fields(body);
@@ -121,13 +123,14 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (typeof f.key !== "string" || !KEY.test(f.key)) {
 		return { ok: false, message: "key 必须是 8 到 1024 个字母、数字或 _ . - 字符", field: "key" };
 	}
-	const { model, protocol, intervalMin, alias } = f;
+	const { model, protocol, intervalMin, alias, board } = f;
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
 	}
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
 	if (!isWatchInterval(intervalMin)) return bad("intervalMin 必须是 5 或 15");
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
+	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");
 	return {
 		ok: true,
 		value: {
@@ -138,6 +141,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 			protocol,
 			intervalMin,
 			alias: (alias ?? "").trim().slice(0, WATCH_MAX_ALIAS),
+			board: board ?? undefined,
 		},
 	};
 }
@@ -162,4 +166,31 @@ export function parseHistoryRawRequest(body: unknown): Result<HistoryCommand & {
 	const runId = fields(body)?.runId;
 	if (typeof runId !== "string" || !UUID.test(runId)) return bad("runId 必须是 UUID");
 	return { ok: true, value: { ...target.value, runId } };
+}
+
+export function parseBoardView(body: unknown): Result<string> {
+	const board = fields(body)?.board;
+	if (typeof board !== "string" || !BOARD.test(board)) return bad("board 不合法");
+	return { ok: true, value: board };
+}
+
+export function parseBoardAdopt(body: unknown): Result<{ board?: string; tokens: string[] }> {
+	const f = fields(body);
+	if (!f) return bad("请求体必须是 JSON 对象");
+	const { board, tokens } = f;
+	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");
+	if (!Array.isArray(tokens)) return bad("tokens 必须是数组");
+	if (tokens.length > BOARD_MAX_WATCHES) return bad(`tokens 最多 ${BOARD_MAX_WATCHES} 个`);
+	const valid = tokens.every((t): t is string => typeof t === "string" && TOKEN.test(t));
+	if (!valid) return bad("tokens 中包含不合法的令牌");
+	return { ok: true, value: { board, tokens } };
+}
+
+export function parseBoardMove(body: unknown): Result<{ from: string; into?: string }> {
+	const f = fields(body);
+	if (!f) return bad("请求体必须是 JSON 对象");
+	const { from, into } = f;
+	if (typeof from !== "string" || !BOARD.test(from)) return bad("from 不合法");
+	if (into !== undefined && (typeof into !== "string" || !BOARD.test(into))) return bad("into 不合法");
+	return { ok: true, value: { from, into } };
 }

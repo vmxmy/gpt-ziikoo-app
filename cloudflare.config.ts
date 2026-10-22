@@ -15,6 +15,7 @@ export default defineConfig({
 			Target: exports.durableObject({ storage: "sqlite" }),
 			Watch: exports.durableObject({ storage: "sqlite" }),
 			WatchRegistry: exports.durableObject({ storage: "sqlite" }),
+			Board: exports.durableObject({ storage: "sqlite" }),
 			Monitor: { type: "durable-object", state: "deleted" },
 		},
 		env: {

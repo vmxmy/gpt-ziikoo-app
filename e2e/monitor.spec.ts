@@ -2,10 +2,9 @@ import type { Page } from "@playwright/test";
 import { MONITOR } from "../src/shared/monitor.ts";
 import { expect, test } from "./fixtures.ts";
 
-// Every add probes the shared mock host once, and each card re-reads once a minute. Serial tests keep
-// those calls from bunching up next to run.spec's ladders.
 test.describe.configure({ mode: "serial", retries: 0 });
 
+const BOARD_KEY = "gpt.board.v1";
 const TOKENS_KEY = "gpt.watch.v1";
 const LEGACY_KEY = "gpt.monitors.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
@@ -33,8 +32,6 @@ async function lastCardId(page: Page): Promise<string> {
 
 const stored = (page: Page) => page.evaluate(() => JSON.stringify({ ...localStorage }));
 
-// Keys typed into the page must not survive into a failure screenshot or trace, and the watches must
-// not outlive the test on the server or in this origin's storage.
 async function cleaned(page: Page, body: () => Promise<void>): Promise<void> {
 	try {
 		await body();
@@ -42,14 +39,19 @@ async function cleaned(page: Page, body: () => Promise<void>): Promise<void> {
 		await page.locator('input[type="password"], [data-testid="watch-add-key"]').evaluateAll((inputs) => {
 			for (const input of inputs) if (input instanceof HTMLInputElement) input.value = "";
 		});
-		const tokens: string[] = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]"), TOKENS_KEY);
-		for (const token of tokens) {
-			const res = await page.request.post("/api/watch/delete", { data: { token } });
-			expect(res.status()).toBe(200);
+		const board: string | null = await page.evaluate((k) => localStorage.getItem(k), BOARD_KEY);
+		if (board) {
+			const res = await page.request.post("/api/board/view", { data: { board } });
+			if (res.ok()) {
+				const body: { watches: { token: string }[] } = await res.json();
+				for (const { token } of body.watches) {
+					await page.request.post("/api/watch/delete", { data: { token } });
+				}
+			}
 		}
 		await page.evaluate((keys) => {
 			for (const k of keys) localStorage.removeItem(k);
-		}, [TOKENS_KEY, LEGACY_KEY]);
+		}, [BOARD_KEY, TOKENS_KEY, LEGACY_KEY]);
 	}
 }
 
@@ -98,10 +100,9 @@ test("暂停与继续", async ({ page, site, key }) =>
 test("删除,服务器与本地令牌都清空", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
-		const token = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]")[0], TOKENS_KEY);
 		await page.getByTestId(`custom-${id}-remove`).click();
 		await expect(page.locator(CARDS)).toHaveCount(0);
-		await expect.poll(() => stored(page)).not.toContain(token);
+		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), BOARD_KEY)).toBeTruthy();
 	}));
 
 test("别名区分同一站点的两张卡片", async ({ page, site, key }) =>
@@ -157,4 +158,42 @@ test("旧的浏览器监测存储被清除", async ({ page, site, key }) =>
 		await page.evaluate((k) => localStorage.setItem(k, '{"sites":[]}'), LEGACY_KEY);
 		await page.getByTestId("tab-watch").click();
 		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), LEGACY_KEY)).toBe(null);
+	}));
+
+test("看板链接在新设备载入全部面板", async ({ page, site, key, context }) =>
+	cleaned(page, async () => {
+		const id = await addOneGood(page, site, key);
+		const link = await page.getByTestId("watch-share-toggle").click().then(() => page.getByTestId("watch-share-link").inputValue());
+		const newPage = await context.newPage();
+		await newPage.goto(link);
+		await expect(newPage.locator(`[data-testid="custom-${id}-card"]`)).toBeVisible({ timeout: 30_000 });
+		await expect(newPage).toHaveURL(/#watch$/);
+		await newPage.close();
+	}));
+
+test("重置后旧链接失效", async ({ page, site, key, context }) =>
+	cleaned(page, async () => {
+		await addOneGood(page, site, key);
+		await page.getByTestId("watch-share-toggle").click();
+		const oldLink = await page.getByTestId("watch-share-link").inputValue();
+		await page.getByTestId("watch-share-reset").click();
+		const newPage = await context.newPage();
+		await newPage.goto(oldLink);
+		await expect(newPage.getByTestId("watch-board-notice")).toContainText("看板不存在或已过期");
+		await newPage.close();
+	}));
+
+test("旧版令牌存储迁移到看板", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		const res = await page.request.post("/api/watch", {
+			data: { site, key, model: "mock-good", protocol: "responses", intervalMin: 5, alias: "", consent: true },
+		});
+		expect(res.ok()).toBe(true);
+		const { token } = await res.json();
+		await page.evaluate((args) => localStorage.setItem(args.key, JSON.stringify([args.token])), { key: TOKENS_KEY, token });
+		await page.goto("/");
+		await page.getByTestId("tab-watch").click();
+		await expect(page.locator(CARDS)).toHaveCount(1, { timeout: 30_000 });
+		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), TOKENS_KEY)).toBe(null);
+		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), BOARD_KEY)).toBeTruthy();
 	}));
