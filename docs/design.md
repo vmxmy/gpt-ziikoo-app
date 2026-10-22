@@ -96,6 +96,8 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 失败多的监测档位 | 不稳定 | 降级 |
 | 随机生成题的展示 | 示例题面 | 样例、样本题 |
 | 站点收到的输入量 | 输入 token 数 | prompt_tokens、提示用量 |
+| 一组持续监测的聚合对象 | 看板 | |
+| 看板的 16 字节标识 | 看板码 | |
 
 ## 题库
 
@@ -308,15 +310,18 @@ usage 原文
 | 项 | 内容 |
 | --- | --- |
 | 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换,间隔 5 或 15 分钟,默认 5 分钟 |
-| 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的随机令牌(token),存 `localStorage` 键 `gpt.watch.v1`;密钥本身从不进浏览器存储、URL、DOM |
+| 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的看板码(board,16 字节 base64url,22 字符),存 `localStorage` 键 `gpt.board.v1`;密钥本身从不进浏览器存储、URL、DOM |
+| 看板码 | 一个看板聚合多个 watch 令牌,最多 30 个。看板码由服务端签发并加密存储令牌列表。浏览器迁移旧版 `gpt.watch.v1`(令牌数组)时,调用 `/api/board/adopt` 并删除旧键。看板链接走 URL fragment(`#watch/b=<看板码>`),不发给服务器 |
 | 同意 | 添加表单必须勾选「我同意本站加密保存这把密钥」,否则不提交 |
-| 上限 | 每个 IP 最多 6 个,全站最多 200 个,超出返回 429 `watch_limit` |
-| 闲置清除 | 每次查看、暂停、继续都把过期时间推到 7 天后;7 天无人查看自动删除密钥与样本 |
+| 上限 | 每个 IP 最多 6 个 watch,全站最多 200 个,一个看板最多 30 个,超出返回 429 `watch_limit` |
+| 闲置清除 | Watch:每次查看、暂停、继续都把过期时间推到 7 天后;7 天无人查看自动删除密钥与样本。Board:每次读写把 alarm 推到 7 天后,闲置自动删除 |
 | 失败处理 | 服务端只重试超时、站点报错、返回无效内容;连续 5 次 unauthorized 转为 bad_key 状态,界面提示删除后重新添加;添加时首调 unauthorized 直接拒绝,不建卡片 |
 | 别名 | 可选,最多 40 字符,用来区分同一站点的不同通道 |
-| 刷新或重开 | 卡片凭 localStorage 里的令牌重新读取,样本与状态来自服务器 |
+| 刷新或重开 | 卡片凭 localStorage 里的看板码经 `/api/board/view` 批量读取,样本与状态来自服务器 |
 | 关闭页面 | 监测继续。这是本功能的目的 |
-| 删除 | 删除卡片立即清空服务器上的密钥、样本与注册表行 |
+| 删除 | 删除卡片立即清空服务器上的密钥、样本与注册表行。看板由下次 view 自动清理已删除的令牌 |
+| 换机器 | 点「看板二维码」,扫码或复制链接到新设备。新设备自动载入全部面板 |
+| 重置看板码 | 旧码立即失效,生成新码,监测本身不受影响。用于码已泄露或发错地方的情况 |
 
 **为什么做服务端监测。** 浏览器监测测不到页面关闭后的表现,而持续采集正是用户要的。此前「不做服务端常驻监测」一节写下的底线全部满足:密钥加密存储并凭随机令牌读取与删除、所有者与全局上限、间隔不低于 5 分钟、7 天无人访问自动清除,隐私说明同步改写。
 
@@ -350,6 +355,23 @@ POST /api/probe
 POST /api/history          { site, key }            最近 10 轮的汇总与指标
 POST /api/history/raw      { site, key, runId }     该轮全部调用的原始数据
 POST /api/history/delete   { site, key }            清空该对象
+
+POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent: true, board? }
+                           创建持续监测,返回 { board, token, watch }
+                           board 参数可选:给了且非空则加入该看板,否则新签发
+                           400 bad_request (field: "site"|"key"|"model"),429 watch_limit
+POST /api/watch/view       { token }                读取,返回 WatchView 或 404
+POST /api/watch/state      { token, action: "pause"|"resume" }   暂停或继续,返回 WatchView 或 404
+POST /api/watch/delete     { token }                删除,返回 { deleted: true }
+
+POST /api/board/view       { board }                返回 { watches: [{ token, watch: WatchView|null }] }
+                           watch 为 null 表示该 token 获取失败但令牌保留;不存在的令牌自动从看板移除
+POST /api/board/adopt      { board?, tokens }       迁移旧令牌,返回 { board } 或 { board: null }
+                           tokens 最多 30 个;board 可选,给了且非空则合并,否则新签发
+                           全部令牌都无效时返回 { board: null };429 watch_limit
+POST /api/board/move       { from, into? }          合并看板,返回 { board }
+                           把 from 全部令牌并入 into 并删除 from;into 未给则新签发
+                           from 或 into 为空返回 404;from === into 直接返回;超限返回 429
 
 POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent }   建立持续监测
 200 { token, watch }       // token 是 43 字符的随机令牌,只出现这一次,页面存 localStorage

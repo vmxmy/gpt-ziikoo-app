@@ -2,15 +2,16 @@ import type { Protocol } from "../shared/types.ts";
 import { WATCH_MAX_ALIAS, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
 import { normalizeKey } from "./results.ts";
 
+export const BOARD_KEY = "gpt.board.v1";
 export const TOKENS_KEY = "gpt.watch.v1";
 const LEGACY_KEY = "gpt.monitors.v1";
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+const BOARD_RE = /^[A-Za-z0-9_-]{22}$/;
 
 export const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
 
 export type ParsedSite = { ok: true; site: string; host: string } | { ok: false; message: string };
 
-// Only a quick shape check; the Worker's 400 stays the authority on which targets are allowed.
 export function parseSite(input: string): ParsedSite {
 	const site = input.trim();
 	if (!URL.canParse(site)) return { ok: false, message: "请输入完整地址，例如 https://example.com" };
@@ -21,7 +22,6 @@ export function parseSite(input: string): ParsedSite {
 
 export const normalizeAlias = (input: string): string => input.trim().slice(0, WATCH_MAX_ALIAS);
 
-// The alias tells apart cards for the same host, so confirmations and labels name both.
 export const cardLabel = ({ alias, host }: { alias: string; host: string }): string => (alias === "" ? host : `${alias}（${host}）`);
 
 export const cardId = (token: string): string => token.slice(0, 8);
@@ -40,7 +40,7 @@ export type WatchInput = {
 
 export type WatchDraft = { ok: true; request: WatchCreateRequest } | { ok: false; error: FieldError };
 
-export function parseWatchInput(input: WatchInput): WatchDraft {
+export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 	const parsed = parseSite(input.site);
 	if (!parsed.ok) return { ok: false, error: { field: "site", message: parsed.message } };
 	const key = normalizeKey(input.key);
@@ -50,7 +50,16 @@ export function parseWatchInput(input: WatchInput): WatchDraft {
 	if (!input.consent) return { ok: false, error: { field: "consent", message: "请先勾选同意，再添加持续监测" } };
 	return {
 		ok: true,
-		request: { site: parsed.site, key, model, protocol: input.protocol, intervalMin: input.intervalMin, alias: normalizeAlias(input.alias), consent: true },
+		request: {
+			site: parsed.site,
+			key,
+			model,
+			protocol: input.protocol,
+			intervalMin: input.intervalMin,
+			alias: normalizeAlias(input.alias),
+			consent: true,
+			...(board ? { board } : {}),
+		},
 	};
 }
 
@@ -77,8 +86,30 @@ export function parseTokens(raw: string | null): string[] {
 	return list.filter((t): t is string => typeof t === "string" && TOKEN_RE.test(t));
 }
 
-// The browser-side monitors are gone; their storage is dropped on the first read of the new list.
-export function loadTokens(): string[] {
+export function loadBoard(): string | null {
+	try {
+		const raw = localStorage.getItem(BOARD_KEY);
+		return raw && BOARD_RE.test(raw) ? raw : null;
+	} catch {
+		return null;
+	}
+}
+
+export function saveBoard(board: string): boolean {
+	try {
+		localStorage.setItem(BOARD_KEY, board);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+export function parseBoardHash(hash: string): string | null {
+	const match = /^#watch\/b=([A-Za-z0-9_-]{22})$/.exec(hash);
+	return match ? match[1] : null;
+}
+
+export function loadLegacyTokens(): string[] {
 	try {
 		localStorage.removeItem(LEGACY_KEY);
 		return parseTokens(localStorage.getItem(TOKENS_KEY));
@@ -87,12 +118,8 @@ export function loadTokens(): string[] {
 	}
 }
 
-// Only the server-issued tokens are stored; the key itself never reaches storage.
-export function saveTokens(tokens: string[]): boolean {
+export function clearLegacyTokens(): void {
 	try {
-		localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
-		return true;
-	} catch {
-		return false;
-	}
+		localStorage.removeItem(TOKENS_KEY);
+	} catch {}
 }

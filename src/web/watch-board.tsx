@@ -1,10 +1,24 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, type WatchView } from "../shared/watch.ts";
-import { createWatch, deleteWatch, fetchWatch, setWatchState } from "./api.ts";
+import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, setWatchState } from "./api.ts";
 import { MonitorCard } from "./monitor-card.tsx";
 import { monitorView } from "./monitor-view.ts";
 import { WatchAddForm } from "./watch-add.tsx";
-import { cardId, cardLabel, loadTokens, parseWatchInput, saveTokens, statusNotice, type FieldError, type WatchInput } from "./watch.ts";
+import { WatchShare } from "./watch-share.tsx";
+import {
+	BOARD_KEY,
+	cardId,
+	cardLabel,
+	clearLegacyTokens,
+	loadBoard,
+	loadLegacyTokens,
+	parseBoardHash,
+	parseWatchInput,
+	saveBoard,
+	statusNotice,
+	type FieldError,
+	type WatchInput,
+} from "./watch.ts";
 
 const REFRESH_MS = 60_000;
 const TICK_MS = 1_000;
@@ -108,36 +122,88 @@ function WatchCardItem(props: CardProps) {
 }
 
 export function WatchBoard() {
-	const [cards, setCards] = useState<WatchCard[]>(() => loadTokens().map((token): WatchCard => ({ kind: "loading", token })));
-	const [stored, setStored] = useState(true);
+	const [cards, setCards] = useState<WatchCard[]>([]);
+	const [board, setBoard] = useState<string | null>(null);
+	const [boardNotice, setBoardNotice] = useState<string | null>(null);
 	const [now, setNow] = useState(() => Date.now());
 	const [adding, setAdding] = useState(false);
 	const latest = useRef(cards);
 	latest.current = cards;
 
-	useEffect(() => setStored(saveTokens(cards.map((c) => c.token))), [cards]);
-
-	const patch = (token: string, next: WatchCard | null) =>
-		setCards((prev) => (next === null ? prev.filter((c) => c.token !== token) : prev.map((c) => (c.token === token ? next : c))));
-
-	const refreshOne = async (token: string): Promise<void> => {
-		try {
-			const view = await fetchWatch(token);
-			patch(token, view ? { kind: "live", token, view, actionError: null } : null);
-		} catch (err) {
-			patch(token, { kind: "error", token, message: err instanceof Error ? err.message : "读取失败" });
-		}
-	};
-
-	// The server drives the probing; the page only re-reads the latest samples once a minute.
 	useEffect(() => {
-		const refresh = () => {
-			for (const { token } of latest.current) void refreshOne(token);
+		const migrate = async () => {
+			const legacy = loadLegacyTokens();
+			if (legacy.length > 0) {
+				try {
+					const existing = loadBoard();
+					const result = await adoptBoard(existing ?? undefined, legacy);
+					if (result.board) {
+						saveBoard(result.board);
+						setBoard(result.board);
+						clearLegacyTokens();
+					}
+				} catch {
+					clearLegacyTokens();
+				}
+			}
 		};
-		refresh();
-		const timer = setInterval(refresh, REFRESH_MS);
-		return () => clearInterval(timer);
+		const handleHash = async () => {
+			const hashBoard = parseBoardHash(location.hash);
+			if (hashBoard) {
+				const localBoard = loadBoard();
+				try {
+					const view = await fetchBoardView(hashBoard);
+					if (view.watches.length > 0 || !localBoard) {
+						if (localBoard && localBoard !== hashBoard) {
+							const moved = await import("./api.ts").then((m) => m.moveBoard(localBoard, hashBoard));
+							saveBoard(moved.board);
+							setBoard(moved.board);
+						} else {
+							saveBoard(hashBoard);
+							setBoard(hashBoard);
+						}
+						history.replaceState(null, "", "#watch");
+						setBoardNotice("已载入看板");
+					} else if (localBoard) {
+						saveBoard(localBoard);
+						setBoard(localBoard);
+						setBoardNotice("看板不存在或已过期");
+					}
+				} catch {
+					if (localBoard) {
+						saveBoard(localBoard);
+						setBoard(localBoard);
+					}
+					setBoardNotice("看板不存在或已过期");
+				}
+			}
+		};
+		void migrate().then(() => {
+			const existing = loadBoard();
+			if (existing) setBoard(existing);
+			void handleHash();
+		});
+		addEventListener("hashchange", () => void handleHash());
 	}, []);
+
+	useEffect(() => {
+		if (!board) return;
+		const refresh = async () => {
+			try {
+				const result = await fetchBoardView(board);
+				setCards(
+					result.watches.map(({ token, watch }): WatchCard =>
+						watch ? { kind: "live", token, view: watch, actionError: null } : { kind: "error", token, message: "读取失败" },
+					),
+				);
+			} catch (err) {
+				console.error("board view failed", err);
+			}
+		};
+		void refresh();
+		const timer = setInterval(() => void refresh(), REFRESH_MS);
+		return () => clearInterval(timer);
+	}, [board]);
 
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -145,7 +211,7 @@ export function WatchBoard() {
 	}, []);
 
 	const add = async (input: WatchInput): Promise<FieldError | null> => {
-		const draft = parseWatchInput(input);
+		const draft = parseWatchInput(input, board ?? undefined);
 		if (!draft.ok) return draft.error;
 		let result: Awaited<ReturnType<typeof createWatch>>;
 		try {
@@ -154,7 +220,9 @@ export function WatchBoard() {
 			return { field: "form", message: "连不上本站接口，请稍后再试" };
 		}
 		if (!result.ok) return { field: result.error.field ?? "form", message: result.error.message };
-		const { token, watch } = result.value;
+		const { board: newBoard, token, watch } = result.value;
+		saveBoard(newBoard);
+		setBoard(newBoard);
 		setCards((prev) => [...prev, { kind: "live", token, view: watch, actionError: null }]);
 		return null;
 	};
@@ -162,7 +230,9 @@ export function WatchBoard() {
 	const toggle = async (token: string, action: "pause" | "resume"): Promise<void> => {
 		try {
 			const view = await setWatchState(token, action);
-			patch(token, view ? { kind: "live", token, view, actionError: null } : null);
+			if (view) {
+				setCards((prev) => prev.map((c) => (c.token === token ? { kind: "live", token, view, actionError: null } : c)));
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "操作失败";
 			setCards((prev) => prev.map((c) => (c.token === token && c.kind === "live" ? { ...c, actionError: message } : c)));
@@ -172,9 +242,28 @@ export function WatchBoard() {
 	const remove = async (card: WatchCard): Promise<void> => {
 		try {
 			await deleteWatch(card.token);
-			patch(card.token, null);
+			setCards((prev) => prev.filter((c) => c.token !== card.token));
 		} catch {
-			patch(card.token, card.kind === "live" ? { ...card, actionError: "删除失败，请重试" } : { kind: "error", token: card.token, message: "删除失败，请重试" });
+			setCards((prev) =>
+				prev.map((c) =>
+					c.token === card.token
+						? c.kind === "live"
+							? { ...c, actionError: "删除失败，请重试" }
+							: { kind: "error", token: card.token, message: "删除失败，请重试" }
+						: c,
+				),
+			);
+		}
+	};
+
+	const refreshOne = async (token: string): Promise<void> => {
+		try {
+			const view = await fetchWatch(token);
+			if (view) {
+				setCards((prev) => prev.map((c) => (c.token === token ? { kind: "live", token, view, actionError: null } : c)));
+			}
+		} catch (err) {
+			setCards((prev) => prev.map((c) => (c.token === token ? { kind: "error", token, message: err instanceof Error ? err.message : "读取失败" } : c)));
 		}
 	};
 
@@ -183,6 +272,7 @@ export function WatchBoard() {
 			<div class="section-head">
 				<h2 id="watch-board-h">持续监测</h2>
 				<div class="section-tools">
+					{board && cards.length > 0 && <WatchShare board={board} onReset={(newBoard) => setBoard(newBoard)} />}
 					<button
 						type="button"
 						class="btn btn-secondary"
@@ -195,6 +285,11 @@ export function WatchBoard() {
 				</div>
 			</div>
 			<p class="muted">监测由本站服务器执行，页面关闭后继续。密钥经你同意后加密保存，闲置 {WATCH_IDLE_DAYS} 天无人查看自动删除。</p>
+			{boardNotice && (
+				<p class="card-notice" role="status" data-testid="watch-board-notice">
+					{boardNotice}
+				</p>
+			)}
 			{adding && <WatchAddForm onAdd={add} onClose={() => setAdding(false)} />}
 			<div class="grid card-grid">
 				{cards.map((card) => (
@@ -208,7 +303,6 @@ export function WatchBoard() {
 				)}
 			</div>
 			<p class="footnote">每个网络最多 {WATCH_MAX_PER_IP} 个持续监测。</p>
-			{!stored && <p class="warn">浏览器存储不可用，刷新页面后找不到已添加的持续监测。</p>}
 		</section>
 	);
 }

@@ -1,5 +1,5 @@
 import type { ApiError, HistoryRawResponse, HistoryResponse, ProbeRequest, ProbeResponse, QuestionListItem } from "../shared/types.ts";
-import type { WatchCreateRequest, WatchCreateResponse, WatchView } from "../shared/watch.ts";
+import type { BoardAdoptResponse, BoardMoveResponse, BoardViewResponse, WatchCreateRequest, WatchCreateResponse, WatchView } from "../shared/watch.ts";
 import type { Probe, ProbeOutcome } from "./runner.ts";
 
 export type Target = { site: string; key: string };
@@ -91,6 +91,24 @@ export async function setWatchState(token: string, action: "pause" | "resume"): 
 export async function deleteWatch(token: string): Promise<void> {
 	const res = await post("/api/watch/delete", { token });
 	if (!res.ok) throw await failure(res);
+}
+
+export async function fetchBoardView(board: string): Promise<BoardViewResponse> {
+	const res = await post("/api/board/view", { board });
+	if (!res.ok) throw await failure(res);
+	return res.json();
+}
+
+export async function adoptBoard(board: string | undefined, tokens: string[]): Promise<BoardAdoptResponse> {
+	const res = await post("/api/board/adopt", { ...(board ? { board } : {}), tokens });
+	if (!res.ok) throw await failure(res);
+	return res.json();
+}
+
+export async function moveBoard(from: string, into?: string): Promise<BoardMoveResponse> {
+	const res = await post("/api/board/move", { from, ...(into ? { into } : {}) });
+	if (!res.ok) throw await failure(res);
+	return res.json();
 }
 
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);

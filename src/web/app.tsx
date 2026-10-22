@@ -224,7 +224,7 @@ type TabId = "live" | "watch";
 
 // The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
 function useTab(): [TabId, (tab: TabId) => void] {
-	const read = (): TabId => (location.hash === "#watch" ? "watch" : "live");
+	const read = (): TabId => (location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live");
 	const [tab, setTab] = useState<TabId>(read);
 	useEffect(() => {
 		const onHash = () => setTab(read());

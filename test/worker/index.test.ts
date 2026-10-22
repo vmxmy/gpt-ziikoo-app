@@ -119,3 +119,48 @@ describe("watch create", () => {
 		expect(reached.watch).toBe(false);
 	});
 });
+
+describe("board request parsing", () => {
+	const validBoard = "AbCdEfGhIjKlMnOpQrSt12";
+	const validToken = "A".repeat(43);
+
+	it("accepts a valid board view request", async () => {
+		const { parseBoardView } = await import("../../src/worker/request.ts");
+		expect(parseBoardView({ board: validBoard })).toEqual({ ok: true, value: validBoard });
+	});
+
+	it("rejects board view with invalid board code", async () => {
+		const { parseBoardView } = await import("../../src/worker/request.ts");
+		expect(parseBoardView({ board: "short" }).ok).toBe(false);
+		expect(parseBoardView({}).ok).toBe(false);
+	});
+
+	it("accepts a valid board adopt request", async () => {
+		const { parseBoardAdopt } = await import("../../src/worker/request.ts");
+		expect(parseBoardAdopt({ tokens: [validToken] })).toEqual({ ok: true, value: { tokens: [validToken] } });
+		expect(parseBoardAdopt({ board: validBoard, tokens: [validToken, validToken] })).toEqual({
+			ok: true,
+			value: { board: validBoard, tokens: [validToken, validToken] },
+		});
+	});
+
+	it("rejects board adopt with invalid tokens", async () => {
+		const { parseBoardAdopt } = await import("../../src/worker/request.ts");
+		expect(parseBoardAdopt({ tokens: ["short"] }).ok).toBe(false);
+		expect(parseBoardAdopt({ tokens: Array(31).fill(validToken) }).ok).toBe(false);
+	});
+
+	it("accepts a valid board move request", async () => {
+		const { parseBoardMove } = await import("../../src/worker/request.ts");
+		const another = "BbCdEfGhIjKlMnOpQrSt34";
+		expect(parseBoardMove({ from: validBoard })).toEqual({ ok: true, value: { from: validBoard } });
+		expect(parseBoardMove({ from: validBoard, into: another })).toEqual({ ok: true, value: { from: validBoard, into: another } });
+	});
+
+	it("rejects board move with invalid codes", async () => {
+		const { parseBoardMove } = await import("../../src/worker/request.ts");
+		expect(parseBoardMove({ from: "short" }).ok).toBe(false);
+		expect(parseBoardMove({ from: validBoard, into: "x" }).ok).toBe(false);
+	});
+});
+
