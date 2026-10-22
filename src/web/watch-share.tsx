@@ -2,6 +2,7 @@ import { encode } from "uqr";
 import { useState } from "preact/hooks";
 import { moveBoard } from "./api.ts";
 import { saveBoard } from "./watch.ts";
+import { Modal } from "./modal.tsx";
 
 type Props = {
 	board: string;
@@ -95,10 +96,10 @@ export function WatchShare({ board, onReset }: Props) {
 
 	return (
 		<>
-			<button type="button" class="btn btn-secondary" onClick={() => setOpen(!open)} data-testid="watch-share-toggle">
+			<button type="button" class="btn btn-secondary" onClick={() => setOpen(true)} data-testid="watch-share-toggle">
 				看板二维码
 			</button>
-			{open && (
+			<Modal open={open} onClose={() => setOpen(false)} title="看板二维码">
 				<div class="watch-share" data-testid="watch-share">
 					<div class="watch-share-qr">
 						<QRCode data={link} />
@@ -117,7 +118,7 @@ export function WatchShare({ board, onReset }: Props) {
 					</div>
 					<p class="muted">扫码或打开链接即可在另一台设备载入全部持续监测。这个码就是看板钥匙，只发给自己。</p>
 				</div>
-			)}
+			</Modal>
 		</>
 	);
 }
