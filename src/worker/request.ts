@@ -1,5 +1,6 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import type { Effort, Protocol, Question } from "../shared/types.ts";
+import { isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { parseSite } from "./target-url.ts";
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -97,6 +98,62 @@ export function parseHistoryRequest(body: unknown): Result<HistoryCommand> {
 	const f = fields(body);
 	if (!f) return bad("请求体必须是 JSON 对象");
 	return parseTarget(f);
+}
+
+export type WatchField = "site" | "key" | "model";
+export type WatchCreateCommand = HistoryCommand & {
+	host: string;
+	model: string;
+	protocol: Protocol;
+	intervalMin: WatchIntervalMin;
+	alias: string;
+};
+export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: false; message: string; field?: WatchField };
+
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+export function parseWatchCreate(body: unknown): WatchCreateResult {
+	const f = fields(body);
+	if (!f) return bad("请求体必须是 JSON 对象");
+	if (f.consent !== true) return bad("必须同意由本站加密保存密钥");
+	const site = typeof f.site === "string" ? parseSite(f.site) : null;
+	if (!site?.ok) return { ok: false, message: "site 不合法：只接受 https 域名", field: "site" };
+	if (typeof f.key !== "string" || !KEY.test(f.key)) {
+		return { ok: false, message: "key 必须是 8 到 1024 个字母、数字或 _ . - 字符", field: "key" };
+	}
+	const { model, protocol, intervalMin, alias } = f;
+	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
+		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
+	}
+	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
+	if (!isWatchInterval(intervalMin)) return bad("intervalMin 必须是 5 或 15");
+	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
+	return {
+		ok: true,
+		value: {
+			origin: site.origin,
+			host: site.host,
+			key: f.key,
+			model,
+			protocol,
+			intervalMin,
+			alias: (alias ?? "").trim().slice(0, WATCH_MAX_ALIAS),
+		},
+	};
+}
+
+export function parseWatchToken(body: unknown): Result<string> {
+	const token = fields(body)?.token;
+	if (typeof token !== "string" || !TOKEN.test(token)) return bad("token 不合法");
+	return { ok: true, value: token };
+}
+
+export function parseWatchState(body: unknown): Result<{ token: string; action: "pause" | "resume" }> {
+	const token = parseWatchToken(body);
+	if (!token.ok) return token;
+	const action = fields(body)?.action;
+	if (action !== "pause" && action !== "resume") return bad("action 必须是 pause 或 resume");
+	return { ok: true, value: { token: token.value, action } };
 }
 
 export function parseHistoryRawRequest(body: unknown): Result<HistoryCommand & { runId: string }> {

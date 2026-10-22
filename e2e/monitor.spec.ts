@@ -2,57 +2,72 @@ import type { Page } from "@playwright/test";
 import { MONITOR } from "../src/shared/monitor.ts";
 import { expect, test } from "./fixtures.ts";
 
-// Every add probes the shared mock host once, and an open card probes again each minute. Serial
-// tests keep those calls from bunching up next to run.spec's ladders.
+// Every add probes the shared mock host once, and each card re-reads once a minute. Serial tests keep
+// those calls from bunching up next to run.spec's ladders.
 test.describe.configure({ mode: "serial", retries: 0 });
 
-const STORAGE_KEY = "gpt.monitors.v1";
+const TOKENS_KEY = "gpt.watch.v1";
+const LEGACY_KEY = "gpt.monitors.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
 
-type AddSetup = { site: string; key: string; alias?: string; model?: string; protocol?: "responses" | "chat" };
+type AddSetup = { site: string; key: string; alias?: string; model?: string; protocol?: "responses" | "chat"; intervalMin?: 5 | 15; consent?: boolean };
 
-async function addSite(page: Page, { site, key, alias, model = "mock-good", protocol }: AddSetup): Promise<void> {
-	await page.getByTestId("monitor-add-toggle").click();
-	await page.getByTestId("monitor-add-site").fill(site);
-	if (alias) await page.getByTestId("monitor-add-alias").fill(alias);
-	await page.getByTestId("monitor-add-key").fill(key);
-	await page.getByTestId("monitor-add-model").fill(model);
-	if (protocol) await page.getByTestId("monitor-add-protocol").selectOption(protocol);
-	await page.getByTestId("monitor-add-submit").click();
+async function addWatch(page: Page, { site, key, alias, model = "mock-good", protocol, intervalMin, consent = true }: AddSetup): Promise<void> {
+	await page.getByTestId("watch-add-toggle").click();
+	await page.getByTestId("watch-add-site").fill(site);
+	if (alias) await page.getByTestId("watch-add-alias").fill(alias);
+	await page.getByTestId("watch-add-key").fill(key);
+	await page.getByTestId("watch-add-model").fill(model);
+	if (protocol) await page.getByTestId("watch-add-protocol").selectOption(protocol);
+	if (intervalMin) await page.getByTestId("watch-add-interval").selectOption(String(intervalMin));
+	if (!consent) await page.getByTestId("watch-add-consent").uncheck();
+	await page.getByTestId("watch-add-submit").click();
 }
 
 async function lastCardId(page: Page): Promise<string> {
 	const testId = (await page.locator(CARDS).last().getAttribute("data-testid")) ?? "";
-	const id = /^custom-([0-9a-f]{8})-card$/.exec(testId)?.[1];
+	const id = /^custom-([A-Za-z0-9_-]{8})-card$/.exec(testId)?.[1];
 	expect(id, `card test id ${testId}`).toBeTruthy();
 	return id!;
 }
 
 const stored = (page: Page) => page.evaluate(() => JSON.stringify({ ...localStorage }));
 
-// Keys typed into the page must not survive into a failure screenshot or trace, and the cards must
-// not outlive the test in this origin's storage.
+// Keys typed into the page must not survive into a failure screenshot or trace, and the watches must
+// not outlive the test on the server or in this origin's storage.
 async function cleaned(page: Page, body: () => Promise<void>): Promise<void> {
 	try {
 		await body();
 	} finally {
-		await page.locator('input[type="password"], [data-testid="monitor-add-key"]').evaluateAll((inputs) => {
+		await page.locator('input[type="password"], [data-testid="watch-add-key"]').evaluateAll((inputs) => {
 			for (const input of inputs) if (input instanceof HTMLInputElement) input.value = "";
 		});
-		await page.evaluate((k) => localStorage.removeItem(k), STORAGE_KEY);
+		const tokens: string[] = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]"), TOKENS_KEY);
+		for (const token of tokens) {
+			const res = await page.request.post("/api/watch/delete", { data: { token } });
+			expect(res.status()).toBe(200);
+		}
+		await page.evaluate((keys) => {
+			for (const k of keys) localStorage.removeItem(k);
+		}, [TOKENS_KEY, LEGACY_KEY]);
 	}
 }
 
-async function addOneGood(page: Page, site: string, key: string): Promise<string> {
+async function openWatchTab(page: Page): Promise<void> {
 	await page.goto("/");
-	await addSite(page, { site, key });
+	await page.getByTestId("tab-watch").click();
+}
+
+async function addOneGood(page: Page, site: string, key: string): Promise<string> {
+	await openWatchTab(page);
+	await addWatch(page, { site, key });
 	await expect(page.locator(CARDS)).toHaveCount(1);
 	const id = await lastCardId(page);
 	await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 	return id;
 }
 
-test("添加自定义站点后立即探测,密钥不进本地存储与页面", async ({ page, site, key }) =>
+test("切换到持续监测 tab,添加后立即返回首个样本,密钥不进本地存储与页面", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
 		await expect(page.getByTestId(`custom-${id}-segment`)).toHaveCount(MONITOR.buckets);
@@ -61,93 +76,85 @@ test("添加自定义站点后立即探测,密钥不进本地存储与页面", a
 		expect(await page.evaluate(() => document.documentElement.outerHTML)).not.toContain(key);
 	}));
 
-test("刷新后保留样本并要求重新输入密钥,输入后继续", async ({ page, site, key }) =>
+test("刷新后卡片仍在,服务器继续监测", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
 		await page.reload();
+		// The hash stays on #watch across a reload, so the tab itself restores.
 		await expect(page.getByTestId(`custom-${id}-card`)).toBeVisible();
 		await expect(page.getByTestId(`custom-${id}-uptime`)).not.toHaveText("—");
-		await expect(page.getByTestId(`custom-${id}-notice`)).toContainText("需要重新输入密钥");
-		const table = page.getByTestId(`custom-${id}-card`).locator("details.chart-table");
-		await table.locator("summary").click();
-		await expect(table.locator("tbody tr")).not.toHaveCount(0);
-		await expect(table.locator("tbody tr").first().locator("td").nth(1)).not.toHaveText("0");
-		await expect(page.getByTestId(`custom-${id}-key`)).toHaveAttribute("autocomplete", "current-password");
-		await expect(page.getByTestId(`custom-${id}-card`).locator('input[autocomplete="username"]')).toHaveCount(1);
-		await page.getByTestId(`custom-${id}-key`).fill(key);
-		await page.getByTestId(`custom-${id}-resume`).click();
-		await expect(page.getByTestId(`custom-${id}-key`)).toHaveCount(0);
-		await expect(page.getByTestId(`custom-${id}-notice`)).toHaveCount(0);
-		await expect(page.getByTestId(`custom-${id}-pause`)).toBeVisible();
 	}));
 
-test("暂停与删除,删除后本地数据清除", async ({ page, site, key }) =>
+test("暂停与继续", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
 		await page.getByTestId(`custom-${id}-pause`).click();
 		await expect(page.getByTestId(`custom-${id}-notice`)).toHaveText("已暂停");
-		await page.getByTestId(`custom-${id}-remove`).click();
-		await expect(page.locator(CARDS)).toHaveCount(0);
-		await expect.poll(() => stored(page)).not.toContain(id);
+		await page.getByTestId(`custom-${id}-resume`).click();
+		await expect(page.getByTestId(`custom-${id}-notice`)).toHaveCount(0);
+		await expect(page.getByTestId(`custom-${id}-pause`)).toBeVisible();
 	}));
 
-test("别名区分同一站点的两张卡片,可留空,刷新后保留", async ({ page, site, key }) =>
+test("删除,服务器与本地令牌都清空", async ({ page, site, key }) =>
 	cleaned(page, async () => {
-		await page.goto("/");
-		await addSite(page, { site, key, alias: "主通道" });
+		const id = await addOneGood(page, site, key);
+		const token = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]")[0], TOKENS_KEY);
+		await page.getByTestId(`custom-${id}-remove`).click();
+		await expect(page.locator(CARDS)).toHaveCount(0);
+		await expect.poll(() => stored(page)).not.toContain(token);
+	}));
+
+test("别名区分同一站点的两张卡片", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await openWatchTab(page);
+		await addWatch(page, { site, key, alias: "主通道" });
 		await expect(page.locator(CARDS)).toHaveCount(1);
-		await addSite(page, { site, key });
+		await addWatch(page, { site, key });
 		await expect(page.locator(CARDS)).toHaveCount(2);
 		const [first, second] = await page.locator(CARDS).all();
 		await expect(first!.locator(".card-alias")).toHaveText("主通道");
 		await expect(second!.locator(".card-alias")).toHaveCount(0);
-		await page.reload();
-		await expect(page.locator(CARDS)).toHaveCount(2);
-		await expect(page.locator(`${CARDS} .card-alias`)).toHaveText(["主通道"]);
-		expect(await stored(page)).toContain("主通道");
 	}));
 
-test("无效密钥:提示密钥无效且不建卡片", async ({ page, site, key }) =>
+test("未勾选同意:提示且不建卡片", async ({ page, site, key }) =>
 	cleaned(page, async () => {
-		await page.goto("/");
-		await addSite(page, { site, key, model: "mock-401" });
-		await expect(page.getByTestId("monitor-add-error")).toContainText("密钥无效");
+		await openWatchTab(page);
+		await addWatch(page, { site, key, consent: false });
+		await expect(page.getByTestId("watch-add-error")).toContainText("同意");
+		await expect(page.locator(CARDS)).toHaveCount(0);
+	}));
+
+test("无效密钥:字段报错且不建卡片", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await openWatchTab(page);
+		await addWatch(page, { site, key, model: "mock-401" });
+		await expect(page.getByTestId("watch-add-error")).toContainText("密钥");
 		await expect(page.locator(CARDS)).toHaveCount(0);
 	}));
 
 test("站点必须是 https,显示字段级错误", async ({ page, key }) =>
 	cleaned(page, async () => {
-		await page.goto("/");
-		await addSite(page, { site: "http://example.com", key });
-		await expect(page.getByTestId("monitor-add-error")).toHaveText("只支持 https 地址");
-		await expect(page.getByTestId("monitor-add-site")).toHaveAttribute("aria-invalid", "true");
+		await openWatchTab(page);
+		await addWatch(page, { site: "http://example.com", key });
+		await expect(page.getByTestId("watch-add-error")).toHaveText("只支持 https 地址");
+		await expect(page.getByTestId("watch-add-site")).toHaveAttribute("aria-invalid", "true");
 		await expect(page.locator(CARDS)).toHaveCount(0);
 	}));
 
-test("最多 6 张自定义卡片", async ({ page, site, key }) =>
+test("chat 协议与 15 分钟间隔也能添加", async ({ page, site, key }) =>
 	cleaned(page, async () => {
-		await page.goto("/");
-		for (let n = 1; n <= 6; n++) {
-			await addSite(page, { site, key });
-			await expect(page.locator(CARDS)).toHaveCount(n);
-		}
-		await expect(page.getByTestId("monitor-add-toggle")).toBeDisabled();
-		await expect(page.getByTestId("monitor-add-card")).toHaveCount(0);
-		await expect(page.getByText("最多 6 个自定义站点")).toBeVisible();
-		const remove = page.locator('[data-testid^="custom-"][data-testid$="-remove"]');
-		for (let n = 6; n > 0; n--) {
-			await remove.first().click();
-			await expect(page.locator(CARDS)).toHaveCount(n - 1);
-		}
-		await expect.poll(() => stored(page)).not.toContain(new URL(site).host);
-	}));
-
-test("chat 通道也能添加并探测成功", async ({ page, site, key }) =>
-	cleaned(page, async () => {
-		await page.goto("/");
-		await addSite(page, { site, key, protocol: "chat" });
+		await openWatchTab(page);
+		await addWatch(page, { site, key, protocol: "chat", intervalMin: 15 });
 		await expect(page.locator(CARDS)).toHaveCount(1);
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("协议 chat");
+	}));
+
+test("旧的浏览器监测存储被清除", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await page.goto("/");
+		await page.evaluate((k) => localStorage.setItem(k, '{"sites":[]}'), LEGACY_KEY);
+		await page.getByTestId("tab-watch").click();
+		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), LEGACY_KEY)).toBe(null);
 	}));

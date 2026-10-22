@@ -13,10 +13,13 @@ export default defineConfig({
 		assets: { runWorkerFirst: ["/api/*"] },
 		exports: {
 			Target: exports.durableObject({ storage: "sqlite" }),
+			Watch: exports.durableObject({ storage: "sqlite" }),
+			WatchRegistry: exports.durableObject({ storage: "sqlite" }),
 			Monitor: { type: "durable-object", state: "deleted" },
 		},
 		env: {
 			PEPPER: bindings.secret(),
+			WATCH_ENC_KEY: bindings.secret(),
 			IP_LIMITER: bindings.rateLimit({ namespace: "7101", simple: { limit: 150, period: 60 } }),
 			HOST_LIMITER: bindings.rateLimit({ namespace: "7102", simple: { limit: 120, period: 60 } }),
 		},

@@ -159,7 +159,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 	};
 }
 
-// One attempt, no retry: the browser drives retries so each attempt is a separately recorded call.
+// One attempt, no retry: the caller (the browser's live test or a Watch object) drives retries so each attempt is a separate call.
 export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): Promise<ProbeResult> {
 	const { path, body } = REQUEST_BUILDERS[input.protocol](input);
 	const start = deps.now();

@@ -47,7 +47,7 @@ test("首屏在 CSP 下无违规", async ({ page }) => {
 	});
 	await page.goto("/");
 	await expect(page.getByTestId("start-button")).toBeVisible();
-	await expect(page.getByTestId("monitor-add-card")).toBeVisible();
+	await expect(page.getByTestId("tab-watch")).toBeVisible();
 	expect(violations).toEqual([]);
 });
 

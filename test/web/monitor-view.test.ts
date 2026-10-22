@@ -17,21 +17,21 @@ const sample = (minutesAgo: number, totalMs: number): MonitorSample => ({
 
 describe("monitorView", () => {
 	it("tells an empty window apart from one with samples", () => {
-		expect(monitorView(buildMonitor([], NOW, "relay.example")).kind).toBe("waiting");
-		expect(monitorView(buildMonitor([sample(1, 900)], NOW, "relay.example")).kind).toBe("live");
+		expect(monitorView(buildMonitor([], NOW, "relay.example", 60)).kind).toBe("waiting");
+		expect(monitorView(buildMonitor([sample(1, 900)], NOW, "relay.example", 60)).kind).toBe("live");
 	});
 
 	it("labels the badge from the last hour", () => {
-		expect(badgeLabel(monitorView(buildMonitor([], NOW, "t")))).toBe("暂无数据");
-		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t")))).toBe("调用数不足");
+		expect(badgeLabel(monitorView(buildMonitor([], NOW, "t", 60)))).toBe("暂无数据");
+		expect(badgeLabel(monitorView(buildMonitor([sample(1, 900)], NOW, "t", 60)))).toBe("调用数不足");
 		const enough = Array.from({ length: 10 }, (_, i) => sample(i + 1, 900));
-		expect(badgeLabel(monitorView(buildMonitor(enough, NOW, "t")))).toBe("运行正常");
+		expect(badgeLabel(monitorView(buildMonitor(enough, NOW, "t", 60)))).toBe("运行正常");
 	});
 });
 
 describe("tableRows", () => {
 	it("keeps only buckets with calls and puts the newest first", () => {
-		const { buckets } = buildMonitor([sample(1, 900), sample(2, 800), sample(100, 700)], NOW, "t");
+		const { buckets } = buildMonitor([sample(1, 900), sample(2, 800), sample(100, 700)], NOW, "t", 60);
 		const rows = tableRows(buckets);
 		expect(rows.map((b) => b.total)).toEqual([2, 1]);
 		expect(rows[0]!.start).toBeGreaterThan(rows[1]!.start);
@@ -47,26 +47,26 @@ describe("monitor text", () => {
 	});
 
 	it("omits the last probe when there is none", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW)).toBe("站点 relay.example · 每 60 秒一次");
-		expect(metaLine(buildMonitor([sample(2, 900)], NOW, "relay.example"), NOW)).toBe(
+		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW)).toBe("站点 relay.example · 每 60 秒一次");
+		expect(metaLine(buildMonitor([sample(2, 900)], NOW, "relay.example", 60), NOW)).toBe(
 			"站点 relay.example · 每 60 秒一次 · 最近一次调用 2 分钟前",
 		);
 	});
 
 	it("states longer custom intervals in minutes", () => {
-		const custom = { ...buildMonitor([], NOW, "relay.example"), intervalSec: 300 };
+		const custom = buildMonitor([], NOW, "relay.example", 300);
 		expect(metaLine(custom, NOW)).toBe("站点 relay.example · 每 5 分钟一次");
 	});
 
 	it("names the channel of a custom card", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example"), NOW, "chat")).toBe("站点 relay.example · 每 60 秒一次 · 协议 chat");
+		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 60 秒一次 · 协议 chat");
 	});
 
 	it("takes the median of the bucket medians", () => {
-		expect(latencyP50(buildMonitor([], NOW, "t").buckets)).toBeNull();
-		const odd = buildMonitor([sample(1, 900), sample(31, 300), sample(61, 1200)], NOW, "t");
+		expect(latencyP50(buildMonitor([], NOW, "t", 60).buckets)).toBeNull();
+		const odd = buildMonitor([sample(1, 900), sample(31, 300), sample(61, 1200)], NOW, "t", 60);
 		expect(latencyP50(odd.buckets)).toBe(900);
-		const even = buildMonitor([sample(1, 900), sample(31, 300)], NOW, "t");
+		const even = buildMonitor([sample(1, 900), sample(31, 300)], NOW, "t", 60);
 		expect(latencyP50(even.buckets)).toBe(600);
 	});
 });
