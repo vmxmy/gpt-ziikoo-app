@@ -124,6 +124,61 @@ describe("objectId", () => {
 	});
 });
 
+describe("parseProbeRequest custom", () => {
+	const target = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m" };
+	const custom = { prompt: "回答:2+2 等于几?", scorer: { type: "contains", expected: "4" } };
+
+	it("returns an ephemeral question with id custom and version 0", () => {
+		const contains = parseProbeRequest({ ...target, custom });
+		const yesNo = parseProbeRequest({ ...target, custom: { prompt: "你认识他吗", scorer: { type: "yes_no", expected: "YES" } }, effort: "low" });
+		expect(contains).toMatchObject({
+			ok: true,
+			value: {
+				question: { id: "custom", version: 0, prompt: custom.prompt, scorer: { type: "contains", expected: "4" } },
+				effort: null,
+				seed: null,
+				run: null,
+			},
+		});
+		expect(yesNo).toMatchObject({
+			ok: true,
+			value: { question: { id: "custom", version: 0, scorer: { type: "yes_no", expected: "YES" } }, effort: "low", seed: null, run: null },
+		});
+	});
+
+	it("counts code points, not UTF-16 units, at the prompt limit", () => {
+		const astral = "𝕏".repeat(2000);
+		expect(astral.length).toBe(4000);
+		expect(parseProbeRequest({ ...target, custom: { ...custom, prompt: astral } })).toMatchObject({ ok: true });
+		expect(parseProbeRequest({ ...target, custom: { ...custom, prompt: `${astral}x` } })).toEqual({
+			ok: false,
+			message: "custom.prompt 必须是 1 到 2000 个码位的字符串",
+		});
+	});
+
+	it.each([
+		["question 与 custom 同给", { question: "thibault" }, "question 与 custom 只能给一个"],
+		["custom 带 runId", { runId: "00000000-0000-4000-8000-00000000000a" }, "custom 请求不能带 runId"],
+		["custom 带 seed", { seed: 1 }, "custom 请求不能带 seed"],
+	])("rejects %s", (label, top, message) => {
+		expect(parseProbeRequest({ ...target, custom, ...top })).toEqual({ ok: false, message });
+	});
+
+	it.each([
+		["空 prompt", { prompt: "" }, "custom.prompt 必须是 1 到 2000 个码位的字符串"],
+		["prompt 超 2000 码位", { prompt: "a".repeat(2001) }, "custom.prompt 必须是 1 到 2000 个码位的字符串"],
+		["空 contains expected", { scorer: { type: "contains", expected: "" } }, "contains 的 expected 必须是 1 到 500 个码位的字符串"],
+		["scorer 类型不在开放清单", { scorer: { type: "numbers", expected: ["1"] } }, "custom.scorer 只接受 yes_no 或 contains"],
+	])("rejects %s", (label, overrides, message) => {
+		expect(parseProbeRequest({ ...target, custom: { ...custom, ...overrides } })).toEqual({ ok: false, message });
+	});
+
+	it("rejects a non-object custom and a request with neither question nor custom", () => {
+		expect(parseProbeRequest({ ...target, custom: "x" })).toEqual({ ok: false, message: "custom 必须是对象" });
+		expect(parseProbeRequest(target)).toEqual({ ok: false, message: "必须给出 question 或 custom" });
+	});
+});
+
 describe("parseProbeRequest seed", () => {
 	const body = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m", question: "candy-var" };
 

@@ -28,6 +28,11 @@ export type QuestionMeta = {
 export type Question = QuestionMeta & { prompt: string };
 export type QuestionListItem = Omit<Question, "scorer">;
 
+export type CustomQuestion = {
+	prompt: string;
+	scorer: Extract<Scorer, { type: "yes_no" | "contains" }>;
+};
+
 export type IdShape = "hex" | "ft" | "base64" | "other";
 
 export type FailReason =
@@ -51,6 +56,7 @@ export type ProbeRequest = {
 	seq?: number;
 	attempt?: number;
 	seed?: number;
+	custom?: CustomQuestion;
 };
 
 export type ProbeOk = {
