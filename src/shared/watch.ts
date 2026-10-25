@@ -3,7 +3,6 @@ import type { Protocol } from "./types.ts";
 
 export const WATCH_INTERVALS = [5, 15] as const;
 export type WatchIntervalMin = (typeof WATCH_INTERVALS)[number];
-export const WATCH_MAX_PER_IP = 6;
 export const WATCH_MAX_TOTAL = 200;
 export const WATCH_IDLE_DAYS = 7;
 export const WATCH_MAX_ALIAS = 40;

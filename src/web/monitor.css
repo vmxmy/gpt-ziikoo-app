@@ -92,14 +92,9 @@
 	background: var(--tone, var(--none));
 }
 
-.meta,
-.footnote {
+.meta {
 	color: var(--fg-3);
 	font-size: var(--fs-12);
-}
-
-.footnote {
-	margin-top: var(--space-3);
 }
 
 .card-notice {

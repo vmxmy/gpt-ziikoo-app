@@ -366,7 +366,7 @@ usage 原文
 | 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的看板码(board,16 字节 base64url,22 字符),存 `localStorage` 键 `gpt.board.v1`;密钥本身从不进浏览器存储、URL、DOM |
 | 看板码 | 一个看板聚合多个 watch 令牌,最多 30 个。看板码由服务端签发并加密存储令牌列表。浏览器迁移旧版 `gpt.watch.v1`(令牌数组)时,调用 `/api/board/adopt` 并删除旧键。看板链接走 URL fragment(`#watch/b=<看板码>`),不发给服务器 |
 | 同意 | 添加表单必须勾选「我同意本站加密保存这把密钥」,否则不提交 |
-| 上限 | 每个 IP 最多 6 个 watch,全站最多 200 个,一个看板最多 30 个,超出返回 429 `watch_limit` |
+| 上限 | 全站最多 200 个 watch,一个看板最多 30 个,超出返回 429 `watch_limit`。不按 IP 限制 |
 | 闲置清除 | Watch:每次查看、暂停、继续都把过期时间推到 7 天后;7 天无人查看自动删除密钥与样本。Board:每次读写把 alarm 推到 7 天后,闲置自动删除 |
 | 失败处理 | 服务端只重试超时、站点报错、返回无效内容;连续 5 次 unauthorized 转为 bad_key 状态,界面提示删除后重新添加;添加时首调 unauthorized 直接拒绝,不建卡片 |
 | 别名 | 可选,最多 40 字符,用来区分同一站点的不同通道 |
@@ -450,7 +450,7 @@ POST /api/board/order      { board, tokens }        按 tokens 的顺序保存�
 POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent }   建立持续监测
 200 { token, watch }       // token 是 43 字符的随机令牌,只出现这一次,页面存 localStorage
 400 密钥被站点拒绝或参数不合法,带 field 指明字段
-429 { error: "watch_limit", message }   // 每 IP 6 个或全站 200 个
+429 { error: "watch_limit", message }   // 全站 200 个已满
 
 POST /api/watch/view       { token }                读取监测与 24 小时样本
 POST /api/watch/state      { token, action }        action 是 pause 或 resume
@@ -480,7 +480,7 @@ POST /api/watch/delete     { token }                立即清空密钥、样本�
 | 打内网或元数据地址 | 只允许 `https`,拒绝 IP 字面量与 `localhost`,不跟随重定向,限制响应体与总时长。Worker 子请求本身不能直接发往 IP,且本 Worker 不配置 VPC 绑定,内网不可达(后一点为推断,未单独验证) |
 | 灌满限额 | 边缘与 Worker 两层限速,超出返回 429 |
 | 灌满存储 | 每轮调用数上限、单次原始数据上限、新对象建立条件、90 天闲置清空 |
-| 把本站变成替任何人打任何主机的放大器 | 持续监测有每 IP 6 个、全站 200 个的上限,间隔不低于 5 分钟,首调 unauthorized 不建立,7 天无人查看自动清空 |
+| 把本站变成替任何人打任何主机的放大器 | 持续监测有全站 200 个的上限,间隔不低于 5 分钟,首调 unauthorized 不建立,7 天无人查看自动清空 |
 
 限速分两层,数值均为起点,未实测,上线后调整。
 
@@ -579,6 +579,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 实施模型 | 实施代理用标准 `claude-opus-5-5`(维护者指定);OCX 路由当日全部不可用 |
 | 首字时延 | SSE 响应一律记录首个增量的到达时刻,不再按到达节奏判流式 |
 | 自定义站点监测 | 2026-10-22 改为服务端持续监测:密钥凭用户同意加密存进 `Watch` Durable Object,浏览器只存令牌。间隔 5 或 15 分钟,每 IP 6 个,全站 200 个,7 天无人查看自动清空。旧的浏览器监测与 `gpt.monitors.v1` 同日移除 |
+| 监测上限 | 2026-10-25 去掉每 IP 6 个的上限,只保留全站 200 个与每看板 30 个。注册表的 `ip_hash` 列保留,只为兼容已有行,不再读取 |
 | 自定义题 | 2026-10-23 授权。单次调用即弃,不入题库、不落库、不进梯度与监测;评分只开放 `yes_no` 与 `contains`;题面 2000 码位、评分规则 500 码位上限;拒绝理由见票 GZA-1 的备选方案对比 |
 | 页面栅格 | 12 列、三个断点、4px 基准令牌;监测置顶且是卡片栅格;`style-src 'self'` 下不允许内联样式 |
 | `HOST_LIMITER` | 由 60 提到 120 |
