@@ -160,7 +160,7 @@ BASE_URL=https://gpt.ziikoo.app MOCK_URL=https://gpt-ziikoo-mock-relay.blueyang.
 
 e2e 满跑一次约 62 次调用,会撞 IP 每分钟 150 次的限速,页面会按 `Retry-After` 等待后继续,所以单次完整运行约 4 到 5 分钟。
 
-最近一次全量线上 e2e(2026-10-19,`gpt.ziikoo.app` 加 mock 中转站,输入用量核对上线之后):38 个用例,37 通过,0 失败,1 个按设计跳过(只在手机项目运行的用例在桌面项目里跳过)。运行约 6.2 分钟。线上 e2e 抓到过三处只有真实环境才暴露的缺陷:短答案首字时延、Cloudflare 注入统计脚本、添加站点表单没等题目加载。
+最近一次全量线上 e2e(2026-10-25,`gpt.ziikoo.app` 加 mock 中转站,鹈鹕 SVG 动画题与页面布局四批优化上线之后):49 个用例,分两次跑完。第一次 36 通过,1 个重试后通过,2 失败,9 个因 `run.spec.ts` 的串行组在首个失败后整组跳过,1 个按设计跳过(只在手机项目运行的用例在桌面项目里跳过),运行约 12.1 分钟。两个失败分别是 mock 中转站不认识鹈鹕题面(回「OK」,评分四项全缺)与迁移用例在进站点之前就写 `localStorage`(about:blank 是不透明源,Chromium 抛 SecurityError);修复在 #50。mock 重新部署后重跑 `run.spec.ts` 整文件 10 通过,迁移用例 1 通过,约 7.5 分钟。线上 e2e 抓到过四处只有真实环境才暴露的缺陷:短答案首字时延、Cloudflare 注入统计脚本、添加站点表单没等题目加载、新题落地没同步 mock 中转站。新题落地时要同步改 `mock/src/index.ts` 的 `topicOf` 与 `ANSWERS`,并在 `mock/` 目录里重新部署。
 
 两个坑:
 
