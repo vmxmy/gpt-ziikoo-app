@@ -1,5 +1,5 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
-import type { Effort, Protocol, Question } from "../shared/types.ts";
+import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { parseSite } from "./target-url.ts";
 
@@ -28,6 +28,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KEY = /^[A-Za-z0-9_.-]{8,1024}$/;
 const MAX_MODEL_LENGTH = 100;
 const MAX_SEED = 4294967295;
+const MAX_CUSTOM_PROMPT = 2000;
+const MAX_CUSTOM_EXPECTED = 500;
 
 function bad<T>(message: string): Result<T> {
 	return { ok: false, message };
@@ -52,6 +54,43 @@ function parseTarget(f: Record<string, unknown>): Result<HistoryCommand & { host
 	return { ok: true, value: { origin: site.origin, host: site.host, key: f.key } };
 }
 
+function inCodePoints(value: string, max: number): boolean {
+	const n = [...value].length;
+	return n >= 1 && n <= max;
+}
+
+function parseCustom(raw: unknown): Result<CustomQuestion> {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return bad("custom 必须是对象");
+	const { prompt, scorer } = raw as Record<string, unknown>;
+	if (typeof prompt !== "string" || !inCodePoints(prompt, MAX_CUSTOM_PROMPT)) {
+		return bad(`custom.prompt 必须是 1 到 ${MAX_CUSTOM_PROMPT} 个码位的字符串`);
+	}
+	if (typeof scorer !== "object" || scorer === null || Array.isArray(scorer)) return bad("custom.scorer 只接受 yes_no 或 contains");
+	const { type, expected } = scorer as Record<string, unknown>;
+	if (type === "yes_no" && (expected === "YES" || expected === "NO")) return { ok: true, value: { prompt, scorer: { type, expected } } };
+	if (type === "contains" && typeof expected === "string" && inCodePoints(expected, MAX_CUSTOM_EXPECTED)) {
+		return { ok: true, value: { prompt, scorer: { type, expected } } };
+	}
+	if (type === "yes_no" || type === "contains") return bad(type === "contains" ? `contains 的 expected 必须是 1 到 ${MAX_CUSTOM_EXPECTED} 个码位的字符串` : "yes_no 的 expected 必须是 YES 或 NO");
+	return bad("custom.scorer 只接受 yes_no 或 contains");
+}
+
+function customQuestion({ prompt, scorer }: CustomQuestion): Question {
+	return {
+		id: "custom",
+		version: 0,
+		status: "active",
+		title: "",
+		measures: "",
+		kind: "knowledge",
+		scorer,
+		expectedLabel: "",
+		calibratedModels: [],
+		failureHint: "",
+		prompt,
+	};
+}
+
 function parseRun(f: Record<string, unknown>): Result<RunRef | null> {
 	const { runId, stage, seq, attempt } = f;
 	if (stage !== undefined && !isIntIn(stage, 1, 4)) return bad("stage 必须是 1 到 4 的整数");
@@ -68,14 +107,34 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	if (!f) return bad("请求体必须是 JSON 对象");
 	const target = parseTarget(f);
 	if (!target.ok) return target;
-	const { protocol, model, effort, seed } = f;
+	const { protocol, model, effort, seed, custom } = f;
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
 	}
-	const question = typeof f.question === "string" ? getQuestion(f.question) : undefined;
-	if (question?.status !== "active") return bad("question 不是已登记的题");
 	if (effort !== undefined && !isOneOf(EFFORTS, effort)) return bad("effort 必须是 low、medium 或 high");
+	if (custom !== undefined && f.question !== undefined) return bad("question 与 custom 只能给一个");
+	if (custom !== undefined) {
+		const parsedCustom = parseCustom(custom);
+		if (!parsedCustom.ok) return parsedCustom;
+		if (f.runId !== undefined) return bad("custom 请求不能带 runId");
+		if (f.seed !== undefined) return bad("custom 请求不能带 seed");
+		return {
+			ok: true,
+			value: {
+				...target.value,
+				protocol,
+				model,
+				question: customQuestion(parsedCustom.value),
+				effort: effort ?? null,
+				seed: null,
+				run: null,
+			},
+		};
+	}
+	const question = typeof f.question === "string" ? getQuestion(f.question) : undefined;
+	if (question === undefined) return bad("必须给出 question 或 custom");
+	if (question.status !== "active") return bad("question 不是已登记的题");
 	if (seed !== undefined && !isIntIn(seed, 0, MAX_SEED)) return bad("seed 必须是 0 到 4294967295 的整数");
 	const effectiveSeed = seed ?? SAMPLE_SEED;
 	const run = parseRun(f);

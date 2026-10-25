@@ -11,6 +11,10 @@ function question(id: string): Question {
 	return q;
 }
 
+function customQuestion(prompt: string, scorer: Question["scorer"]): Question {
+	return { id: "custom", version: 0, status: "active", title: "", measures: "", kind: "knowledge", scorer, expectedLabel: "", calibratedModels: [], failureHint: "", prompt };
+}
+
 type Chunk = { at: number; text: string };
 type Reply = { status: number; headers?: Record<string, string>; ttfb: number; chunks: Chunk[] };
 
@@ -184,6 +188,32 @@ describe("probe", () => {
 			cachedTokens: null,
 		});
 		expect(result.capture.rawBody).toBe(body);
+	});
+
+	it("scores a custom question's prompt through the same builder and scorer table", async () => {
+		const prompt = "用一句话回答:本站的名字是什么?";
+		const { deps, requests } = fakeUpstream({
+			status: 200,
+			headers: { "content-type": "text/event-stream" },
+			ttfb: 60,
+			chunks: [
+				{ at: 70, text: sse({ type: "response.created", response: { id: "resp_68ab12cd34ef" } }) },
+				{ at: 120, text: sse({ type: "response.output_text.delta", delta: "本站的名字是 ziikoo。" }) },
+			],
+		});
+		const result = await probe(input({ question: customQuestion(prompt, { type: "contains", expected: "ziikoo" }) }), deps);
+		expect(result.response).toMatchObject({ ok: true, questionVersion: 0, correct: true, note: "ok", answer: "本站的名字是 ziikoo。" });
+		expect(JSON.parse(String(requests[0].init.body))).toEqual({ model: "gpt-6-astra", input: prompt, stream: true });
+	});
+
+	it("scores a custom yes_no question", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: "Yes." }) }],
+		});
+		const result = await probe(input({ question: customQuestion("你认识他吗", { type: "yes_no", expected: "YES" }) }), deps);
+		expect(result.response).toMatchObject({ ok: true, questionVersion: 0, correct: true, note: "YES" });
 	});
 
 	it("maps 401 and redacts a key the site echoes back", async () => {
