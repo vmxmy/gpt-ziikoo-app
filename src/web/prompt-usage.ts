@@ -1,4 +1,4 @@
-import { generateCandy } from "../shared/candy-gen.ts";
+import { GENERATORS } from "../shared/generators.ts";
 import type { Protocol, QuestionListItem } from "../shared/types.ts";
 import type { Attempt } from "./runner.ts";
 
@@ -24,7 +24,7 @@ function usageRow(q: QuestionListItem, attempts: readonly Attempt[], seed: numbe
 			: [],
 	);
 	// The worker sends the generated prompt for this seed verbatim, so its length is what the site received.
-	const chars = q.generator ? generateCandy(seed).prompt.length : q.prompt.length;
+	const chars = q.generator ? GENERATORS[q.generator](seed).prompt.length : q.prompt.length;
 	const medianTokens = median(tokens);
 	return { question: q.id, title: q.title, chars, calls: tokens.length, medianTokens, perChar: medianTokens === null ? null : medianTokens / chars };
 }

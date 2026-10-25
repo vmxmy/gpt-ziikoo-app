@@ -118,7 +118,9 @@ type QuestionManifest = {
     | { type: "numbers"; expected: string[] }
     | { type: "final_numbers"; expected: string[] }   // 只读最后一行「答案:」,按顺序逐个比对
     | { type: "contains"; expected: string }
-  generator?: "candy"              // 生成器题:题面与评分由服务端按 seed 生成
+    | { type: "svg_animation" }                       // 完整 HTML 里有 SVG 与动画,见「生成器题 `pelican-svg`」
+  generator?: "candy" | "pelican"  // 生成器题:题面与评分由服务端按 seed 生成
+  inWatchRotation?: boolean        // false 时不进监测轮转,缺省为 true
   expectedLabel: string            // 给人看的答案说明,评分不用它
   defaultEffort?: "low" | "medium" | "high"
   calibratedModels: string[]
@@ -193,6 +195,29 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - seed 是 0 到 4294967295 的整数。一轮用一个 seed,由页面选定;监测和命令行不带 seed 时用 0。题目清单展示的题面就是 seed 0 的实例。
 - seed 随每次调用落库,原始数据里能看到。同一 seed 总是生成同一道题。
 - 生成器或求解器一改,同一 seed 的题就变了,题的 `version` 加 1。
+
+### 生成器题 `pelican-svg`
+
+2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。
+
+- 清单只写 `generator: "pelican"`。题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
+- 动物来自封闭词表 `RIDERS`(8 种),交通工具与动词来自封闭词表 `RIDES`(6 种)。组合序号是 `seed % 48`,站点无法只预置一个答案。seed 范围与 `candy-var` 相同。
+- seed 0 是鹈鹕骑自行车。题面原文如下:
+
+```
+创建一个HTML，内容是用SVG绘制一个鹈鹕骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成
+```
+
+- 评分 `svg_animation`,对完整回答不区分大小写检查四部分:
+  1. `html`:含 `<!doctype html` 或 `<html`。
+  2. `svg`:含 `<svg`。
+  3. `animation`:含 `<animate`、`@keyframes`、`requestAnimationFrame`、`.animate(` 之一。
+  4. `complete`:同时含 `</svg>` 与 `</html>`,没写完的回答答错。
+- 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
+- `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
+- 成本:回答很长,跑满四关是 31 次调用。探针接口的 `answer` 仍只返回前 70 字,完整 HTML 只在历史接口的原始数据里。
+- 本站从不渲染站点返回的 HTML,只按文本显示。
+- 题面模板或词表一改,同一 seed 的题就变了,题的 `version` 加 1。
 
 ### 自定义题
 
@@ -334,7 +359,7 @@ usage 原文
 
 | 项 | 内容 |
 | --- | --- |
-| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换,间隔 5 或 15 分钟,默认 5 分钟 |
+| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换(`inWatchRotation: false` 的题除外),间隔 5 或 15 分钟,默认 5 分钟 |
 | 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的看板码(board,16 字节 base64url,22 字符),存 `localStorage` 键 `gpt.board.v1`;密钥本身从不进浏览器存储、URL、DOM |
 | 看板码 | 一个看板聚合多个 watch 令牌,最多 30 个。看板码由服务端签发并加密存储令牌列表。浏览器迁移旧版 `gpt.watch.v1`(令牌数组)时,调用 `/api/board/adopt` 并删除旧键。看板链接走 URL fragment(`#watch/b=<看板码>`),不发给服务器 |
 | 同意 | 添加表单必须勾选「我同意本站加密保存这把密钥」,否则不提交 |

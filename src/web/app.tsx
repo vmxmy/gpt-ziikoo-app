@@ -1,7 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { STAGES } from "../shared/ladder.ts";
-import type { Protocol, QuestionListItem } from "../shared/types.ts";
+import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
 import { fetchQuestions, makeProbe, missingFields } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
@@ -19,6 +19,10 @@ const PRIVACY = [
 	["持续监测", "密钥加密后存在服务器，凭页面保存的令牌读取与删除。闲置 7 天无人查看自动删除。"],
 ] as const;
 
+const GENERATOR_HINT: Record<GeneratorId, string> = {
+	candy: "每轮的物品、属性和数字都会变，下面是一个示例。",
+	pelican: "每轮的动物和交通工具都会变，下面是一个示例。",
+};
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 
 type CopyStatus = "copied" | "failed";
@@ -84,7 +88,7 @@ function QuestionRow(props: {
 					标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
 				</p>
 				<QuestionActions id={q.id} generated={generated} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
-				{generated && <p class="muted small">每轮的物品、属性和数字都会变，下面是一个示例。</p>}
+				{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
 				{open && (
 					<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
 						{q.prompt}

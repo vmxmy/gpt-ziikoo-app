@@ -1,10 +1,11 @@
-import { generateCandy } from "../src/shared/candy-gen.ts";
+import { GENERATORS } from "../src/shared/generators.ts";
 import type { Effort, GeneratorId, Question, QuestionKind, QuestionMeta, Scorer } from "../src/shared/types.ts";
 import candyMeta from "./candy/meta.json";
 import candyPrompt from "./candy/prompt.txt?raw";
 import candyVarMeta from "./candy-var/meta.json";
 import cialloMeta from "./ciallo/meta.json";
 import cialloPrompt from "./ciallo/prompt.txt?raw";
+import pelicanMeta from "./pelican-svg/meta.json";
 import thibaultMeta from "./thibault/meta.json";
 import thibaultPrompt from "./thibault/prompt.txt?raw";
 
@@ -14,15 +15,6 @@ type RawMeta = Omit<QuestionMeta, "status" | "kind" | "scorer" | "generator" | "
 	scorer?: { type: string; expected: unknown };
 	generator?: string;
 	defaultEffort?: string;
-};
-
-type Content = { prompt: string; scorer: Scorer };
-
-const GENERATORS: Record<GeneratorId, (seed: number) => Content> = {
-	candy: (seed) => {
-		const { prompt, expected } = generateCandy(seed);
-		return { prompt, scorer: { type: "final_numbers", expected } };
-	},
 };
 
 // The listing shows this instance; a probe without a seed sends it too.
@@ -70,6 +62,7 @@ export const QUESTIONS: readonly Question[] = [
 	defineQuestion(candyMeta, candyPrompt),
 	defineQuestion(candyVarMeta),
 	defineQuestion(cialloMeta, cialloPrompt),
+	defineQuestion(pelicanMeta),
 ];
 
 export function instantiate(question: Question, seed: number): Question {

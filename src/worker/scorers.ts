@@ -28,11 +28,25 @@ function contains(answer: string, scorer: ScorerOf<"contains">): ScoreResult {
 	return { correct, note: correct ? "ok" : "not found" };
 }
 
+const SVG_PARTS: readonly (readonly [part: string, present: (low: string) => boolean])[] = [
+	["html", (low) => low.includes("<!doctype html") || low.includes("<html")],
+	["svg", (low) => low.includes("<svg")],
+	["animation", (low) => ["<animate", "@keyframes", "requestanimationframe", ".animate("].some((m) => low.includes(m))],
+	["complete", (low) => low.includes("</svg>") && low.includes("</html>")],
+];
+
+function svgAnimation(answer: string): ScoreResult {
+	const low = answer.toLowerCase();
+	const missing = SVG_PARTS.filter(([, present]) => !present(low)).map(([part]) => part);
+	return { correct: missing.length === 0, note: missing.length === 0 ? "ok" : `missing ${JSON.stringify(missing)}` };
+}
+
 const SCORERS: { [K in Scorer["type"]]: (answer: string, scorer: ScorerOf<K>) => ScoreResult } = {
 	yes_no: yesNo,
 	numbers,
 	final_numbers: finalNumbers,
 	contains,
+	svg_animation: svgAnimation,
 };
 
 export function score(answer: string, scorer: Scorer): ScoreResult {
