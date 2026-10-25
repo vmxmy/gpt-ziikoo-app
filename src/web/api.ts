@@ -10,7 +10,7 @@ import type {
 	Protocol,
 	QuestionListItem,
 } from "../shared/types.ts";
-import type { BoardAdoptResponse, BoardMoveResponse, BoardViewResponse, WatchCreateRequest, WatchCreateResponse, WatchView } from "../shared/watch.ts";
+import type { BoardAdoptResponse, BoardMoveResponse, BoardOrderResponse, BoardViewResponse, WatchCreateRequest, WatchCreateResponse, WatchView } from "../shared/watch.ts";
 import { FAILURE_ADVICE, failureAdvice } from "./results.ts";
 import type { Probe, ProbeOutcome } from "./runner.ts";
 
@@ -172,6 +172,12 @@ export async function adoptBoard(board: string | undefined, tokens: string[]): P
 
 export async function moveBoard(from: string, into?: string): Promise<BoardMoveResponse> {
 	const res = await post("/api/board/move", { from, ...(into ? { into } : {}) });
+	if (!res.ok) throw await failure(res);
+	return res.json();
+}
+
+export async function orderBoard(board: string, tokens: string[]): Promise<BoardOrderResponse> {
+	const res = await post("/api/board/order", { board, tokens });
 	if (!res.ok) throw await failure(res);
 	return res.json();
 }

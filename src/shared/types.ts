@@ -87,7 +87,7 @@ export type ProbeFail = {
 export type ProbeResponse = ProbeOk | ProbeFail;
 
 export type ApiError = {
-	error: "bad_request" | "rate_limited" | "too_many_calls" | "not_found" | "watch_limit";
+	error: "bad_request" | "rate_limited" | "too_many_calls" | "not_found" | "watch_limit" | "stale";
 	message: string;
 	retryAfterSec?: number;
 };

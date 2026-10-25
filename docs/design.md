@@ -99,6 +99,7 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 一组持续监测的聚合对象 | 看板 | |
 | 运行 `svg_animation` 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
 | 看板的 16 字节标识 | 看板码 | |
+| 把卡片移到看板第一位 | 置顶 | 固定、钉住、顶置 |
 | 站点返回的可用模型清单 | 模型列表 | 模型清单、模型目录 |
 
 ## 题库
@@ -370,6 +371,7 @@ usage 原文
 | 失败处理 | 服务端只重试超时、站点报错、返回无效内容;连续 5 次 unauthorized 转为 bad_key 状态,界面提示删除后重新添加;添加时首调 unauthorized 直接拒绝,不建卡片 |
 | 别名 | 可选,最多 40 字符,用来区分同一站点的不同通道 |
 | 刷新或重开 | 卡片凭 localStorage 里的看板码经 `/api/board/view` 批量读取,样本与状态来自服务器 |
+| 顺序 | 卡片顺序存在看板里,置顶、上移、下移都是改看板的令牌顺序,刷新与换设备保持;提交的排列与看板现有令牌不一致时返回 409,页面回到原顺序并提示 |
 | 关闭页面 | 监测继续。这是本功能的目的 |
 | 删除 | 删除卡片立即清空服务器上的密钥、样本与注册表行。看板由下次 view 自动清理已删除的令牌 |
 | 换机器 | 点「看板链接」,复制链接到新设备。新设备自动载入全部面板 |
@@ -438,6 +440,12 @@ POST /api/board/adopt      { board?, tokens }       迁移旧令牌,返回 { boa
 POST /api/board/move       { from, into? }          合并看板,返回 { board }
                            把 from 全部令牌并入 into 并删除 from;into 未给则新签发
                            from 或 into 为空返回 404;from === into 直接返回;超限返回 429
+POST /api/board/order      { board, tokens }        按 tokens 的顺序保存看板,返回 { tokens }
+                           tokens 必须恰好是该看板现有令牌的一个排列,最多 30 个
+                           400 参数不合法(board 不合法、tokens 不是数组、超 30 个、含不合法令牌、有重复)
+                           409 { error: "stale", message: "看板已变化，请刷新后重试" }
+                           // tokens 与看板现有令牌集合不一致
+                           429 本站限流
 
 POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent }   建立持续监测
 200 { token, watch }       // token 是 43 字符的随机令牌,只出现这一次,页面存 localStorage

@@ -174,5 +174,19 @@ describe("board request parsing", () => {
 		expect(parseBoardMove({ from: "short" }).ok).toBe(false);
 		expect(parseBoardMove({ from: validBoard, into: "x" }).ok).toBe(false);
 	});
+
+	it("accepts a valid board order request", async () => {
+		const { parseBoardOrder } = await import("../../src/worker/request.ts");
+		const another = "C".repeat(43);
+		expect(parseBoardOrder({ board: validBoard, tokens: [validToken, another] })).toEqual({
+			ok: true,
+			value: { board: validBoard, tokens: [validToken, another] },
+		});
+	});
+
+	it("rejects board order with duplicate tokens", async () => {
+		const { parseBoardOrder } = await import("../../src/worker/request.ts");
+		expect(parseBoardOrder({ board: validBoard, tokens: [validToken, validToken] }).ok).toBe(false);
+	});
 });
 
