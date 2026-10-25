@@ -114,6 +114,12 @@ describe("probe", () => {
 		});
 	});
 
+	it("appends the endpoint path to a prefixed origin", async () => {
+		const { deps, requests } = fakeUpstream({ status: 200, ttfb: 10, chunks: [{ at: 20, text: sse({ type: "response.completed", response: { id: "resp_68ab12cd34ef" } }) }] });
+		await probe(input({ origin: "https://openrouter.ai/api", protocol: "chat" }), deps);
+		expect(requests[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
+	});
+
 	it("parses a streamed chat call with an event split across chunks", async () => {
 		const usageChunk = sse({
 			id: "chatcmpl-abc",
