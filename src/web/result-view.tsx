@@ -1,10 +1,17 @@
 import { useState } from "preact/hooks";
-import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
+import { STAGES, evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
-import { diagnosis, failureAdvice, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
+import { diagnosis, dotLabel, FAILURE_ADVICE, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
-import { ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
+import { callState, ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
 import { Modal } from "./modal.tsx";
+
+const DOT_LEGEND = [
+	["ok", "答对"],
+	["wrong", "答错"],
+	["fail", "失败"],
+	["pending", "进行中"],
+] as const;
 
 // The frame has an opaque origin, so "*" is the only target that reaches it; the answer is the user's own and holds no key.
 function AnimationFrame({ artifact }: { artifact: string }) {
@@ -19,82 +26,122 @@ function AnimationFrame({ artifact }: { artifact: string }) {
 	);
 }
 
-function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
-	const [playing, setPlaying] = useState<string | null>(null);
+function Ladder({ id, attempts }: { id: string; attempts: Attempt[] }) {
 	return (
-		<div class="table-wrap table-scroll">
-			<table data-testid={`detail-table-${id}`}>
-				<thead>
-					<tr>
-						<th class="num">关</th>
-						<th class="num">序号</th>
-						<th class="num">尝试</th>
-						<th>结果</th>
-						<th class="num">推理 token 数</th>
-						<th>响应 ID 形态</th>
-						<th class="num">首字耗时</th>
-						<th class="num">总耗时</th>
-						<th>回答片段</th>
-						<th>数字核对</th>
-					</tr>
-				</thead>
-				<tbody>
-					{attempts.map((a) => {
-						const r = a.response?.ok ? a.response : null;
-						const artifact = r?.artifact;
-						return (
-							<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
-								<td class="num">{a.stage}</td>
-								<td class="num">{a.seq}</td>
-								<td class="num">{a.attempt}</td>
-								<td>{resultText(a)}</td>
-								<td class="num">{r?.reasoningTokens ?? "—"}</td>
-								<td class="mono">{r?.idShape ?? "—"}</td>
-								<td class="num">{ms(r?.ttftMs)}</td>
-								<td class="num">{ms(r?.totalMs)}</td>
-								<td class="answer">
-									{r?.answer ?? ""}{" "}
-									{artifact && (
-										<button type="button" class="btn-text" onClick={() => setPlaying(artifact)}>
-											播放动画
-										</button>
-									)}
-								</td>
-								<td class="num">{numberCheck(a.response)}</td>
-							</tr>
-						);
-					})}
-				</tbody>
-			</table>
-			<Modal open={playing !== null} onClose={() => setPlaying(null)} title="播放动画">
-				{playing !== null && <AnimationFrame artifact={playing} />}
-			</Modal>
-		</div>
+		<ol class="stages" data-testid={`lane-${id}`}>
+			{STAGES.map((s, i) => {
+				const inStage = attempts.filter((a) => a.stage === i + 1);
+				const correct = inStage.filter((a) => callState(a) === "ok").length;
+				return (
+					<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
+						<span class="stage-name">
+							第 {i + 1} 关 <span class="muted">需 {s.need}/{s.calls}</span>
+						</span>
+						<span class="dots">
+							{inStage.map((a) => (
+								<span
+									class="call-dot"
+									data-testid="call-dot"
+									data-state={callState(a)}
+									role="img"
+									aria-label={dotLabel(a)}
+									title={dotLabel(a)}
+									key={`${a.protocol}-${a.seq}-${a.attempt}`}
+								/>
+							))}
+						</span>
+						<span class="stage-count num">答对 {correct}</span>
+					</li>
+				);
+			})}
+		</ol>
 	);
 }
 
-function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attempts: Attempt[]; protocol: Protocol | null }) {
-	const { q, v, protocol } = props;
-	const attempts = props.attempts.filter((a) => a.done && (protocol === null || a.protocol === protocol));
-	const advice = v.status === "unavailable" ? failureAdvice(attempts) : null;
+const DETAIL_COLUMNS = ["关", "序号", "尝试", "结果", "推理 token 数", "响应 ID 形态", "首字耗时", "总耗时"] as const;
+const NUMERIC_COLUMNS = new Set(["关", "序号", "尝试", "推理 token 数", "首字耗时", "总耗时"]);
+
+function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
+	const [playing, setPlaying] = useState<string | null>(null);
+	const showNumberCheck = attempts.some((a) => numberCheck(a.response) !== "");
+	const hasArtifact = attempts.some((a) => a.response?.ok && a.response.artifact);
+	const tailColumn = hasArtifact ? "播放动画" : "回答片段";
+	const columns = [...DETAIL_COLUMNS, tailColumn, ...(showNumberCheck ? ["数字核对"] : [])];
+	return (
+		<details class="detail">
+			<summary>逐次明细</summary>
+			<div class="table-wrap table-scroll">
+				<table data-testid={`detail-table-${id}`}>
+					<thead>
+						<tr>
+							{columns.map((label) => (
+								<th key={label} class={NUMERIC_COLUMNS.has(label) ? "num" : undefined}>
+									{label}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{attempts.map((a) => {
+							const r = a.response?.ok ? a.response : null;
+							const artifact = r?.artifact;
+							const failure = !a.response?.ok ? (a.response ? FAILURE_ADVICE[a.response.reason].reason : "连不上本站接口") : null;
+							return (
+								<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
+									<td class="num" data-label="关">{a.stage}</td>
+									<td class="num" data-label="序号">{a.seq}</td>
+									<td class="num" data-label="尝试">{a.attempt}</td>
+									<td data-label="结果">{resultText(a)}</td>
+									{failure === null ? (
+										<>
+											<td class="num" data-label="推理 token 数">{r?.reasoningTokens ?? "—"}</td>
+											<td class="mono" data-label="响应 ID 形态">{r?.idShape ?? "—"}</td>
+											<td class="num" data-label="首字耗时">{ms(r?.ttftMs)}</td>
+											<td class="num" data-label="总耗时">{ms(r?.totalMs)}</td>
+											<td class="answer" data-label={tailColumn}>
+												{hasArtifact ? (
+													artifact && (
+														<button type="button" class="btn-text" onClick={() => setPlaying(artifact)}>
+															播放动画
+														</button>
+													)
+												) : (
+													(r?.answer ?? "")
+												)}
+											</td>
+											{showNumberCheck && <td class="num" data-label="数字核对">{numberCheck(a.response)}</td>}
+										</>
+									) : (
+										<td colspan={columns.length - 4} data-label="原因">{failure}</td>
+									)}
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+				<Modal open={playing !== null} onClose={() => setPlaying(null)} title="播放动画">
+					{playing !== null && <AnimationFrame artifact={playing} />}
+				</Modal>
+			</div>
+		</details>
+	);
+}
+
+function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attempts: Attempt[]; protocol: Protocol | null; running: boolean }) {
+	const { q, v, protocol, running } = props;
+	// The lane keeps every probe of the question, including the stage-1 protocol race whose extra dot the e2e counts.
+	const done = props.attempts.filter((a) => a.done && (protocol === null || a.protocol === protocol));
 	return (
 		<article class="verdict" data-testid={`verdict-${q.id}`} data-status={v.status}>
 			<header class="verdict-head">
 				<h3>{q.title}</h3>
 				<span class="pill" data-status={v.status}>
-					{VERDICT_LABEL[v.status]}
+					{running && v.status === "incomplete" ? "进行中" : VERDICT_LABEL[v.status]}
 				</span>
 			</header>
-			<p data-testid={`diagnosis-${q.id}`}>{diagnosis(v, attempts, q.failureHint)}</p>
-			{advice && (
-				<dl class="advice">
-					<dt>原因</dt>
-					<dd>{advice.reason}</dd>
-					<dt>下一步</dt>
-					<dd>{advice.next}</dd>
-				</dl>
-			)}
-			<DetailTable id={q.id} attempts={attempts} />
+			<Ladder id={q.id} attempts={props.attempts} />
+			<p data-testid={`diagnosis-${q.id}`}>{diagnosis(v, done, q.failureHint)}</p>
+			<DetailTable id={q.id} attempts={done} />
 		</article>
 	);
 }
@@ -144,24 +191,53 @@ function UsageCheck(props: { run: RunSnapshot; questions: QuestionListItem[]; se
 	);
 }
 
-export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]; seed: number; onRerun: (protocol?: Protocol) => void }) {
-	const { run, questions, seed, onRerun } = props;
+export function Results(props: {
+	run: RunSnapshot;
+	running: boolean;
+	questions: QuestionListItem[];
+	seed: number;
+	onRerun: (protocol?: Protocol) => void;
+}) {
+	const { run, running, questions, seed, onRerun } = props;
 	const verdicts = questions.map((q) => ({ q, v: evaluateQuestion(ladderCalls(run.attempts, q.id, run.protocol)) }));
 	const overall = summarizeRun(verdicts.map(({ v }) => v.status));
 	const passed = verdicts.filter(({ v }) => v.status === "passed").length;
 	const other: Protocol = run.protocol === "chat" ? "responses" : "chat";
 	return (
-		<section class="block col-12" id="results" aria-labelledby="result-h">
-			<h2 id="result-h">结果</h2>
-			<div class="overall-block">
-				<p class="overall" data-testid="overall-result" data-status={overall}>
-					总评：{OVERALL_LABEL[overall]}
-					{run.protocol && <span class="muted"> （协议 {run.protocol}）</span>}
-				</p>
-				<p class="muted">
-					共 {verdicts.length} 题，通过 {passed} 题。
-				</p>
+		<section class="panel col-12" id="results" aria-labelledby="result-h">
+			<div class="section-head">
+				<h2 id="result-h">结果</h2>
+				<ul class="dot-legend" aria-label="图例">
+					{DOT_LEGEND.map(([state, label]) => (
+						<li key={state}>
+							<span class="call-dot" data-state={state} aria-hidden="true" />
+							{label}
+						</li>
+					))}
+				</ul>
 			</div>
+			<p class="muted" aria-live="polite">
+				{running ? `进行中${run.protocol ? `，协议 ${run.protocol}` : "，正在确认协议"}` : "已结束"}
+			</p>
+			{run.finished && (
+				<div class="overall" data-testid="overall-result" data-status={overall}>
+					<div class="overall-main">
+						<span class="overall-eyebrow">总评：</span><strong class="overall-label">{OVERALL_LABEL[overall]}</strong>
+						{run.protocol && <span class="muted">（协议 {run.protocol}）</span>}{" "}
+						<p class="muted">共 {verdicts.length} 题，通过 {passed} 题。</p>
+					</div>
+					<div class="actions">
+						<button type="button" class="btn btn-secondary" onClick={() => onRerun()}>
+							重新测试
+						</button>
+						{run.protocol && (
+							<button type="button" class="btn btn-secondary" onClick={() => onRerun(other)}>
+								也测另一协议（{other}）
+							</button>
+						)}
+					</div>
+				</div>
+			)}
 			{run.cancelled && <p class="warn">已取消。</p>}
 			{run.stop && (
 				<p class="warn" role="alert">
@@ -169,23 +245,15 @@ export function Results(props: { run: RunSnapshot; questions: QuestionListItem[]
 					{run.stop.retryAfterSec ? `，请 ${run.stop.retryAfterSec} 秒后再试。` : "。"}
 				</p>
 			)}
-			<p class="notice" data-testid="snapshot-notice">
-				结果只代表此刻。同一站点一天内的结果会变化。耗时从本站服务器测到站点，不是从你的电脑测到站点。如果站点限制区域，结果会与你的电脑上的结果不同。
-			</p>
+			{run.finished && (
+				<p class="notice" data-testid="snapshot-notice">
+					结果只代表此刻。同一站点一天内的结果会变化。耗时从本站服务器测到站点，不是从你的电脑测到站点。如果站点限制区域，结果会与你的电脑上的结果不同。
+				</p>
+			)}
 			{verdicts.map(({ q, v }) => (
-				<QuestionResult key={q.id} q={q} v={v} attempts={run.attempts.filter((a) => a.question === q.id)} protocol={run.protocol} />
+				<QuestionResult key={q.id} q={q} v={v} attempts={run.attempts.filter((a) => a.question === q.id)} protocol={run.protocol} running={running} />
 			))}
 			<UsageCheck run={run} questions={questions} seed={seed} />
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" onClick={() => onRerun()}>
-					重新测试
-				</button>
-				{run.protocol && (
-					<button type="button" class="btn btn-secondary" onClick={() => onRerun(other)}>
-						也测另一协议（{other}）
-					</button>
-				)}
-			</div>
 		</section>
 	);
 }

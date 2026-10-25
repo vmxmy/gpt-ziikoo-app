@@ -51,32 +51,14 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 	);
 }
 
-function FormActions(props: Props) {
-	return (
-		<>
-			<div class="actions">
-				<button type="submit" class="btn btn-primary" disabled={props.running || props.selectedCount === 0} data-testid="start-button">
-					开始测试
-				</button>
-				<button type="button" class="btn btn-secondary" disabled={!props.running} onClick={props.onCancel} data-testid="cancel-button">
-					取消
-				</button>
-			</div>
-			<p class="muted small" data-testid="cost-line">
-				{costLine(props.selectedCount)}
-			</p>
-		</>
-	);
-}
-
 export function TestForm(props: Props) {
 	const keyInput = useRef<HTMLInputElement>(null);
 
 	return (
-		<section class="panel col-12 col-lg-5" aria-labelledby="form-h">
+		<section class="panel col-12" aria-labelledby="form-h">
 			<h2 id="form-h">站点与密钥</h2>
 			<form
-				class="form"
+				class="run-form"
 				onSubmit={(e) => {
 					e.preventDefault();
 					props.onStart();
@@ -97,18 +79,30 @@ export function TestForm(props: Props) {
 				<label class="field">
 					<span class="field-label">密钥</span>
 					<SecretInput inputRef={keyInput} testId="key-input" onInput={(v) => props.setKey(normalizeKey(v))} />
-					<p class="muted small">密钥只在本次测试时转发给站点，不保存。请使用有限额的密钥。</p>
 				</label>
 				<label class="field">
 					<span class="field-label">模型</span>
 					<input value={props.model} onInput={(e) => props.setModel(e.currentTarget.value)} data-testid="model-input" />
 				</label>
+				<div class="run-form-actions">
+					{props.running ? (
+						<button type="button" class="btn btn-secondary" onClick={props.onCancel} data-testid="cancel-button">
+							取消
+						</button>
+					) : (
+						<button type="submit" class="btn btn-primary" disabled={props.selectedCount === 0} data-testid="start-button">
+							开始测试
+						</button>
+					)}
+				</div>
 				{props.error && (
 					<p class="field-error" role="alert">
 						{props.error}
 					</p>
 				)}
-				<FormActions {...props} />
+				<p class="muted small" data-testid="cost-line">
+					{costLine(props.selectedCount)}
+				</p>
 			</form>
 		</section>
 	);

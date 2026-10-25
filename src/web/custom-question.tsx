@@ -120,7 +120,6 @@ export function CustomQuestionForm({ target, model }: { target: Target; model: s
 
 	return (
 		<div class="custom-q" data-testid="custom-q">
-			<h3>自定义题</h3>
 			<p class="muted small">用自己的题面和评分规则，对上面的站点调用一次。不计入分关，不进历史。不要在题面里写密钥。完整回答不保存，刷新页面即失。</p>
 			<label class="field">
 				<span class="field-label">题面</span>

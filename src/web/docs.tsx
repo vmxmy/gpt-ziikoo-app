@@ -9,7 +9,7 @@ const CURL = `curl -s https://gpt.ziikoo.app/api/probe \\
 
 export function ApiDocs() {
 	return (
-		<details class="block docs col-12 col-md-6" id="api-docs" data-testid="api-docs">
+		<details class="block docs col-12" id="api-docs" data-testid="api-docs">
 			<summary>
 				<h2>API 说明</h2>
 				<span class="muted small">接口约定、分关规则、curl 示例、限额</span>

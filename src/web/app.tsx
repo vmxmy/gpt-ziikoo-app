@@ -1,14 +1,12 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { STAGES } from "../shared/ladder.ts";
 import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
-import { fetchQuestions, makeProbe, missingFields } from "./api.ts";
+import { fetchQuestions, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
-import { DEFAULT_MODEL, dotLabel, MAX_CALLS_PER_QUESTION } from "./results.ts";
+import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
-import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
+import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
 import { WatchBoard } from "./watch-board.tsx";
 
@@ -27,33 +25,8 @@ const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知�
 
 type CopyStatus = "copied" | "failed";
 
-type ActionsProps = { id: string; generated: boolean; open: boolean; copy: CopyStatus | null; onOpen: () => void; onCopy: () => void };
-
-function QuestionActions({ id, generated, open, copy, onOpen, onCopy }: ActionsProps) {
-	const noun = generated ? "示例题面" : "题面";
-	return (
-		<div class="question-actions">
-			<button type="button" class="btn-text" aria-expanded={open} onClick={onOpen} data-testid={`question-${id}-prompt-toggle`}>
-				{open ? `收起${noun}` : `查看${noun}`}
-			</button>
-			<button type="button" class="btn-text" onClick={onCopy} data-testid={`question-${id}-copy`}>
-				复制{noun}
-			</button>
-			<span class="muted small" role="status" data-testid={`question-${id}-copy-status`}>
-				{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
-			</span>
-		</div>
-	);
-}
-
-function QuestionRow(props: {
-	q: QuestionListItem;
-	checked: boolean;
-	locked: boolean;
-	model: string;
-	onToggle: () => void;
-}) {
-	const { q, checked, locked, model, onToggle } = props;
+function QuestionRow(props: { q: QuestionListItem; checked: boolean; model: string; onToggle: () => void }) {
+	const { q, checked, model, onToggle } = props;
 	const [open, setOpen] = useState(false);
 	const [copy, setCopy] = useState<CopyStatus | null>(null);
 	const doCopy = () => {
@@ -65,13 +38,13 @@ function QuestionRow(props: {
 	};
 	const calibrated = q.calibratedModels.includes(model.trim());
 	const generated = q.generator !== undefined;
+	const noun = generated ? "示例题面" : "题面";
 	return (
 		<li class={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
 			<input
 				id={`q-${q.id}`}
 				type="checkbox"
 				checked={checked}
-				disabled={checked && locked}
 				onChange={onToggle}
 				data-testid={`question-${q.id}-toggle`}
 			/>
@@ -81,65 +54,33 @@ function QuestionRow(props: {
 					<span class="tag">{KIND_LABEL[q.kind]}</span>
 					{generated && <span class="tag">每轮随机生成</span>}
 					<span class="mono muted">v{q.version}</span>
-					{!calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
+					{q.calibratedModels.length > 0 && !calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
 				</label>
 				<p>{q.measures}</p>
-				<p class="muted small">
-					标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
-				</p>
-				<QuestionActions id={q.id} generated={generated} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
-				{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
+				<button type="button" class="btn-text" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={`question-${q.id}-prompt-toggle`}>
+					{open ? `收起${noun}` : `查看${noun}`}
+				</button>
 				{open && (
-					<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
-						{q.prompt}
-					</pre>
+					<>
+						<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
+							{q.prompt}
+						</pre>
+						<p class="muted small">标准答案：{q.expectedLabel}。</p>
+						{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
+						<div class="question-actions">
+							<button type="button" class="btn-text" onClick={doCopy} data-testid={`question-${q.id}-copy`}>
+								复制{noun}
+							</button>
+							<span class="muted small" role="status" data-testid={`question-${q.id}-copy-status`}>
+								{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
+							</span>
+						</div>
+					</>
 				)}
 			</div>
 		</li>
 	);
 }
-
-function Lane({ id, title, attempts }: { id: string; title: string; attempts: Attempt[] }) {
-	return (
-		<li class="lane" data-testid={`lane-${id}`}>
-			<span class="lane-title">{title}</span>
-			<ol class="stages">
-				{STAGES.map((s, i) => {
-					const inStage = attempts.filter((a) => a.stage === i + 1);
-					const correct = inStage.filter((a) => callState(a) === "ok").length;
-					return (
-						<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
-							<span class="stage-name">
-								第 {i + 1} 关 <span class="muted">需 {s.need}/{s.calls}</span>
-							</span>
-							<span class="dots">
-								{inStage.map((a) => (
-									<span
-										class="call-dot"
-										data-testid="call-dot"
-										data-state={callState(a)}
-										role="img"
-										aria-label={dotLabel(a)}
-										title={dotLabel(a)}
-										key={`${a.protocol}-${a.seq}-${a.attempt}`}
-									/>
-								))}
-							</span>
-							<span class="stage-count num">答对 {correct}</span>
-						</li>
-					);
-				})}
-			</ol>
-		</li>
-	);
-}
-
-const DOT_LEGEND = [
-	["ok", "答对"],
-	["wrong", "答错"],
-	["fail", "失败"],
-	["pending", "进行中"],
-] as const;
 
 const DEFAULT_QUESTION = "thibault";
 
@@ -170,55 +111,45 @@ type QuestionsProps = {
 	loadError: string;
 	selected: string[];
 	model: string;
+	target: Target;
 	onToggle: (id: string) => void;
-	children: ComponentChildren;
 };
 
-function QuestionsSection({ questions, loadError, selected, model, onToggle, children }: QuestionsProps) {
+function QuestionsSection({ questions, loadError, selected, model, target, onToggle }: QuestionsProps) {
+	const [customOpen, setCustomOpen] = useState(false);
 	return (
-		<section class="block col-12 col-lg-7" aria-labelledby="questions-h">
-			<h2 id="questions-h">选题</h2>
+		<section class="block col-12" aria-labelledby="questions-h">
+			<div class="section-head">
+				<h2 id="questions-h">选题</h2>
+				<div class="section-tools">
+					<button
+						type="button"
+						class="btn btn-secondary"
+						aria-expanded={customOpen}
+						onClick={() => setCustomOpen(!customOpen)}
+						data-testid="custom-q-toggle"
+					>
+						自定义题
+					</button>
+				</div>
+			</div>
 			{loadError && <p class="warn">{loadError}</p>}
 			{questions === null && !loadError && <p class="muted">题目加载中…</p>}
+			{questions !== null && questions.some((q) => !q.calibratedModels.includes(model.trim())) && (
+				<p class="muted small">题目尚未按当前模型校准，结果仅供参考。</p>
+			)}
 			<ul class="questions">
 				{(questions ?? []).map((q) => (
 					<QuestionRow
 						key={q.id}
 						q={q}
 						checked={selected.includes(q.id)}
-						locked={selected.length <= 1}
 						model={model}
 						onToggle={() => onToggle(q.id)}
 					/>
 				))}
 			</ul>
-			{children}
-		</section>
-	);
-}
-
-function RunSection({ run, running, questions }: { run: RunSnapshot; running: boolean; questions: QuestionListItem[] }) {
-	return (
-		<section class="block col-12" aria-labelledby="run-h">
-			<div class="section-head">
-				<h2 id="run-h">运行</h2>
-				<ul class="dot-legend" aria-label="图例">
-					{DOT_LEGEND.map(([state, label]) => (
-						<li key={state}>
-							<span class="call-dot" data-state={state} aria-hidden="true" />
-							{label}
-						</li>
-					))}
-				</ul>
-			</div>
-			<p class="muted" aria-live="polite">
-				{running ? `进行中${run.protocol ? `，协议 ${run.protocol}` : "，正在确认协议"}` : "已结束"}
-			</p>
-			<ul class="lanes">
-				{questions.map((q) => (
-					<Lane key={q.id} id={q.id} title={q.title} attempts={run.attempts.filter((a) => a.question === q.id)} />
-				))}
-			</ul>
+			{customOpen && <CustomQuestionForm target={target} model={model} />}
 		</section>
 	);
 }
@@ -327,14 +258,18 @@ export function App() {
 	const [tab, switchTab] = useTab();
 	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
+	useEffect(() => {
+		if (r.run !== null) document.getElementById("results")?.scrollIntoView({ block: "start" });
+	}, [r.run !== null]);
+
 	return (
 		<div class="container">
 			<SiteHeader />
 			<Tabs tab={tab} onSwitch={switchTab} />
 			{tab === "live" ? (
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live">
-					<section class="privacy" aria-labelledby="privacy-h">
-						<h2 id="privacy-h">隐私</h2>
+					<details class="privacy">
+						<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
 						<dl>
 							{PRIVACY.map(([term, text]) => (
 								<div key={term}>
@@ -343,14 +278,11 @@ export function App() {
 								</div>
 							))}
 						</dl>
-					</section>
+					</details>
 					<main class="grid main-grid">
-						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle}>
-							<CustomQuestionForm target={{ site: site.trim(), key }} model={model} />
-						</QuestionsSection>
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-						{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
-						{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={{ site: site.trim(), key }} onToggle={q.toggle} />
 						<History target={{ site: site.trim(), key }} />
 						<ApiDocs />
 					</main>

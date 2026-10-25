@@ -66,7 +66,7 @@
 
 .card-actions {
 	display: flex;
-	gap: var(--space-4);
+	gap: var(--space-2);
 }
 
 .card-status {
@@ -191,18 +191,20 @@
 }
 
 .bar-foot {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-2) var(--space-4);
 	margin-top: var(--space-2);
 }
 
 .readout {
+	min-height: 1.5em;
 	color: var(--fg-2);
 	font-size: var(--fs-12);
 	font-variant-numeric: tabular-nums;
+}
+
+.board-legend {
+	display: grid;
+	gap: var(--space-2);
+	margin-bottom: var(--space-4);
 }
 
 .legend {
@@ -521,20 +523,6 @@
 	background: var(--tone, var(--none));
 }
 
-.watch-table .row-metrics {
-	display: inline-flex;
-	align-items: baseline;
-	gap: var(--space-4);
-	margin-left: var(--space-4);
-	color: var(--tone-text, var(--fg));
-	font-variant-numeric: tabular-nums;
-}
-
-.watch-table .row-metrics .num {
-	min-width: 3.5em;
-	text-align: right;
-}
-
 .watch-table tr[data-paused] {
 	color: var(--fg-3);
 }
@@ -612,11 +600,8 @@
 }
 
 @media (max-width: 639px) {
-	.watch-table [data-col="bar"] {
-		display: none;
-	}
-
-	.watch-table .row-metrics .num[data-col="p50"] {
+	.watch-table [data-col="bar"],
+	.watch-table [data-col="p50"] {
 		display: none;
 	}
 }

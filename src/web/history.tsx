@@ -68,7 +68,7 @@ export function History({ target }: { target: Target }) {
 	};
 
 	return (
-		<section class="block col-12 col-md-6" id="history" aria-labelledby="history-h" data-testid="history-section">
+		<section class="block col-12" id="history" aria-labelledby="history-h" data-testid="history-section">
 			<h2 id="history-h">历史</h2>
 			<p class="muted">用上面填写的站点与密钥取回最近 10 轮。</p>
 			<div class="actions">

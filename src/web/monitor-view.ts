@@ -14,6 +14,7 @@ export const STATE_LABEL: Record<MonitorState, string> = {
 };
 
 export const WAITING_NOTICE = "等待第一次调用的结果。按设定间隔调用站点，结果出来后这里会更新。";
+export const SPARSE_NOTICE = "再过一个半小时格，耗时折线会出现。";
 
 export function monitorView(data: MonitorResponse): MonitorView {
 	return { kind: data.last === null ? "waiting" : "live", data };
