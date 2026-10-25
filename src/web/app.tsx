@@ -1,8 +1,7 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { STAGES } from "../shared/ladder.ts";
 import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
-import { fetchQuestions, makeProbe, missingFields } from "./api.ts";
+import { fetchQuestions, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
@@ -170,14 +169,28 @@ type QuestionsProps = {
 	loadError: string;
 	selected: string[];
 	model: string;
+	target: Target;
 	onToggle: (id: string) => void;
-	children: ComponentChildren;
 };
 
-function QuestionsSection({ questions, loadError, selected, model, onToggle, children }: QuestionsProps) {
+function QuestionsSection({ questions, loadError, selected, model, target, onToggle }: QuestionsProps) {
+	const [customOpen, setCustomOpen] = useState(false);
 	return (
-		<section class="block col-12 col-lg-7" aria-labelledby="questions-h">
-			<h2 id="questions-h">选题</h2>
+		<section class="block col-12" aria-labelledby="questions-h">
+			<div class="section-head">
+				<h2 id="questions-h">选题</h2>
+				<div class="section-tools">
+					<button
+						type="button"
+						class="btn btn-secondary"
+						aria-expanded={customOpen}
+						onClick={() => setCustomOpen(!customOpen)}
+						data-testid="custom-q-toggle"
+					>
+						自定义题
+					</button>
+				</div>
+			</div>
 			{loadError && <p class="warn">{loadError}</p>}
 			{questions === null && !loadError && <p class="muted">题目加载中…</p>}
 			<ul class="questions">
@@ -192,14 +205,14 @@ function QuestionsSection({ questions, loadError, selected, model, onToggle, chi
 					/>
 				))}
 			</ul>
-			{children}
+			{customOpen && <CustomQuestionForm target={target} model={model} />}
 		</section>
 	);
 }
 
 function RunSection({ run, running, questions }: { run: RunSnapshot; running: boolean; questions: QuestionListItem[] }) {
 	return (
-		<section class="block col-12" aria-labelledby="run-h">
+		<section class="block col-12" id="run" aria-labelledby="run-h">
 			<div class="section-head">
 				<h2 id="run-h">运行</h2>
 				<ul class="dot-legend" aria-label="图例">
@@ -327,14 +340,18 @@ export function App() {
 	const [tab, switchTab] = useTab();
 	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
+	useEffect(() => {
+		if (r.run !== null) document.getElementById("run")?.scrollIntoView({ block: "start" });
+	}, [r.run !== null]);
+
 	return (
 		<div class="container">
 			<SiteHeader />
 			<Tabs tab={tab} onSwitch={switchTab} />
 			{tab === "live" ? (
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live">
-					<section class="privacy" aria-labelledby="privacy-h">
-						<h2 id="privacy-h">隐私</h2>
+					<details class="privacy">
+						<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
 						<dl>
 							{PRIVACY.map(([term, text]) => (
 								<div key={term}>
@@ -343,14 +360,12 @@ export function App() {
 								</div>
 							))}
 						</dl>
-					</section>
+					</details>
 					<main class="grid main-grid">
-						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle}>
-							<CustomQuestionForm target={{ site: site.trim(), key }} model={model} />
-						</QuestionsSection>
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
 						{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
 						{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={{ site: site.trim(), key }} onToggle={q.toggle} />
 						<History target={{ site: site.trim(), key }} />
 						<ApiDocs />
 					</main>

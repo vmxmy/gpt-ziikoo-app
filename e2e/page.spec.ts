@@ -2,6 +2,7 @@ import { expect, scrubbed, test } from "./fixtures.ts";
 
 test("custom 自定义题:规则为空或题面超 2000 码位时禁用测一次", async ({ page }) => {
 	await page.goto("/");
+	await page.getByTestId("custom-q-toggle").click();
 	const run = page.getByTestId("custom-q-run");
 	await expect(run).toBeDisabled();
 	await page.getByTestId("custom-q-prompt").fill("Say OK.");
@@ -19,6 +20,7 @@ test("custom 自定义题:规则为空或题面超 2000 码位时禁用测一次
 test("custom 自定义题测一次答对,不进运行区", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/");
+		await page.getByTestId("custom-q-toggle").click();
 		await page.getByTestId("site-input").fill(site);
 		await page.getByTestId("key-input").fill(key);
 		await page.getByTestId("model-input").fill("mock-good");
@@ -35,6 +37,7 @@ test("custom 自定义题测一次答对,不进运行区", async ({ page, site, 
 test("custom 自定义题答错,回答按文本渲染", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/");
+		await page.getByTestId("custom-q-toggle").click();
 		await page.getByTestId("site-input").fill(site);
 		await page.getByTestId("key-input").fill(key);
 		await page.getByTestId("model-input").fill("mock-wrong");

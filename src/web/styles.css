@@ -286,18 +286,18 @@ a {
 	font-size: var(--fs-12);
 }
 
-.privacy h2 {
-	margin: 0 0 var(--space-2);
+.privacy summary {
 	color: var(--fg);
 	font-size: var(--fs-13);
 	font-weight: 600;
+	cursor: pointer;
 }
 
 .privacy dl {
 	display: grid;
 	grid-template-columns: max-content 1fr;
 	gap: var(--space-2) var(--space-4);
-	margin: 0;
+	margin: var(--space-3) 0 0;
 }
 
 .privacy dl > div {
@@ -315,6 +315,48 @@ a {
 
 .main-grid {
 	align-items: start;
+}
+
+#run,
+#results {
+	scroll-margin-top: var(--space-5);
+}
+
+.run-form {
+	display: grid;
+	gap: var(--space-4);
+}
+
+.run-form > .field {
+	min-width: 0;
+}
+
+.run-form-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+@media (min-width: 720px) {
+	.run-form {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.run-form > .field-error,
+	.run-form > .muted.small {
+		grid-column: 1 / -1;
+	}
+}
+
+@media (min-width: 1040px) {
+	.run-form {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+		align-items: start;
+	}
+
+	.run-form > .run-form-actions {
+		align-self: end;
+	}
 }
 
 .site-footer {
