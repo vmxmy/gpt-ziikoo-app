@@ -6,7 +6,6 @@ import {
 	type BoardMoveResponse,
 	type BoardOrderResponse,
 	type BoardViewResponse,
-	WATCH_MAX_PER_IP,
 	type WatchCreateError,
 	type WatchCreateResponse,
 	type WatchDeleteResponse,
@@ -186,7 +185,6 @@ const handleHistoryDelete: Handler = async (request, env, ctx) => {
 };
 
 const LIMIT_MESSAGES = {
-	ip_limit: `每个网络最多 ${WATCH_MAX_PER_IP} 个持续监测`,
 	total_limit: "本站持续监测已满，请稍后再试",
 	board_limit: `一个看板最多 ${BOARD_MAX_WATCHES} 个持续监测`,
 } as const;

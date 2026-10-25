@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { activeQuestions, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol } from "../shared/types.ts";
-import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, WATCH_MAX_TOTAL, type WatchIntervalMin, type WatchStatus, type WatchView } from "../shared/watch.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchIntervalMin, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { probe, type ProbeResult } from "./probe.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
@@ -227,7 +227,7 @@ export class Watch extends DurableObject<Env> {
 	}
 }
 
-export type ReserveOutcome = "ok" | "ip_limit" | "total_limit";
+export type ReserveOutcome = "ok" | "total_limit";
 
 // One row per live watch so caps can be checked without visiting every Watch object.
 // Rows past their purge date are dropped on the next reserve; the Watch object purges itself.
@@ -244,8 +244,6 @@ export class WatchRegistry extends DurableObject<Env> {
 		sql.exec("DELETE FROM watches WHERE expires_at <= ?", now);
 		const total = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches").one().n;
 		if (total >= WATCH_MAX_TOTAL) return "total_limit";
-		const mine = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM watches WHERE ip_hash = ?", ipHash).one().n;
-		if (mine >= WATCH_MAX_PER_IP) return "ip_limit";
 		sql.exec("INSERT INTO watches (id, ip_hash, host, expires_at) VALUES (?, ?, ?, ?)", id, ipHash, host, now + IDLE_MS);
 		return "ok";
 	}

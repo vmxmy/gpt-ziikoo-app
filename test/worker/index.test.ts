@@ -123,11 +123,11 @@ describe("watch create", () => {
 		expect(await res.json()).toMatchObject({ error: "bad_request", field: "key" });
 	});
 
-	it("stops at the per-IP cap before calling the site", async () => {
-		const { call, reached } = watchHarness("ip_limit");
+	it("stops at the site-wide cap before calling the site", async () => {
+		const { call, reached } = watchHarness("total_limit");
 		const res = await call(body);
 		expect(res.status).toBe(429);
-		expect(await res.json()).toEqual({ error: "watch_limit", message: "每个网络最多 6 个持续监测" });
+		expect(await res.json()).toEqual({ error: "watch_limit", message: "本站持续监测已满，请稍后再试" });
 		expect(reached.watch).toBe(false);
 	});
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorState } from "../shared/monitor.ts";
-import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, type WatchStatus, type WatchView } from "../shared/watch.ts";
+import { WATCH_IDLE_DAYS, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState } from "./api.ts";
 import { BAR_HINT, LEGEND, MonitorCard } from "./monitor-card.tsx";
 import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
@@ -504,7 +504,6 @@ export function WatchBoard() {
 			) : (
 				<WatchTable cards={cards} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} onMove={(token, to) => void move(token, to)} />
 			)}
-			<p class="footnote">每个网络最多 {WATCH_MAX_PER_IP} 个持续监测。</p>
 		</section>
 	);
 }
