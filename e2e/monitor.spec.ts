@@ -185,6 +185,8 @@ test("重置后旧链接失效", async ({ page, site, key, context }) =>
 
 test("旧版令牌存储迁移到看板", async ({ page, site, key }) =>
 	cleaned(page, async () => {
+		// localStorage is only reachable on the site's origin; about:blank throws a SecurityError.
+		await page.goto("/");
 		const res = await page.request.post("/api/watch", {
 			data: { site, key, model: "mock-good", protocol: "responses", intervalMin: 5, alias: "", consent: true },
 		});
