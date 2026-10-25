@@ -4,11 +4,12 @@ export type Scorer =
 	| { type: "yes_no"; expected: "YES" | "NO" }
 	| { type: "numbers"; expected: string[] }
 	| { type: "final_numbers"; expected: readonly string[] }
-	| { type: "contains"; expected: string };
+	| { type: "contains"; expected: string }
+	| { type: "svg_animation" };
 
 export type Effort = "low" | "medium" | "high";
 export type Protocol = "responses" | "chat";
-export type GeneratorId = "candy";
+export type GeneratorId = "candy" | "pelican";
 
 export type QuestionMeta = {
 	id: string;
@@ -19,6 +20,7 @@ export type QuestionMeta = {
 	kind: QuestionKind;
 	scorer?: Scorer;
 	generator?: GeneratorId;
+	inWatchRotation?: boolean;
 	expectedLabel: string;
 	defaultEffort?: Effort;
 	calibratedModels: string[];
@@ -73,6 +75,7 @@ export type ProbeOk = {
 	totalMs: number;
 	promptTokens: number | null;
 	cachedTokens: number | null;
+	artifact?: string;
 };
 
 export type ProbeFail = {

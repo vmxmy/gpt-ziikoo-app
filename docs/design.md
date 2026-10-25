@@ -98,6 +98,7 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 用户自带的单次测试题 | 自定义题 | 自定义题目、用户题、私人题 |
 | 站点收到的输入量 | 输入 token 数 | prompt_tokens、提示用量 |
 | 一组持续监测的聚合对象 | 看板 | |
+| 运行 `svg_animation` 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
 | 看板的 16 字节标识 | 看板码 | |
 
 ## 题库
@@ -118,7 +119,9 @@ type QuestionManifest = {
     | { type: "numbers"; expected: string[] }
     | { type: "final_numbers"; expected: string[] }   // 只读最后一行「答案:」,按顺序逐个比对
     | { type: "contains"; expected: string }
-  generator?: "candy"              // 生成器题:题面与评分由服务端按 seed 生成
+    | { type: "svg_animation" }                       // 完整 HTML 里有 SVG 与动画,见「生成器题 `pelican-svg`」
+  generator?: "candy" | "pelican"  // 生成器题:题面与评分由服务端按 seed 生成
+  inWatchRotation?: boolean        // false 时不进监测轮转,缺省为 true
   expectedLabel: string            // 给人看的答案说明,评分不用它
   defaultEffort?: "low" | "medium" | "high"
   calibratedModels: string[]
@@ -193,6 +196,30 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - seed 是 0 到 4294967295 的整数。一轮用一个 seed,由页面选定;监测和命令行不带 seed 时用 0。题目清单展示的题面就是 seed 0 的实例。
 - seed 随每次调用落库,原始数据里能看到。同一 seed 总是生成同一道题。
 - 生成器或求解器一改,同一 seed 的题就变了,题的 `version` 加 1。
+
+### 生成器题 `pelican-svg`
+
+2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。
+
+- 清单只写 `generator: "pelican"`。题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
+- 动物来自封闭词表 `RIDERS`(8 种),交通工具与动词来自封闭词表 `RIDES`(6 种)。组合序号是 `seed % 48`,站点无法只预置一个答案。seed 范围与 `candy-var` 相同。
+- seed 0 是鹈鹕骑自行车。题面原文如下:
+
+```
+创建一个HTML，内容是用SVG绘制一个鹈鹕骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成
+```
+
+- 评分 `svg_animation`,对完整回答不区分大小写检查四部分:
+  1. `html`:含 `<!doctype html` 或 `<html`。
+  2. `svg`:含 `<svg`。
+  3. `animation`:含 `<animate`、`@keyframes`、`requestAnimationFrame`、`.animate(` 之一。
+  4. `complete`:同时含 `</svg>` 与 `</html>`,没写完的回答答错。
+- 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
+- `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
+- 成本:回答很长,跑满四关是 31 次调用。
+- 播放:探针接口对这题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。逐次明细里有 `artifact` 的行显示「播放动画」按钮。按下后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
+- 除这题外,本站从不渲染站点返回的 HTML,只按文本显示。
+- 题面模板或词表一改,同一 seed 的题就变了,题的 `version` 加 1。
 
 ### 自定义题
 
@@ -334,7 +361,7 @@ usage 原文
 
 | 项 | 内容 |
 | --- | --- |
-| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换,间隔 5 或 15 分钟,默认 5 分钟 |
+| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换(`inWatchRotation: false` 的题除外),间隔 5 或 15 分钟,默认 5 分钟 |
 | 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的看板码(board,16 字节 base64url,22 字符),存 `localStorage` 键 `gpt.board.v1`;密钥本身从不进浏览器存储、URL、DOM |
 | 看板码 | 一个看板聚合多个 watch 令牌,最多 30 个。看板码由服务端签发并加密存储令牌列表。浏览器迁移旧版 `gpt.watch.v1`(令牌数组)时,调用 `/api/board/adopt` 并删除旧键。看板链接走 URL fragment(`#watch/b=<看板码>`),不发给服务器 |
 | 同意 | 添加表单必须勾选「我同意本站加密保存这把密钥」,否则不提交 |
@@ -373,12 +400,16 @@ POST /api/probe
       "reasoningTokens": 12, "idShape": "hex" | "ft" | "base64" | "other",
       "answer": "No, I don't ...",
       "streamed": true, "ttfbMs": 420, "ttftMs": 2100, "totalMs": 8400,
-      "promptTokens": 31, "cachedTokens": 0 }          // 站点未返回的字段为 null
+      "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null
+      "artifact": "<!doctype html>..." }               // 只在评分为 svg_animation 的题上出现
 200 { "ok": false, "reason": "unauthorized" | "forbidden" | "not_found" |
       "rate_limited" | "upstream_error" | "timeout" | "bad_response",
       "httpStatus": 401 }
 400 参数不合法或地址被拒,含 seed 不是 0 到 4294967295 的整数
 429 本站限流或超出每轮调用上限,带重试时间
+
+GET /api/frame
+200 text/html                                           // 播放动画用的空白宿主页,带自己的 CSP,见「安全边界」
 
 POST /api/history          { site, key }            最近 10 轮的汇总与指标
 POST /api/history/raw      { site, key, runId }     该轮全部调用的原始数据
@@ -415,7 +446,8 @@ POST /api/watch/delete     { token }                立即清空密钥、样本�
 
 - 站点自身的失败用 200 加 `ok:false`,调用方能区分「站点出问题」和「我们出问题」。
 - 不提供跨域头。浏览器里的第三方网页不能调用,脚本和命令行不受影响。
-- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。
+- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。例外是 `svg_animation` 题:`artifact` 字段带完整回答,只供当次播放,不入库。自定义题只评 `yes_no` 与 `contains`,所以永远没有 `artifact`。
+- `/api/frame` 是静态页,不限速。它由 Worker 返回,`public/_headers` 不作用于它。
 - 历史接口一律用 POST,密钥放请求体。对象不存在与对象为空返回相同结果,不泄露对象是否存在。
 
 ## 安全边界
@@ -460,6 +492,14 @@ Free 套餐下限速的已知缺口,明确接受:
 另一条路线是把 zone 升到 Pro,换来 60 秒窗口、更长封禁、自定义 JSON 响应和 Super Bot Fight Mode 的跳过规则。这是花钱的选择,由维护者决定,首期不做。
 
 机器人防护:Bot Fight Mode 必须保持关闭。官方文档写明它不能被任何 WAF 规则跳过,会质询匿名脚本,也没有按路径的例外。Free zone 没有 Super Bot Fight Mode。
+
+播放动画:`svg_animation` 题的回答是站点给的 HTML,可能含恶意脚本。本站只在沙箱 iframe 里运行它,规则如下。
+
+1. iframe 只带 `sandbox="allow-scripts"`。它没有 `allow-same-origin`,所以是不透明源,读不到本站的 Cookie、`localStorage` 与页面 DOM。
+2. iframe 没有 `allow-popups`、`allow-forms`、`allow-top-navigation`,所以不能开新窗口、提交表单或跳走顶层页面。
+3. `/api/frame` 自带 CSP:`default-src 'none'`,只放行内联脚本与样式,以及 `data:`、`blob:` 图片、字体与媒体。CSP 拦住全部网络请求,所以回答不能外传数据,也不能加载外部资源。CSP 另带 `sandbox allow-scripts`,有人直接打开这个地址也同样受限。`frame-ancestors 'self'` 只许本站嵌入它。
+4. 宿主页只接受一条消息:来源是父页面、数据是字符串。它用 `document.write` 写入这条消息,之后忽略其他消息。
+5. 页面用 `postMessage(artifact, "*")` 发送。目标必须写 `"*"`,因为不透明源没有可写的源名。发送的内容是用户自己的回答,不含密钥。
 
 日志不含任何用户数据。回答原文与原始响应只存在于按密钥访问的对象存储里。每次探针写一条结构化日志,字段只有目标主机名、题 id、结果类别、状态码、延迟,密钥永远不放进请求头或 URL。调用日志(`invocation_logs`)关闭。
 
@@ -535,6 +575,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 题面是否公开 | 公开,可复制 |
 | 糖果评分 | 21、9、12 须同时出现 |
 | 部署 | GitHub Actions 加 `cf`:PR 跑 `cf deploy --dry-run`,合并后构建一次并 `--prebuilt` 部署。不用 Workers Builds,因为没有查到它支持 `cf deploy` |
+| 播放动画 | 2026-10-25 授权。`svg_animation` 题的回答经探针接口的 `artifact` 返回,只在沙箱 iframe `/api/frame` 里运行。这是「回答只用文本节点渲染」的唯一例外 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。

@@ -209,7 +209,20 @@ describe("probe", () => {
 		});
 		const result = await probe(input({ question: customQuestion(prompt, { type: "contains", expected: "ziikoo" }) }), deps);
 		expect(result.response).toMatchObject({ ok: true, questionVersion: 0, correct: true, note: "ok", answer: "本站的名字是 ziikoo。" });
+		expect(result.response).not.toHaveProperty("artifact");
 		expect(JSON.parse(String(requests[0].init.body))).toEqual({ model: "gpt-6-astra", input: prompt, stream: true });
+	});
+
+	it("returns the full answer as the artifact of an svg_animation question", async () => {
+		const html = `<!doctype html><html><body><svg><circle r="${"9".repeat(100)}"><animate attributeName="r"/></circle></svg></body></html>`;
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: `  ${html}\n` }) }],
+		});
+		const result = await probe(input({ question: question("pelican-svg") }), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: true, artifact: html });
+		expect(result.capture).not.toHaveProperty("artifact");
 	});
 
 	it("scores a custom yes_no question", async () => {

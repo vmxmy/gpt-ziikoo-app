@@ -433,6 +433,18 @@
 	padding: var(--space-5);
 }
 
+.modal-dialog:has(.animation-frame) {
+	max-width: 960px;
+}
+
+.animation-frame {
+	display: block;
+	width: 100%;
+	height: 70vh;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-2);
+}
+
 /* 看板列表 */
 
 .view-toggle {

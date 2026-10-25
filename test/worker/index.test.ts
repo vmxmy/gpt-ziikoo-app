@@ -66,6 +66,18 @@ describe("worker rate limits", () => {
 	});
 });
 
+describe("frame host", () => {
+	it("serves the sandboxed frame document with its own CSP", async () => {
+		const res = await worker.fetch(new Request("https://gpt.ziikoo.app/api/frame"), {} as Env, {} as ExecutionContext);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+		const csp = res.headers.get("Content-Security-Policy") ?? "";
+		expect(csp).toContain("default-src 'none'");
+		expect(csp).toContain("sandbox allow-scripts");
+		expect(await res.text()).toContain("document.write");
+	});
+});
+
 describe("watch create", () => {
 	function watchHarness(reserved: string) {
 		const reached = { watch: false };

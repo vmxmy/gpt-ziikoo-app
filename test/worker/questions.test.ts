@@ -22,7 +22,7 @@ it("keeps prompt text byte-for-byte", () => {
 });
 
 it("lists only active questions", () => {
-	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo"]);
+	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo", "pelican-svg"]);
 });
 
 it("keeps the ciallo prompt byte-for-byte", () => {
@@ -39,4 +39,17 @@ it("instantiates a generator question per seed and leaves fixed questions as the
 	expect(one).toMatchObject({ id: "candy-var", version: 1, scorer: { type: "final_numbers", expected: ["25", "6", "19"] } });
 	expect(one.prompt).toContain("三种口味的巧克力：榛子味、草莓味、抹茶味");
 	expect(instantiate(candyVar, 1).prompt).toBe(one.prompt);
+});
+
+it("generates the pelican prompt at seed 0 and another rider or vehicle per seed", () => {
+	const pelican = getQuestion("pelican-svg")!;
+	expect(pelican).toMatchObject({ generator: "pelican", inWatchRotation: false, scorer: { type: "svg_animation" } });
+	expect(pelican.prompt).toBe(
+		"创建一个HTML，内容是用SVG绘制一个鹈鹕骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
+	);
+	const one = instantiate(pelican, 1);
+	expect(one.prompt).toBe(
+		"创建一个HTML，内容是用SVG绘制一个企鹅骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
+	);
+	expect(instantiate(pelican, 1).prompt).toBe(one.prompt);
 });

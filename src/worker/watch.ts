@@ -96,8 +96,8 @@ function logProbe(host: string, question: string, { response, capture }: ProbeRe
 // Each round counts against the same per-host limit as the live test, so a watch cannot be used to flood a site.
 // Only failures another call can fix are retried; the sample records the site's quality, not a passing hiccup.
 async function probeRound(env: Env, state: WatchState, key: string): Promise<{ question: string; response: ProbeResponse } | null> {
-	const ids = activeQuestions().map((q) => q.id);
-	const question = activeQuestions().find((q) => q.id === ids[state.seq % ids.length]);
+	const rotation = activeQuestions().filter((q) => q.inWatchRotation !== false);
+	const question = rotation[state.seq % rotation.length];
 	if (!question) return null;
 	const input = {
 		origin: state.origin,

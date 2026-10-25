@@ -37,6 +37,13 @@ describe("score", () => {
 		expect(score("21 颗：9 颗圆形，12 颗五角星", scorer)).toEqual({ correct: false, note: "want 21/9/12 got none" });
 	});
 
+	it("svg_animation requires a complete HTML document with an animated SVG", () => {
+		const scorer: Scorer = { type: "svg_animation" };
+		const html = "```html\n<!DOCTYPE html><html><body><svg><circle><animate attributeName=\"r\"/></circle></svg></body></html>\n```";
+		expect(score(html, scorer)).toEqual({ correct: true, note: "ok" });
+		expect(score(html.slice(0, html.indexOf("</html>")), scorer)).toEqual({ correct: false, note: 'missing ["complete"]' });
+	});
+
 	it("contains matches a substring", () => {
 		expect(score("the answer is 42", { type: "contains", expected: "42" })).toEqual({ correct: true, note: "ok" });
 		expect(score("the answer is 41", { type: "contains", expected: "42" })).toEqual({ correct: false, note: "not found" });
