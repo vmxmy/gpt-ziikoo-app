@@ -74,12 +74,12 @@ const STATUS_REASONS: Partial<Record<number, FailReason>> = {
 	429: "rate_limited",
 };
 
-function statusReason(status: number): FailReason | null {
+export function statusReason(status: number): FailReason | null {
 	if (status >= 200 && status < 300) return null;
 	return STATUS_REASONS[status] ?? "upstream_error";
 }
 
-function thrownReason(err: unknown): FailReason {
+export function thrownReason(err: unknown): FailReason {
 	return err instanceof Error && err.name === "TimeoutError" ? "timeout" : "upstream_error";
 }
 

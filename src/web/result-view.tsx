@@ -140,7 +140,7 @@ function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attemp
 				</span>
 			</header>
 			<Ladder id={q.id} attempts={props.attempts} />
-			<p data-testid={`diagnosis-${q.id}`}>{diagnosis(v, done, q.failureHint)}</p>
+			<p data-testid={`diagnosis-${q.id}`}>{running && v.status === "incomplete" ? `正在测第 ${v.stage} 关。` : diagnosis(v, done, q.failureHint)}</p>
 			<DetailTable id={q.id} attempts={done} />
 		</article>
 	);

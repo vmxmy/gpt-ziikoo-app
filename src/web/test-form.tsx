@@ -1,5 +1,7 @@
 import type { RefObject } from "preact";
 import { useRef, useState } from "preact/hooks";
+import type { Target } from "./api.ts";
+import { ModelField } from "./model-field.tsx";
 import { costLine, normalizeKey } from "./results.ts";
 
 type Props = {
@@ -8,6 +10,7 @@ type Props = {
 	setKey: (v: string) => void;
 	model: string;
 	setModel: (v: string) => void;
+	target: Target;
 	running: boolean;
 	selectedCount: number;
 	error: string;
@@ -80,17 +83,15 @@ export function TestForm(props: Props) {
 					<span class="field-label">密钥</span>
 					<SecretInput inputRef={keyInput} testId="key-input" onInput={(v) => props.setKey(normalizeKey(v))} />
 				</label>
-				<label class="field">
-					<span class="field-label">模型</span>
-					<input value={props.model} onInput={(e) => props.setModel(e.currentTarget.value)} data-testid="model-input" />
-				</label>
+				<ModelField value={props.model} onInput={props.setModel} target={props.target} testId="model-input" />
 				<div class="run-form-actions">
+					{/* Distinct keys force a new node: reusing one would flip its type to submit inside the cancel click and resubmit the form. */}
 					{props.running ? (
-						<button type="button" class="btn btn-secondary" onClick={props.onCancel} data-testid="cancel-button">
+						<button key="cancel" type="button" class="btn btn-secondary" onClick={props.onCancel} data-testid="cancel-button">
 							取消
 						</button>
 					) : (
-						<button type="submit" class="btn btn-primary" disabled={props.selectedCount === 0} data-testid="start-button">
+						<button key="start" type="submit" class="btn btn-primary" disabled={props.selectedCount === 0} data-testid="start-button">
 							开始测试
 						</button>
 					)}

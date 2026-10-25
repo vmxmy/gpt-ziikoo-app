@@ -175,6 +175,8 @@ export type RunView = {
 	questions: { id: string; version: number; verdict: QuestionVerdict | null; metrics: QuestionMetrics }[];
 };
 
+export type ModelsResponse = { ok: true; models: string[] } | { ok: false; reason: FailReason; httpStatus: number | null };
+
 export type HistoryResponse = { runs: RunView[] };
 export type HistoryRawResponse = { calls: RawCall[] };
 export type HistoryDeleteResponse = { deleted: boolean };

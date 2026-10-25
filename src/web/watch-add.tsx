@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 import type { Protocol } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
+import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { PROTOCOLS, type FieldError, type WatchInput } from "./watch.ts";
@@ -63,6 +64,8 @@ const CONSENT_TEXT = "我同意本站加密保存这把密钥，并由本站服�
 
 export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) => Promise<FieldError | null>; onClose: () => void }) {
 	const [site, setSite] = useState("");
+	// State only feeds the model-list target; the submit still reads the ref, and the key never enters storage or logs.
+	const [key, setKey] = useState("");
 	const [alias, setAlias] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [intervalMin, setIntervalMin] = useState<WatchIntervalMin>(5);
@@ -106,7 +109,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			<SiteField inputRef={siteInput} value={site} onInput={setSite} error={error} />
 			<label class="field col-12 col-md-6 col-lg-4">
 				<span class="field-label">密钥</span>
-				<SecretInput inputRef={keyInput} testId="watch-add-key" invalid={error?.field === "key"} describedBy={ERROR_ID} />
+				<SecretInput inputRef={keyInput} testId="watch-add-key" onInput={(v) => setKey(normalizeKey(v))} invalid={error?.field === "key"} describedBy={ERROR_ID} />
 				<p class="muted small">提交后由本站加密保存，关闭页面监测继续。请使用有限额的密钥。</p>
 				<FieldMessage error={error} field="key" />
 			</label>
@@ -121,11 +124,16 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 					data-testid="watch-add-alias"
 				/>
 			</label>
-			<label class="field col-12 col-md-6 col-lg-4">
-				<span class="field-label">模型</span>
-				<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="watch-add-model" {...invalid(error, "model")} />
-				<FieldMessage error={error} field="model" />
-			</label>
+			<ModelField
+				value={model}
+				onInput={setModel}
+				target={{ site: site.trim(), key }}
+				testId="watch-add-model"
+				class="col-12 col-md-6 col-lg-4"
+				invalid={error?.field === "model"}
+				describedBy={ERROR_ID}
+			/>
+			<FieldMessage error={error} field="model" />
 			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
 			<ChoiceField label="间隔" testId="watch-add-interval" value={intervalMin} options={WATCH_INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
 			<div class="field col-12">

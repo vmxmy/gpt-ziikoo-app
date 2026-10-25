@@ -1,4 +1,28 @@
-import { expect, scrubbed, test } from "./fixtures.ts";
+import { expect, scrubbed, startRun, test } from "./fixtures.ts";
+
+// mock-slow streams each reply over about two seconds, which leaves the stage-1 race open long enough to cancel.
+test("点取消后本轮结束，不会开新一轮", async ({ page, site, key, questions }) =>
+	scrubbed(page, async () => {
+		await startRun(page, { site, key, model: "mock-slow", select: ["thibault"], questions });
+		await page.getByTestId("cancel-button").click();
+		await expect(page.getByText("已取消。")).toBeVisible();
+		await expect(page.getByTestId("start-button")).toBeVisible();
+		await page.waitForTimeout(1000);
+		await expect(page.getByTestId("cancel-button")).toHaveCount(0);
+	}));
+
+test("模型列表自动加载并可从下拉选择", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/");
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
+		await expect(page.getByTestId("model-input-status")).toContainText("个模型", { timeout: 30_000 });
+		await page.getByTestId("model-input-toggle").click();
+		await expect(page.getByTestId("model-input-list")).toBeVisible();
+		await page.getByTestId("model-input-option").filter({ hasText: "mock-good" }).click();
+		await expect(page.getByTestId("model-input")).toHaveValue("mock-good");
+		await expect(page.getByTestId("model-input-list")).not.toBeVisible();
+	}));
 
 test("custom 自定义题:规则为空或题面超 2000 码位时禁用测一次", async ({ page }) => {
 	await page.goto("/");

@@ -153,7 +153,9 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	};
 }
 
-export function parseHistoryRequest(body: unknown): Result<HistoryCommand> {
+export type HistoryTarget = HistoryCommand & { host: string };
+
+export function parseHistoryRequest(body: unknown): Result<HistoryTarget> {
 	const f = fields(body);
 	if (!f) return bad("请求体必须是 JSON 对象");
 	return parseTarget(f);

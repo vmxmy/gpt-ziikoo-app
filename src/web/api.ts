@@ -3,6 +3,7 @@ import type {
 	CustomQuestion,
 	HistoryRawResponse,
 	HistoryResponse,
+	ModelsResponse,
 	ProbeOk,
 	ProbeRequest,
 	ProbeResponse,
@@ -171,6 +172,12 @@ export async function adoptBoard(board: string | undefined, tokens: string[]): P
 
 export async function moveBoard(from: string, into?: string): Promise<BoardMoveResponse> {
 	const res = await post("/api/board/move", { from, ...(into ? { into } : {}) });
+	if (!res.ok) throw await failure(res);
+	return res.json();
+}
+
+export async function fetchModels(t: Target, signal?: AbortSignal): Promise<ModelsResponse> {
+	const res = await post("/api/models", t, signal);
 	if (!res.ok) throw await failure(res);
 	return res.json();
 }

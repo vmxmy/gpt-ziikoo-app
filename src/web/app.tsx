@@ -256,7 +256,8 @@ export function App() {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const r = useLadderRun({ site, key, model, questions: q.questions, selected: q.selected });
 	const [tab, switchTab] = useTab();
-	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
+	const target = { site: site.trim(), key };
+	const formProps = { site, setSite, setKey, model, setModel, target, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
 	useEffect(() => {
 		if (r.run !== null) document.getElementById("results")?.scrollIntoView({ block: "start" });
@@ -282,8 +283,8 @@ export function App() {
 					<main class="grid main-grid">
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
 						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
-						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={{ site: site.trim(), key }} onToggle={q.toggle} />
-						<History target={{ site: site.trim(), key }} />
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
+						<History target={target} />
 						<ApiDocs />
 					</main>
 				</div>
