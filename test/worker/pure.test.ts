@@ -74,6 +74,24 @@ describe("parseSite", () => {
 		expect(parseSite(input)).toEqual({ ok: true, origin: "https://api.example.com", host: "api.example.com" });
 	});
 
+	it.each([
+		"https://openrouter.ai/api/v1",
+		"https://openrouter.ai/api/v1/",
+		"https://openrouter.ai/api/v1/chat/completions",
+		"https://openrouter.ai/api/v1/responses",
+		"https://openrouter.ai/api",
+	])("normalises %s to its path prefix", (input) => {
+		expect(parseSite(input)).toEqual({ ok: true, origin: "https://openrouter.ai/api", host: "openrouter.ai" });
+	});
+
+	it("keeps a trailing segment that is not exactly v1", () => {
+		expect(parseSite("https://api.example.com/v11")).toEqual({
+			ok: true,
+			origin: "https://api.example.com/v11",
+			host: "api.example.com",
+		});
+	});
+
 	it("keeps a non-default port in the origin but not in the rate-limit host", () => {
 		expect(parseSite("https://api.example.com.:8443/v1")).toEqual({
 			ok: true,
@@ -121,6 +139,16 @@ describe("objectId", () => {
 		expect(await objectId(pepper, b.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, c.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, b.origin, "sk-test-87654321")).not.toBe(idA);
+	});
+
+	it("keys the path prefix into the object id", async () => {
+		const a = parseSite("https://openrouter.ai/api/v1");
+		const b = parseSite("https://openrouter.ai/api");
+		const c = parseSite("https://openrouter.ai");
+		if (!a.ok || !b.ok || !c.ok) throw new Error("site should parse");
+		const idA = await objectId(pepper, a.origin, "sk-test-12345678");
+		expect(await objectId(pepper, b.origin, "sk-test-12345678")).toBe(idA);
+		expect(await objectId(pepper, c.origin, "sk-test-12345678")).not.toBe(idA);
 	});
 });
 
