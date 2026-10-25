@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { evaluateQuestion } from "../../src/shared/ladder.ts";
 import type { ProbeResponse } from "../../src/shared/types.ts";
+import { checkCustom, customResult, probeCustom, type CustomDraft } from "../../src/web/api.ts";
 import { ladderCalls, RATE_LIMIT_RETRIES, runLadder, type ProbeArgs, type ProbeOutcome } from "../../src/web/runner.ts";
 
 const RUN_ID = "11111111-2222-4333-8444-555555555555";
@@ -188,5 +189,46 @@ describe("protocol detection", () => {
 		expect(calls.length).toBe(6);
 		expect(calls.some((c) => c.question === "candy")).toBe(false);
 		expect(evaluateQuestion(ladderCalls(snap.attempts, "thibault", snap.protocol)).status).toBe("unavailable");
+	});
+});
+
+describe("custom question", () => {
+	const draft: CustomDraft = { prompt: "Is 2 even? Answer YES or NO.", scorerType: "yes_no", yesNo: "YES", contains: "" };
+	const target = { site: "https://example.com", key: "sk-test-1234" };
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	it("counts the prompt limit in code points and rejects one past it", () => {
+		expect(checkCustom({ ...draft, prompt: "😀".repeat(2000) }).ok).toBe(true);
+		expect(checkCustom({ ...draft, prompt: "😀".repeat(2001) })).toEqual({
+			ok: false,
+			error: { field: "prompt", message: "题面最多 2000 个字符，现在 2001 个" },
+		});
+	});
+
+	it("is incomplete without an error while the contains rule is empty", () => {
+		expect(checkCustom({ ...draft, scorerType: "contains", contains: "" })).toEqual({ ok: false, error: null });
+		expect(checkCustom({ ...draft, scorerType: "contains", contains: "42" })).toEqual({
+			ok: true,
+			question: { prompt: draft.prompt, scorer: { type: "contains", expected: "42" } },
+		});
+	});
+
+	it("sends one probe with the custom object and no ladder fields", async () => {
+		const fetch = vi.fn(async (_path: string, _init: RequestInit) => Response.json(okResponse(false)));
+		vi.stubGlobal("fetch", fetch);
+		const question = { prompt: "p", scorer: { type: "yes_no", expected: "YES" } } as const;
+		const outcome = await probeCustom(target, "gpt-6-astra", "chat", question);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({ ...target, model: "gpt-6-astra", protocol: "chat", custom: question });
+		expect(customResult(outcome)).toEqual({ state: "wrong", label: "答错", response: okResponse(false) });
+	});
+
+	it("maps a dropped connection to the network failure", async () => {
+		vi.stubGlobal("fetch", async () => {
+			throw new TypeError("Failed to fetch");
+		});
+		const outcome = await probeCustom(target, "gpt-6-astra", "responses", { prompt: "p", scorer: { type: "contains", expected: "x" } });
+		expect(customResult(outcome)).toEqual({ state: "fail", label: "失败", reason: "连不上本站接口，检查网络后重新测试" });
 	});
 });

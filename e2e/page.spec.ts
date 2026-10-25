@@ -1,4 +1,51 @@
-import { expect, test } from "./fixtures.ts";
+import { expect, scrubbed, test } from "./fixtures.ts";
+
+test("custom 自定义题:规则为空或题面超 2000 码位时禁用测一次", async ({ page }) => {
+	await page.goto("/");
+	const run = page.getByTestId("custom-q-run");
+	await expect(run).toBeDisabled();
+	await page.getByTestId("custom-q-prompt").fill("Say OK.");
+	await expect(run).toBeEnabled();
+	await page.getByTestId("custom-q-scorer").selectOption("contains");
+	await expect(run).toBeDisabled();
+	await page.getByTestId("custom-q-contains").fill("OK");
+	await expect(run).toBeEnabled();
+	await page.getByTestId("custom-q-prompt").fill("😀".repeat(2001));
+	await expect(page.getByTestId("custom-q-prompt-count")).toHaveText("2001/2000");
+	await expect(page.getByTestId("custom-q-prompt-error")).toBeVisible();
+	await expect(run).toBeDisabled();
+});
+
+test("custom 自定义题测一次答对,不进运行区", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/");
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
+		await page.getByTestId("model-input").fill("mock-good");
+		await page.getByTestId("custom-q-prompt").fill("Say OK.");
+		await page.getByTestId("custom-q-scorer").selectOption("contains");
+		await page.getByTestId("custom-q-contains").fill("OK");
+		await page.getByTestId("custom-q-run").click();
+		await expect(page.getByTestId("custom-q-verdict")).toHaveAttribute("data-state", "ok", { timeout: 30_000 });
+		await expect(page.getByTestId("custom-q-verdict")).toHaveText("答对");
+		await expect(page.getByTestId("custom-q-answer")).toHaveText("OK");
+		await expect(page.getByTestId("call-dot")).toHaveCount(0);
+	}));
+
+test("custom 自定义题答错,回答按文本渲染", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/");
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
+		await page.getByTestId("model-input").fill("mock-wrong");
+		await page.getByTestId("custom-q-prompt").fill("Do you know Thibault? Answer YES or NO.");
+		await page.getByTestId("custom-q-yes-no").selectOption("YES");
+		await page.getByTestId("custom-q-run").click();
+		await expect(page.getByTestId("custom-q-verdict")).toHaveAttribute("data-state", "wrong", { timeout: 30_000 });
+		await expect(page.getByTestId("custom-q-verdict")).toHaveText("答错");
+		await expect(page.getByTestId("custom-q-answer")).toContainText("<b>bold</b>");
+		await expect(page.getByTestId("custom-q-answer").locator("b, img")).toHaveCount(0);
+	}));
 
 test("页面加载,题目清单,题面展开与复制和接口逐字节一致", async ({ page, context, questions }) => {
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);

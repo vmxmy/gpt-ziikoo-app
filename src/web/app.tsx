@@ -1,7 +1,9 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { STAGES } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem } from "../shared/types.ts";
-import { fetchQuestions, makeProbe } from "./api.ts";
+import { fetchQuestions, makeProbe, missingFields } from "./api.ts";
+import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { DEFAULT_MODEL, dotLabel, MAX_CALLS_PER_QUESTION } from "./results.ts";
@@ -159,9 +161,16 @@ function useQuestions() {
 	return { questions, loadError, selected, toggle };
 }
 
-type QuestionsProps = { questions: QuestionListItem[] | null; loadError: string; selected: string[]; model: string; onToggle: (id: string) => void };
+type QuestionsProps = {
+	questions: QuestionListItem[] | null;
+	loadError: string;
+	selected: string[];
+	model: string;
+	onToggle: (id: string) => void;
+	children: ComponentChildren;
+};
 
-function QuestionsSection({ questions, loadError, selected, model, onToggle }: QuestionsProps) {
+function QuestionsSection({ questions, loadError, selected, model, onToggle, children }: QuestionsProps) {
 	return (
 		<section class="block col-12 col-lg-7" aria-labelledby="questions-h">
 			<h2 id="questions-h">选题</h2>
@@ -179,6 +188,7 @@ function QuestionsSection({ questions, loadError, selected, model, onToggle }: Q
 					/>
 				))}
 			</ul>
+			{children}
 		</section>
 	);
 }
@@ -281,7 +291,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 
 	const start = (protocol?: Protocol) => {
 		const chosen = (questions ?? []).filter((q) => selected.includes(q.id));
-		const missing = [site.trim() === "" && "站点", key === "" && "密钥", model.trim() === "" && "模型"].filter(Boolean);
+		const missing = missingFields({ site, key }, model);
 		if (missing.length > 0) {
 			setFormError(`请填写${missing.join("、")}`);
 			return;
@@ -331,7 +341,9 @@ export function App() {
 						</dl>
 					</section>
 					<main class="grid main-grid">
-						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle} />
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} onToggle={q.toggle}>
+							<CustomQuestionForm target={{ site: site.trim(), key }} model={model} />
+						</QuestionsSection>
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
 						{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
 						{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
