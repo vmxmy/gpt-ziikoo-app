@@ -22,7 +22,7 @@ const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 
 function ChoiceField<T extends string | number>(props: { label: string; testId: string; value: T; options: readonly T[]; text: (v: T) => string; onChange: (v: T) => void }) {
 	return (
-		<label class="field col-6 col-lg-2">
+		<label class="field col-12 col-md-6 col-lg-4">
 			<span class="field-label">{props.label}</span>
 			<select
 				value={String(props.value)}
@@ -41,7 +41,7 @@ function ChoiceField<T extends string | number>(props: { label: string; testId: 
 
 function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value: string; onInput: (v: string) => void; error: FieldError | null }) {
 	return (
-		<label class="field col-12 col-md-6 col-lg-3">
+		<label class="field col-12 col-md-6 col-lg-4">
 			<span class="field-label">站点地址</span>
 			<input
 				ref={props.inputRef}
@@ -104,20 +104,13 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			}}
 		>
 			<SiteField inputRef={siteInput} value={site} onInput={setSite} error={error} />
-			<label class="field col-12 col-md-6 col-lg-3">
+			<label class="field col-12 col-md-6 col-lg-4">
 				<span class="field-label">密钥</span>
 				<SecretInput inputRef={keyInput} testId="watch-add-key" invalid={error?.field === "key"} describedBy={ERROR_ID} />
 				<p class="muted small">提交后由本站加密保存，关闭页面监测继续。请使用有限额的密钥。</p>
 				<FieldMessage error={error} field="key" />
 			</label>
-			<label class="field col-6 col-lg-2">
-				<span class="field-label">模型</span>
-				<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="watch-add-model" {...invalid(error, "model")} />
-				<FieldMessage error={error} field="model" />
-			</label>
-			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
-			<ChoiceField label="间隔" testId="watch-add-interval" value={intervalMin} options={WATCH_INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
-			<label class="field col-12 col-md-6 col-lg-3">
+			<label class="field col-12 col-md-6 col-lg-4">
 				<span class="field-label">别名（可选）</span>
 				<input
 					value={alias}
@@ -128,6 +121,13 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 					data-testid="watch-add-alias"
 				/>
 			</label>
+			<label class="field col-12 col-md-6 col-lg-4">
+				<span class="field-label">模型</span>
+				<input value={model} onInput={(e) => setModel(e.currentTarget.value)} data-testid="watch-add-model" {...invalid(error, "model")} />
+				<FieldMessage error={error} field="model" />
+			</label>
+			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
+			<ChoiceField label="间隔" testId="watch-add-interval" value={intervalMin} options={WATCH_INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
 			<div class="field col-12">
 				<label class="consent-row">
 					<input type="checkbox" checked={consent} onChange={(e) => setConsent(e.currentTarget.checked)} data-testid="watch-add-consent" />

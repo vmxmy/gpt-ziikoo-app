@@ -209,6 +209,9 @@ a {
 	.grid > .col-lg-3 {
 		grid-column: span 3;
 	}
+	.grid > .col-lg-4 {
+		grid-column: span 4;
+	}
 	.grid > .col-lg-5 {
 		grid-column: span 5;
 	}

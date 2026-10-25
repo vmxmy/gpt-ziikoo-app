@@ -14,11 +14,12 @@ import {
 	tableRows,
 	type MonitorView,
 	WAITING_NOTICE,
+	SPARSE_NOTICE,
 } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
 
-const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", quality: "降智", degraded: "不稳定", down: "故障", insufficient: "调用数不足", no_data: "无数据" };
-const BAR_HINT = "悬停或聚焦任一格查看详情。状态按截至该格的最近 60 分钟的调用判定";
+export const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", quality: "降智", degraded: "不稳定", down: "故障", insufficient: "调用数不足", no_data: "无数据" };
+export const BAR_HINT = "悬停或聚焦任一格查看详情。状态按截至该格的最近 60 分钟的调用判定";
 
 // `testPrefix` keeps the official card on its original test ids and gives each custom card its own.
 export type CardProps = {
@@ -26,7 +27,6 @@ export type CardProps = {
 	rootTestId: string;
 	host: string;
 	alias?: string;
-	source: string;
 	protocol?: Protocol;
 	view: MonitorView;
 	now: number;
@@ -45,7 +45,6 @@ export function MonitorCard(props: CardProps) {
 				<h3 id={headingId} class="card-title">
 					{props.alias && <span class="card-alias">{props.alias}</span>}
 					<span class={props.alias ? "mono muted" : "mono"}>{props.host}</span>
-					<span class="tag">{props.source}</span>
 				</h3>
 				{props.actions && <div class="card-actions">{props.actions}</div>}
 			</header>
@@ -58,11 +57,15 @@ export function MonitorCard(props: CardProps) {
 			{props.children}
 			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />
 			<StatusBar t={t} buckets={buckets} />
-			{view.kind === "live" ? (
+			{buckets.filter((b) => b.totalMs !== null).length >= 2 ? (
 				<Chart t={t} buckets={buckets} />
-			) : (
-				<p class="chart-empty" data-testid={`${t}-chart`} data-kind={view.kind}>
+			) : view.kind === "waiting" ? (
+				<p class="chart-empty" data-testid={`${t}-chart`} data-kind="waiting">
 					{WAITING_NOTICE}
+				</p>
+			) : (
+				<p class="chart-empty" data-testid={`${t}-chart`} data-kind="sparse">
+					{SPARSE_NOTICE}
 				</p>
 			)}
 		</section>
@@ -119,15 +122,8 @@ function StatusBar({ t, buckets }: { t: string; buckets: MonitorBucket[] }) {
 			</div>
 			<div class="bar-foot">
 				<p class="readout" aria-live="polite">
-					{active === null ? BAR_HINT : segmentLabel(buckets[active]!)}
+					{active === null ? "" : segmentLabel(buckets[active]!)}
 				</p>
-				<ul class="legend" aria-label="图例">
-					{Object.entries(LEGEND).map(([state, label]) => (
-						<li data-state={state} key={state}>
-							{label}
-						</li>
-					))}
-				</ul>
 			</div>
 		</div>
 	);

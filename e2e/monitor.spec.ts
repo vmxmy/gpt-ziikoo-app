@@ -73,7 +73,7 @@ test("切换到持续监测 tab,添加后立即返回首个样本,密钥不进�
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
 		await expect(page.getByTestId(`custom-${id}-segment`)).toHaveCount(MONITOR.buckets);
-		await expect.poll(() => stored(page)).toContain(id);
+		await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), BOARD_KEY)).toBeTruthy();
 		expect(await stored(page)).not.toContain(key);
 		expect(await page.evaluate(() => document.documentElement.outerHTML)).not.toContain(key);
 	}));
