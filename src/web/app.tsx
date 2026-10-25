@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { STAGES } from "../shared/ladder.ts";
 import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
 import { fetchQuestions, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
-import { DEFAULT_MODEL, dotLabel, MAX_CALLS_PER_QUESTION } from "./results.ts";
+import { DEFAULT_MODEL, MAX_CALLS_PER_QUESTION } from "./results.ts";
 import { Results } from "./result-view.tsx";
-import { callState, runLadder, type Attempt, type RunSnapshot } from "./runner.ts";
+import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
 import { WatchBoard } from "./watch-board.tsx";
 
@@ -98,48 +97,6 @@ function QuestionRow(props: {
 	);
 }
 
-function Lane({ id, title, attempts }: { id: string; title: string; attempts: Attempt[] }) {
-	return (
-		<li class="lane" data-testid={`lane-${id}`}>
-			<span class="lane-title">{title}</span>
-			<ol class="stages">
-				{STAGES.map((s, i) => {
-					const inStage = attempts.filter((a) => a.stage === i + 1);
-					const correct = inStage.filter((a) => callState(a) === "ok").length;
-					return (
-						<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
-							<span class="stage-name">
-								第 {i + 1} 关 <span class="muted">需 {s.need}/{s.calls}</span>
-							</span>
-							<span class="dots">
-								{inStage.map((a) => (
-									<span
-										class="call-dot"
-										data-testid="call-dot"
-										data-state={callState(a)}
-										role="img"
-										aria-label={dotLabel(a)}
-										title={dotLabel(a)}
-										key={`${a.protocol}-${a.seq}-${a.attempt}`}
-									/>
-								))}
-							</span>
-							<span class="stage-count num">答对 {correct}</span>
-						</li>
-					);
-				})}
-			</ol>
-		</li>
-	);
-}
-
-const DOT_LEGEND = [
-	["ok", "答对"],
-	["wrong", "答错"],
-	["fail", "失败"],
-	["pending", "进行中"],
-] as const;
-
 const DEFAULT_QUESTION = "thibault";
 
 // Selects the default question alone; a bank without it falls back to every question so the selection is never empty.
@@ -206,32 +163,6 @@ function QuestionsSection({ questions, loadError, selected, model, target, onTog
 				))}
 			</ul>
 			{customOpen && <CustomQuestionForm target={target} model={model} />}
-		</section>
-	);
-}
-
-function RunSection({ run, running, questions }: { run: RunSnapshot; running: boolean; questions: QuestionListItem[] }) {
-	return (
-		<section class="block col-12" id="run" aria-labelledby="run-h">
-			<div class="section-head">
-				<h2 id="run-h">运行</h2>
-				<ul class="dot-legend" aria-label="图例">
-					{DOT_LEGEND.map(([state, label]) => (
-						<li key={state}>
-							<span class="call-dot" data-state={state} aria-hidden="true" />
-							{label}
-						</li>
-					))}
-				</ul>
-			</div>
-			<p class="muted" aria-live="polite">
-				{running ? `进行中${run.protocol ? `，协议 ${run.protocol}` : "，正在确认协议"}` : "已结束"}
-			</p>
-			<ul class="lanes">
-				{questions.map((q) => (
-					<Lane key={q.id} id={q.id} title={q.title} attempts={run.attempts.filter((a) => a.question === q.id)} />
-				))}
-			</ul>
 		</section>
 	);
 }
@@ -341,7 +272,7 @@ export function App() {
 	const formProps = { site, setSite, setKey, model, setModel, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
 	useEffect(() => {
-		if (r.run !== null) document.getElementById("run")?.scrollIntoView({ block: "start" });
+		if (r.run !== null) document.getElementById("results")?.scrollIntoView({ block: "start" });
 	}, [r.run !== null]);
 
 	return (
@@ -363,8 +294,7 @@ export function App() {
 					</details>
 					<main class="grid main-grid">
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-						{r.run && <RunSection run={r.run} running={r.running} questions={r.runQuestions} />}
-						{r.run?.finished && <Results run={r.run} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
 						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={{ site: site.trim(), key }} onToggle={q.toggle} />
 						<History target={{ site: site.trim(), key }} />
 						<ApiDocs />

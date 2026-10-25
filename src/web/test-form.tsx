@@ -85,12 +85,15 @@ export function TestForm(props: Props) {
 					<input value={props.model} onInput={(e) => props.setModel(e.currentTarget.value)} data-testid="model-input" />
 				</label>
 				<div class="run-form-actions">
-					<button type="submit" class="btn btn-primary" disabled={props.running || props.selectedCount === 0} data-testid="start-button">
-						开始测试
-					</button>
-					<button type="button" class="btn btn-secondary" disabled={!props.running} onClick={props.onCancel} data-testid="cancel-button">
-						取消
-					</button>
+					{props.running ? (
+						<button type="button" class="btn btn-secondary" onClick={props.onCancel} data-testid="cancel-button">
+							取消
+						</button>
+					) : (
+						<button type="submit" class="btn btn-primary" disabled={props.selectedCount === 0} data-testid="start-button">
+							开始测试
+						</button>
+					)}
 				</div>
 				{props.error && (
 					<p class="field-error" role="alert">

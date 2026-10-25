@@ -317,7 +317,6 @@ a {
 	align-items: start;
 }
 
-#run,
 #results {
 	scroll-margin-top: var(--space-5);
 }
