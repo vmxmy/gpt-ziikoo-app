@@ -4,7 +4,7 @@ import { fetchQuestions, makeProbe, missingFields, type Target } from "./api.ts"
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
-import { DEFAULT_MODEL, MAX_CALLS_PER_QUESTION } from "./results.ts";
+import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
@@ -25,33 +25,8 @@ const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知�
 
 type CopyStatus = "copied" | "failed";
 
-type ActionsProps = { id: string; generated: boolean; open: boolean; copy: CopyStatus | null; onOpen: () => void; onCopy: () => void };
-
-function QuestionActions({ id, generated, open, copy, onOpen, onCopy }: ActionsProps) {
-	const noun = generated ? "示例题面" : "题面";
-	return (
-		<div class="question-actions">
-			<button type="button" class="btn-text" aria-expanded={open} onClick={onOpen} data-testid={`question-${id}-prompt-toggle`}>
-				{open ? `收起${noun}` : `查看${noun}`}
-			</button>
-			<button type="button" class="btn-text" onClick={onCopy} data-testid={`question-${id}-copy`}>
-				复制{noun}
-			</button>
-			<span class="muted small" role="status" data-testid={`question-${id}-copy-status`}>
-				{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
-			</span>
-		</div>
-	);
-}
-
-function QuestionRow(props: {
-	q: QuestionListItem;
-	checked: boolean;
-	locked: boolean;
-	model: string;
-	onToggle: () => void;
-}) {
-	const { q, checked, locked, model, onToggle } = props;
+function QuestionRow(props: { q: QuestionListItem; checked: boolean; model: string; onToggle: () => void }) {
+	const { q, checked, model, onToggle } = props;
 	const [open, setOpen] = useState(false);
 	const [copy, setCopy] = useState<CopyStatus | null>(null);
 	const doCopy = () => {
@@ -63,13 +38,13 @@ function QuestionRow(props: {
 	};
 	const calibrated = q.calibratedModels.includes(model.trim());
 	const generated = q.generator !== undefined;
+	const noun = generated ? "示例题面" : "题面";
 	return (
 		<li class={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
 			<input
 				id={`q-${q.id}`}
 				type="checkbox"
 				checked={checked}
-				disabled={checked && locked}
 				onChange={onToggle}
 				data-testid={`question-${q.id}-toggle`}
 			/>
@@ -79,18 +54,28 @@ function QuestionRow(props: {
 					<span class="tag">{KIND_LABEL[q.kind]}</span>
 					{generated && <span class="tag">每轮随机生成</span>}
 					<span class="mono muted">v{q.version}</span>
-					{!calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
+					{q.calibratedModels.length > 0 && !calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
 				</label>
 				<p>{q.measures}</p>
-				<p class="muted small">
-					标准答案：{q.expectedLabel}。最多调用 {MAX_CALLS_PER_QUESTION} 次。
-				</p>
-				<QuestionActions id={q.id} generated={generated} open={open} copy={copy} onOpen={() => setOpen(!open)} onCopy={doCopy} />
-				{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
+				<button type="button" class="btn-text" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={`question-${q.id}-prompt-toggle`}>
+					{open ? `收起${noun}` : `查看${noun}`}
+				</button>
 				{open && (
-					<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
-						{q.prompt}
-					</pre>
+					<>
+						<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
+							{q.prompt}
+						</pre>
+						<p class="muted small">标准答案：{q.expectedLabel}。</p>
+						{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
+						<div class="question-actions">
+							<button type="button" class="btn-text" onClick={doCopy} data-testid={`question-${q.id}-copy`}>
+								复制{noun}
+							</button>
+							<span class="muted small" role="status" data-testid={`question-${q.id}-copy-status`}>
+								{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
+							</span>
+						</div>
+					</>
 				)}
 			</div>
 		</li>
@@ -150,13 +135,15 @@ function QuestionsSection({ questions, loadError, selected, model, target, onTog
 			</div>
 			{loadError && <p class="warn">{loadError}</p>}
 			{questions === null && !loadError && <p class="muted">题目加载中…</p>}
+			{questions !== null && questions.some((q) => !q.calibratedModels.includes(model.trim())) && (
+				<p class="muted small">题目尚未按当前模型校准，结果仅供参考。</p>
+			)}
 			<ul class="questions">
 				{(questions ?? []).map((q) => (
 					<QuestionRow
 						key={q.id}
 						q={q}
 						checked={selected.includes(q.id)}
-						locked={selected.length <= 1}
 						model={model}
 						onToggle={() => onToggle(q.id)}
 					/>

@@ -204,7 +204,7 @@ export function Results(props: {
 	const passed = verdicts.filter(({ v }) => v.status === "passed").length;
 	const other: Protocol = run.protocol === "chat" ? "responses" : "chat";
 	return (
-		<section class="block col-12" id="results" aria-labelledby="result-h">
+		<section class="panel col-12" id="results" aria-labelledby="result-h">
 			<div class="section-head">
 				<h2 id="result-h">结果</h2>
 				<ul class="dot-legend" aria-label="图例">
