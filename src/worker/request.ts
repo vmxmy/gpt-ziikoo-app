@@ -255,3 +255,16 @@ export function parseBoardMove(body: unknown): Result<{ from: string; into?: str
 	if (into !== undefined && (typeof into !== "string" || !BOARD.test(into))) return bad("into 不合法");
 	return { ok: true, value: { from, into } };
 }
+
+export function parseBoardOrder(body: unknown): Result<{ board: string; tokens: string[] }> {
+	const f = fields(body);
+	if (!f) return bad("请求体必须是 JSON 对象");
+	const { board, tokens } = f;
+	if (typeof board !== "string" || !BOARD.test(board)) return bad("board 不合法");
+	if (!Array.isArray(tokens)) return bad("tokens 必须是数组");
+	if (tokens.length > BOARD_MAX_WATCHES) return bad(`tokens 最多 ${BOARD_MAX_WATCHES} 个`);
+	const valid = tokens.every((t): t is string => typeof t === "string" && TOKEN.test(t));
+	if (!valid) return bad("tokens 中包含不合法的令牌");
+	if (new Set(tokens).size !== tokens.length) return bad("tokens 有重复");
+	return { ok: true, value: { board, tokens } };
+}

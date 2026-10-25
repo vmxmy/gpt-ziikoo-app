@@ -572,9 +572,14 @@
 	cursor: pointer;
 }
 
-.icon-btn:hover {
+.icon-btn:hover:not(:disabled) {
 	background: var(--surface-2);
 	color: var(--fg);
+}
+
+.icon-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
 }
 
 .icon-btn-danger:hover {

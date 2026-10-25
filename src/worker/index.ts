@@ -4,6 +4,7 @@ import {
 	BOARD_MAX_WATCHES,
 	type BoardAdoptResponse,
 	type BoardMoveResponse,
+	type BoardOrderResponse,
 	type BoardViewResponse,
 	WATCH_MAX_PER_IP,
 	type WatchCreateError,
@@ -20,6 +21,7 @@ import {
 	type HistoryCommand,
 	parseBoardAdopt,
 	parseBoardMove,
+	parseBoardOrder,
 	parseBoardView,
 	parseHistoryRawRequest,
 	parseHistoryRequest,
@@ -332,6 +334,17 @@ const handleBoardMove: Handler = async (request, env, ctx) => {
 	return json({ board: into } satisfies BoardMoveResponse);
 };
 
+const handleBoardOrder: Handler = async (request, env, ctx) => {
+	const parsed = parseBoardOrder(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const { board, tokens } = parsed.value;
+	const stub = await boardStub(ctx, env, board);
+	const result = await stub.reorder(board, tokens, Date.now());
+	if (result === "stale") return apiError(409, { error: "stale", message: "看板已变化，请刷新后重试" });
+	return json({ tokens } satisfies BoardOrderResponse);
+};
+
 // The page posts the answer HTML in after load; the sandbox CSP gives the frame an opaque origin and no network.
 const FRAME_HTML = `<!doctype html><meta charset="utf-8"><script>
 addEventListener("message", function once(e) {
@@ -369,6 +382,7 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/board/view": { POST: handleBoardView },
 	"/api/board/adopt": { POST: handleBoardAdopt },
 	"/api/board/move": { POST: handleBoardMove },
+	"/api/board/order": { POST: handleBoardOrder },
 };
 
 export default {

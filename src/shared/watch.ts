@@ -28,6 +28,7 @@ export type WatchStateRequest = { token: string; action: "pause" | "resume" };
 export type BoardViewRequest = { board: string };
 export type BoardAdoptRequest = { board?: string; tokens: string[] };
 export type BoardMoveRequest = { from: string; into?: string };
+export type BoardOrderRequest = { board: string; tokens: string[] };
 
 export type WatchView = {
 	site: string;
@@ -49,3 +50,4 @@ export type WatchCreateError =
 export type BoardViewResponse = { watches: { token: string; watch: WatchView | null }[] };
 export type BoardAdoptResponse = { board: string | null };
 export type BoardMoveResponse = { board: string };
+export type BoardOrderResponse = { tokens: string[] };

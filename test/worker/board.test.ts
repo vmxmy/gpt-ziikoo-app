@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 
-const { mergeTokens } = await import("../../src/worker/board.ts");
+const { mergeTokens, reorderTokens } = await import("../../src/worker/board.ts");
 
 describe("mergeTokens", () => {
 	it("merges and deduplicates tokens", () => {
@@ -18,5 +18,19 @@ describe("mergeTokens", () => {
 
 	it("accepts the result at exactly the max", () => {
 		expect(mergeTokens(["a", "b"], ["c"], 3)).toEqual(["a", "b", "c"]);
+	});
+});
+
+describe("reorderTokens", () => {
+	it("returns the incoming order for a permutation of the same set", () => {
+		expect(reorderTokens(["a", "b", "c"], ["c", "a", "b"])).toEqual(["c", "a", "b"]);
+		expect(reorderTokens(["a"], ["a"])).toEqual(["a"]);
+	});
+
+	it("returns null when a token is missing, extra, or duplicated", () => {
+		expect(reorderTokens(["a", "b", "c"], ["a", "b"])).toEqual(null);
+		expect(reorderTokens(["a", "b"], ["a", "b", "c"])).toEqual(null);
+		expect(reorderTokens(["a", "b"], ["a", "a"])).toEqual(null);
+		expect(reorderTokens(["a", "b"], ["a", "x"])).toEqual(null);
 	});
 });

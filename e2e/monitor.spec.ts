@@ -117,6 +117,20 @@ test("别名区分同一站点的两张卡片", async ({ page, site, key }) =>
 		await expect(second!.locator(".card-alias")).toHaveCount(0);
 	}));
 
+test("置顶后顺序保持到刷新", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await openWatchTab(page);
+		await addWatch(page, { site, key, alias: "主通道" });
+		const first = await lastCardId(page);
+		await addWatch(page, { site, key });
+		const second = await lastCardId(page);
+		await expect(page.locator(CARDS)).toHaveCount(2);
+		await page.getByTestId(`custom-${second}-top`).click();
+		await expect(page.locator(CARDS).first()).toHaveAttribute("data-testid", `custom-${second}-card`);
+		await page.reload();
+		await expect(page.locator(CARDS).first()).toHaveAttribute("data-testid", `custom-${second}-card`, { timeout: 30_000 });
+	}));
+
 test("未勾选同意:提示且不建卡片", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		await openWatchTab(page);

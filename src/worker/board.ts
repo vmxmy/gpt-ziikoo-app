@@ -9,6 +9,12 @@ export function mergeTokens(existing: string[], incoming: string[], max: number)
 	return unique.length > max ? null : unique;
 }
 
+export function reorderTokens(existing: string[], incoming: string[]): string[] | null {
+	if (incoming.length !== existing.length || new Set(incoming).size !== incoming.length) return null;
+	const before = new Set(existing);
+	return incoming.every((t) => before.has(t)) ? incoming : null;
+}
+
 export function newBoardCode(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(16));
 	return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -49,6 +55,15 @@ export class Board extends DurableObject<Env> {
 			const merged = mergeTokens(await this.load(board), incoming, BOARD_MAX_WATCHES);
 			if (merged === null) return "full";
 			await this.save(board, merged, now + IDLE_MS);
+			return "ok";
+		});
+	}
+
+	async reorder(board: string, incoming: string[], now: number): Promise<"ok" | "stale"> {
+		return this.ctx.blockConcurrencyWhile(async () => {
+			const ordered = reorderTokens(await this.load(board), incoming);
+			if (ordered === null) return "stale";
+			await this.save(board, ordered, now + IDLE_MS);
 			return "ok";
 		});
 	}

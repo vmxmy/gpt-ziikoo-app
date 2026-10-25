@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorState } from "../shared/monitor.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, type WatchStatus, type WatchView } from "../shared/watch.ts";
-import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, setWatchState } from "./api.ts";
+import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState } from "./api.ts";
 import { BAR_HINT, LEGEND, MonitorCard } from "./monitor-card.tsx";
 import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
@@ -36,6 +36,7 @@ type CardProps = {
 	onToggle: (token: string, action: "pause" | "resume") => void;
 	onRemove: (card: WatchCard) => void;
 	onRetry: (token: string) => void;
+	onMove: (token: string, to: "top" | "up" | "down") => void;
 };
 
 const cardName = (card: WatchCard): string => (card.kind === "live" ? cardLabel(card.view) : `令牌 ${cardId(card.token)}`);
@@ -61,9 +62,16 @@ function rowCells(card: LiveCard): LiveRowCells {
 	};
 }
 
-type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry">;
+type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove">;
 
-function RowActions({ card, onToggle, onRemove }: { card: WatchCard } & Pick<BoardActions, "onToggle" | "onRemove">) {
+function RowActions({
+	card,
+	onToggle,
+	onRemove,
+	index,
+	count,
+	onMove,
+}: { card: WatchCard; index: number; count: number } & Pick<BoardActions, "onToggle" | "onRemove" | "onMove">) {
 	const t = `custom-${cardId(card.token)}`;
 	return (
 		<>
@@ -81,6 +89,25 @@ function RowActions({ card, onToggle, onRemove }: { card: WatchCard } & Pick<Boa
 					</svg>
 				</button>
 			)}
+			{count >= 2 && (
+				<>
+					<button type="button" class="icon-btn" aria-label="置顶" title="置顶" disabled={index === 0} onClick={() => onMove(card.token, "top")} data-testid={`${t}-top`}>
+						<svg viewBox="0 0 16 16" aria-hidden="true">
+							<path class="icon-stroke" d="M3 3.5h10M8 13V5M4.8 7.7L8 4.5l3.2 3.2" />
+						</svg>
+					</button>
+					<button type="button" class="icon-btn" aria-label="上移" title="上移" disabled={index === 0} onClick={() => onMove(card.token, "up")} data-testid={`${t}-up`}>
+						<svg viewBox="0 0 16 16" aria-hidden="true">
+							<path class="icon-stroke" d="M8 13V5M4.8 7.7L8 4.5l3.2 3.2" />
+						</svg>
+					</button>
+					<button type="button" class="icon-btn" aria-label="下移" title="下移" disabled={index === count - 1} onClick={() => onMove(card.token, "down")} data-testid={`${t}-down`}>
+						<svg viewBox="0 0 16 16" aria-hidden="true">
+							<path class="icon-stroke" d="M8 3v8M4.8 8.3L8 11.5l3.2-3.2" />
+						</svg>
+					</button>
+				</>
+			)}
 			<button
 				type="button"
 				class="icon-btn icon-btn-danger"
@@ -97,8 +124,8 @@ function RowActions({ card, onToggle, onRemove }: { card: WatchCard } & Pick<Boa
 	);
 }
 
-function WatchCardItem(props: CardProps) {
-	const { card, now } = props;
+function WatchCardItem(props: CardProps & { index: number; count: number }) {
+	const { card, now, index, count, onMove } = props;
 	const t = `custom-${cardId(card.token)}`;
 	if (card.kind === "loading") {
 		return (
@@ -122,7 +149,7 @@ function WatchCardItem(props: CardProps) {
 					<button type="button" class="btn-text" onClick={() => props.onRetry(card.token)} data-testid={`${t}-retry`}>
 						重试
 					</button>
-					<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} />
+					<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} />
 				</div>
 			</section>
 		);
@@ -137,7 +164,7 @@ function WatchCardItem(props: CardProps) {
 			protocol={card.view.protocol}
 			view={monitorView(card.view.monitor)}
 			now={now}
-			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} />}
+			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} />}
 		>
 			{notice && (
 				<p class="card-notice" data-kind={card.view.status.kind} role="status" data-testid={`${t}-notice`}>
@@ -153,7 +180,7 @@ function WatchCardItem(props: CardProps) {
 	);
 }
 
-function WatchTableRow({ card, onToggle, onRemove, onRetry }: { card: WatchCard } & BoardActions) {
+function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove }: { card: WatchCard; index: number; count: number } & BoardActions) {
 	const t = `custom-${cardId(card.token)}`;
 	if (card.kind !== "live") {
 		return (
@@ -175,7 +202,7 @@ function WatchTableRow({ card, onToggle, onRemove, onRetry }: { card: WatchCard 
 				</td>
 				<td>
 					<div class="row-actions">
-						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} />
+						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} />
 					</div>
 				</td>
 			</tr>
@@ -207,7 +234,7 @@ function WatchTableRow({ card, onToggle, onRemove, onRetry }: { card: WatchCard 
 			</td>
 			<td>
 				<div class="row-actions">
-					<RowActions card={card} onToggle={onToggle} onRemove={onRemove} />
+					<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} />
 				</div>
 			</td>
 		</tr>
@@ -233,8 +260,8 @@ function WatchTable(props: { cards: WatchCard[] } & BoardActions) {
 					</tr>
 				</thead>
 				<tbody>
-					{cards.map((card) => (
-						<WatchTableRow key={card.token} card={card} {...rest} />
+					{cards.map((card, i) => (
+						<WatchTableRow key={card.token} card={card} index={i} count={cards.length} {...rest} />
 					))}
 				</tbody>
 			</table>
@@ -389,6 +416,24 @@ export function WatchBoard() {
 		}
 	};
 
+	const move = async (token: string, to: "top" | "up" | "down"): Promise<void> => {
+		if (!board) return;
+		const prev = latest.current;
+		const from = prev.findIndex((c) => c.token === token);
+		const at = to === "top" ? 0 : to === "up" ? from - 1 : from + 1;
+		if (from < 0 || at < 0 || at >= prev.length || at === from) return;
+		const next = [...prev];
+		const [card] = next.splice(from, 1);
+		next.splice(at, 0, card!);
+		setCards(next);
+		try {
+			await orderBoard(board, next.map((c) => c.token));
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "调整顺序失败，请重试";
+			setCards(prev.map((c) => (c.token === token && c.kind === "live" ? { ...c, actionError: message } : c)));
+		}
+	};
+
 	return (
 		<section class="monitor" id="watch-board" aria-label="持续监测">
 			<div class="section-head">
@@ -436,8 +481,18 @@ export function WatchBoard() {
 			)}
 			{layout === "cards" || cards.length < 2 ? (
 				<div class="grid card-grid">
-					{cards.map((card) => (
-						<WatchCardItem key={card.token} card={card} now={now} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} />
+					{cards.map((card, i) => (
+						<WatchCardItem
+							key={card.token}
+							card={card}
+							now={now}
+							index={i}
+							count={cards.length}
+							onToggle={(token, action) => void toggle(token, action)}
+							onRemove={(c) => void remove(c)}
+							onRetry={(token) => void refreshOne(token)}
+							onMove={(token, to) => void move(token, to)}
+						/>
 					))}
 					{cards.length === 0 && (
 						<button type="button" class="card-add" onClick={() => setAdding(true)} data-testid="watch-add-card">
@@ -447,7 +502,7 @@ export function WatchBoard() {
 					)}
 				</div>
 			) : (
-				<WatchTable cards={cards} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} />
+				<WatchTable cards={cards} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} onMove={(token, to) => void move(token, to)} />
 			)}
 			<p class="footnote">每个网络最多 {WATCH_MAX_PER_IP} 个持续监测。</p>
 		</section>
