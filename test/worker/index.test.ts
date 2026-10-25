@@ -43,7 +43,7 @@ function harness(ipAllowed: boolean) {
 }
 
 describe("worker rate limits", () => {
-	it.each(["/api/history", "/api/history/raw", "/api/history/delete"])("limits %s by caller IP before touching storage", async (path) => {
+	it.each(["/api/history", "/api/history/raw", "/api/history/delete", "/api/models"])("limits %s by caller IP before touching storage", async (path) => {
 		const { call, ip, reached } = harness(false);
 		const res = await call(path, { site: "https://api.example.com", key: KEY, runId: "00000000-0000-4000-8000-00000000000a" });
 		expect(res.status).toBe(429);

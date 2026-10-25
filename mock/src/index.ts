@@ -404,6 +404,12 @@ export default {
 	async fetch(request) {
 		const { pathname } = new URL(request.url);
 		if (pathname === "/healthz") return new Response("ok");
+		if (pathname === "/v1/models") {
+			if (request.method !== "GET") return openAiError(405, "Method not allowed.", "invalid_request_error", null);
+			const auth = request.headers.get("Authorization") ?? "";
+			if (!VALID_AUTH.test(auth)) return failure({ kind: "fail", status: 401, echo: false }, auth);
+			return json({ object: "list", data: [...MODELS.keys()].map((id) => ({ id, object: "model", owned_by: "mock" })) });
+		}
 		const protocol = PATHS.get(pathname);
 		if (!protocol) return openAiError(404, "Unknown URL.", "invalid_request_error", "unknown_url");
 		if (request.method !== "POST") return openAiError(405, "Method not allowed.", "invalid_request_error", null);

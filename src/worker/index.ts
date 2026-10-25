@@ -14,6 +14,7 @@ import {
 import { newBoardCode } from "./board.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
+import { fetchModels } from "./models.ts";
 import { probe, type ProbeResult } from "./probe.ts";
 import {
 	type HistoryCommand,
@@ -145,6 +146,16 @@ const handleProbe: Handler = async (request, env, ctx) => {
 const handleQuestions: Handler = async () => {
 	const questions: Omit<Question, "scorer">[] = activeQuestions().map(({ scorer, ...rest }) => rest);
 	return json(questions);
+};
+
+const handleModels: Handler = async (request, env) => {
+	const parsed = parseHistoryRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const { origin, host, key } = parsed.value;
+	if (!(await ipAllowed(request, env)) || !(await env.HOST_LIMITER.limit({ key: host })).success) return rateLimited();
+	const result = await fetchModels({ origin, key });
+	console.log(JSON.stringify({ event: "models", host, outcome: result.ok ? "ok" : result.reason, httpStatus: result.ok ? null : result.httpStatus, count: result.ok ? result.models.length : 0 }));
+	return json(result);
 };
 
 const handleHistory: Handler = async (request, env, ctx) => {
@@ -347,6 +358,7 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/frame": { GET: handleFrame },
 	"/api/questions": { GET: handleQuestions },
 	"/api/probe": { POST: handleProbe },
+	"/api/models": { POST: handleModels },
 	"/api/history": { POST: handleHistory },
 	"/api/history/raw": { POST: handleHistoryRaw },
 	"/api/history/delete": { POST: handleHistoryDelete },
