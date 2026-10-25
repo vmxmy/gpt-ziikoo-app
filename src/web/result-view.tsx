@@ -1,10 +1,26 @@
+import { useState } from "preact/hooks";
 import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
 import { diagnosis, failureAdvice, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
 import { ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
+import { Modal } from "./modal.tsx";
+
+// The frame has an opaque origin, so "*" is the only target that reaches it; the answer is the user's own and holds no key.
+function AnimationFrame({ artifact }: { artifact: string }) {
+	return (
+		<iframe
+			class="animation-frame"
+			sandbox="allow-scripts"
+			src="/api/frame"
+			title="动画"
+			onLoad={(e) => e.currentTarget.contentWindow?.postMessage(artifact, "*")}
+		/>
+	);
+}
 
 function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
+	const [playing, setPlaying] = useState<string | null>(null);
 	return (
 		<div class="table-wrap table-scroll">
 			<table data-testid={`detail-table-${id}`}>
@@ -25,6 +41,7 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 				<tbody>
 					{attempts.map((a) => {
 						const r = a.response?.ok ? a.response : null;
+						const artifact = r?.artifact;
 						return (
 							<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
 								<td class="num">{a.stage}</td>
@@ -35,13 +52,23 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 								<td class="mono">{r?.idShape ?? "—"}</td>
 								<td class="num">{ms(r?.ttftMs)}</td>
 								<td class="num">{ms(r?.totalMs)}</td>
-								<td class="answer">{r?.answer ?? ""}</td>
+								<td class="answer">
+									{r?.answer ?? ""}{" "}
+									{artifact && (
+										<button type="button" class="btn-text" onClick={() => setPlaying(artifact)}>
+											播放动画
+										</button>
+									)}
+								</td>
 								<td class="num">{numberCheck(a.response)}</td>
 							</tr>
 						);
 					})}
 				</tbody>
 			</table>
+			<Modal open={playing !== null} onClose={() => setPlaying(null)} title="播放动画">
+				{playing !== null && <AnimationFrame artifact={playing} />}
+			</Modal>
 		</div>
 	);
 }

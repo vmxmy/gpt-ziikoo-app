@@ -321,7 +321,30 @@ const handleBoardMove: Handler = async (request, env, ctx) => {
 	return json({ board: into } satisfies BoardMoveResponse);
 };
 
+// The page posts the answer HTML in after load; the sandbox CSP gives the frame an opaque origin and no network.
+const FRAME_HTML = `<!doctype html><meta charset="utf-8"><script>
+addEventListener("message", function once(e) {
+	if (e.source !== parent || typeof e.data !== "string") return;
+	removeEventListener("message", once);
+	document.open();
+	document.write(e.data);
+	document.close();
+});
+</script>`;
+
+const FRAME_HEADERS = {
+	"Content-Type": "text/html; charset=utf-8",
+	"Content-Security-Policy":
+		"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; sandbox allow-scripts; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+	"Cache-Control": "no-store",
+	"X-Content-Type-Options": "nosniff",
+	"Referrer-Policy": "no-referrer",
+};
+
+const handleFrame: Handler = async () => new Response(FRAME_HTML, { headers: FRAME_HEADERS });
+
 const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
+	"/api/frame": { GET: handleFrame },
 	"/api/questions": { GET: handleQuestions },
 	"/api/probe": { POST: handleProbe },
 	"/api/history": { POST: handleHistory },

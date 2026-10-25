@@ -75,6 +75,7 @@ export type ProbeOk = {
 	totalMs: number;
 	promptTokens: number | null;
 	cachedTokens: number | null;
+	artifact?: string;
 };
 
 export type ProbeFail = {

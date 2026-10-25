@@ -154,6 +154,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 			totalMs,
 			promptTokens: usage.promptTokens,
 			cachedTokens: usage.cachedTokens,
+			...(scorer?.type === "svg_animation" && { artifact: answer }),
 		},
 		capture: { ...capture, ok: true, correct, note },
 	};
