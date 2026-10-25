@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, type WatchView } from "../shared/watch.ts";
+import { MONITOR, type MonitorState } from "../shared/monitor.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_PER_IP, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, setWatchState } from "./api.ts";
 import { MonitorCard } from "./monitor-card.tsx";
-import { monitorView } from "./monitor-view.ts";
+import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
+import { ms, pct } from "./results.ts";
 import { WatchAddForm } from "./watch-add.tsx";
 import { WatchShare } from "./watch-share.tsx";
 import {
@@ -38,6 +40,27 @@ type CardProps = {
 
 const cardName = (card: WatchCard): string => (card.kind === "live" ? cardLabel(card.view) : `令牌 ${cardId(card.token)}`);
 
+// `running` as a boolean cannot say bad_key, whose row shows neither pause nor resume.
+type LiveRowCells = { kind: "live"; host: string; alias: string | null; state: MonitorState; label: string; uptime: string; correct: string; p50: string; states: MonitorState[]; status: WatchStatus["kind"] };
+type LiveCard = Extract<WatchCard, { kind: "live" }>;
+
+function rowCells(card: LiveCard): LiveRowCells {
+	const view = monitorView(card.view.monitor);
+	const buckets = card.view.monitor.buckets.length === MONITOR.buckets ? card.view.monitor.buckets : emptyBuckets();
+	return {
+		kind: "live",
+		host: card.view.host,
+		alias: card.view.alias || null,
+		state: view.data.state,
+		label: badgeLabel(view),
+		uptime: pct(view.data.uptimePct),
+		correct: pct(view.data.correctPct),
+		p50: ms(latencyP50(buckets)),
+		states: buckets.map((b) => b.state),
+		status: card.view.status.kind,
+	};
+}
+
 function CardActions({ card, onToggle, onRemove }: Omit<CardProps, "now" | "onRetry">) {
 	const t = `custom-${cardId(card.token)}`;
 	return (
@@ -59,6 +82,42 @@ function CardActions({ card, onToggle, onRemove }: Omit<CardProps, "now" | "onRe
 				data-testid={`${t}-remove`}
 			>
 				删除卡片
+			</button>
+		</>
+	);
+}
+
+type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry">;
+
+function RowActions({ card, onToggle, onRemove }: { card: WatchCard } & Pick<BoardActions, "onToggle" | "onRemove">) {
+	const t = `custom-${cardId(card.token)}`;
+	return (
+		<>
+			{card.kind === "live" && card.view.status.kind === "running" && (
+				<button type="button" class="icon-btn" aria-label="暂停" title="暂停" onClick={() => onToggle(card.token, "pause")} data-testid={`${t}-pause`}>
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path class="icon-stroke" d="M5.5 3.5v9M10.5 3.5v9" />
+					</svg>
+				</button>
+			)}
+			{card.kind === "live" && card.view.status.kind === "paused" && (
+				<button type="button" class="icon-btn" aria-label="继续监测" title="继续监测" onClick={() => onToggle(card.token, "resume")} data-testid={`${t}-resume`}>
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path class="icon-fill" d="M5 3.2c0-.6.7-1 1.2-.6l6 4.4c.5.4.5 1.2 0 1.6l-6 4.4c-.5.4-1.2 0-1.2-.6V3.2z" />
+					</svg>
+				</button>
+			)}
+			<button
+				type="button"
+				class="icon-btn icon-btn-danger"
+				aria-label="删除"
+				title="删除"
+				onClick={() => confirm(`删除 ${cardName(card)} 的持续监测？服务器上的密钥与调用记录会立即清空。`) && onRemove(card)}
+				data-testid={`${t}-remove`}
+			>
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<path class="icon-stroke" d="M2.5 4.5h11M6.5 2.5h3M4 4.5l.7 8.3c0 .6.5 1.2 1.2 1.2h4.2c.7 0 1.2-.6 1.2-1.2l.7-8.3M6.7 7v4M9.3 7v4" />
+				</svg>
 			</button>
 		</>
 	);
@@ -121,12 +180,101 @@ function WatchCardItem(props: CardProps) {
 	);
 }
 
+function WatchTableRow({ card, onToggle, onRemove, onRetry }: { card: WatchCard } & BoardActions) {
+	const t = `custom-${cardId(card.token)}`;
+	if (card.kind !== "live") {
+		return (
+			<tr data-testid={`${t}-row`}>
+				<td class="mono">{cardName(card)}</td>
+				<td colspan={5}>
+					{card.kind === "loading" ? (
+						<span class="muted" data-testid={`${t}-loading`}>
+							读取中…
+						</span>
+					) : (
+						<span class="row-error" data-kind="rejected" data-testid={`${t}-error`}>
+							{card.message}
+							<button type="button" class="btn-text" onClick={() => onRetry(card.token)} data-testid={`${t}-retry`}>
+								重试
+							</button>
+						</span>
+					)}
+				</td>
+				<td>
+					<div class="row-actions">
+						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} />
+					</div>
+				</td>
+			</tr>
+		);
+	}
+	const cells = rowCells(card);
+	return (
+		<tr data-testid={`${t}-row`} data-paused={cells.status === "paused" ? true : undefined}>
+			<td>
+				<span class="row-site">
+					{cells.alias && <span class="card-alias">{cells.alias}</span>}
+					<span class={cells.alias ? "mono muted" : "mono"}>{cells.host}</span>
+				</span>
+			</td>
+			<td colspan={4} data-state={cells.state}>
+				<span class="row-state">
+					{cells.label}
+				</span>
+				<span class="row-metrics">
+					<span class="num">{cells.uptime}</span>
+					<span class="num">{cells.correct}</span>
+					<span class="num" data-col="p50">
+						{cells.p50}
+					</span>
+				</span>
+			</td>
+			<td data-col="bar">
+				<div class="mini-bar" aria-hidden="true">
+					{cells.states.map((state, i) => (
+						<span class="segment" data-state={state} key={i} />
+					))}
+				</div>
+			</td>
+			<td>
+				<div class="row-actions">
+					<RowActions card={card} onToggle={onToggle} onRemove={onRemove} />
+				</div>
+			</td>
+		</tr>
+	);
+}
+
+function WatchTable(props: { cards: WatchCard[] } & BoardActions) {
+	const { cards, ...rest } = props;
+	return (
+		<div class="watch-table-wrap">
+			<table class="watch-table">
+				<thead>
+					<tr>
+						<th>站点</th>
+						<th colspan={4}>状态 · 可用率 · 答对率 · 总耗时中位数</th>
+						<th data-col="bar">近24小时</th>
+						<th>操作</th>
+					</tr>
+				</thead>
+				<tbody>
+					{cards.map((card) => (
+						<WatchTableRow key={card.token} card={card} {...rest} />
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
 export function WatchBoard() {
 	const [cards, setCards] = useState<WatchCard[]>([]);
 	const [board, setBoard] = useState<string | null>(null);
 	const [boardNotice, setBoardNotice] = useState<string | null>(null);
 	const [now, setNow] = useState(() => Date.now());
 	const [adding, setAdding] = useState(false);
+	const [layout, setLayout] = useState<"cards" | "list">("cards");
 	const latest = useRef(cards);
 	latest.current = cards;
 
@@ -272,6 +420,14 @@ export function WatchBoard() {
 			<div class="section-head">
 				<h2 id="watch-board-h">持续监测</h2>
 				<div class="section-tools">
+					<div class="view-toggle" role="group" aria-label="版式">
+						<button type="button" class="view-toggle-btn" aria-pressed={layout === "cards"} onClick={() => setLayout("cards")} data-testid="watch-view-cards">
+							卡片
+						</button>
+						<button type="button" class="view-toggle-btn" aria-pressed={layout === "list"} onClick={() => setLayout("list")} data-testid="watch-view-list">
+							列表
+						</button>
+					</div>
 					{board && cards.length > 0 && <WatchShare board={board} onReset={(newBoard) => setBoard(newBoard)} />}
 					<button
 						type="button"
@@ -291,17 +447,21 @@ export function WatchBoard() {
 				</p>
 			)}
 			{adding && <WatchAddForm onAdd={add} onClose={() => setAdding(false)} />}
-			<div class="grid card-grid">
-				{cards.map((card) => (
-					<WatchCardItem key={card.token} card={card} now={now} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} />
-				))}
-				{cards.length === 0 && (
-					<button type="button" class="card-add" onClick={() => setAdding(true)} data-testid="watch-add-card">
-						<span class="card-add-title">添加站点</span>
-						<span class="muted">由本站服务器持续调用你的站点。密钥加密保存，页面关闭后监测继续。</span>
-					</button>
-				)}
-			</div>
+			{layout === "cards" || cards.length === 0 ? (
+				<div class="grid card-grid">
+					{cards.map((card) => (
+						<WatchCardItem key={card.token} card={card} now={now} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} />
+					))}
+					{cards.length === 0 && (
+						<button type="button" class="card-add" onClick={() => setAdding(true)} data-testid="watch-add-card">
+							<span class="card-add-title">添加站点</span>
+							<span class="muted">由本站服务器持续调用你的站点。密钥加密保存，页面关闭后监测继续。</span>
+						</button>
+					)}
+				</div>
+			) : (
+				<WatchTable cards={cards} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} />
+			)}
 			<p class="footnote">每个网络最多 {WATCH_MAX_PER_IP} 个持续监测。</p>
 		</section>
 	);
