@@ -2,7 +2,7 @@ import { solveBag } from "../../src/shared/candy-gen.ts";
 
 type Protocol = "responses" | "chat";
 type IdKind = "hex" | "ft" | "b64";
-type Topic = "thibault" | "candy" | "candy-var" | "ciallo";
+type Topic = "thibault" | "candy" | "candy-var" | "ciallo" | "pelican-svg";
 type Answering = {
 	kind: "answer";
 	correct: boolean;
@@ -127,7 +127,16 @@ function solveCandyVar(prompt: string): { right: string; wrong: string } {
 	};
 }
 
+const SVG_PAGE =
+	'<!DOCTYPE html><html><head><meta charset="utf-8"><title>ride</title></head><body>' +
+	'<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">' +
+	'<circle cx="40" cy="70" r="12" fill="none" stroke="#333"><animateTransform attributeName="transform" type="rotate" from="0 40 70" to="360 40 70" dur="1s" repeatCount="indefinite"/></circle>' +
+	'<ellipse cx="60" cy="40" rx="14" ry="9" fill="#eee" stroke="#333"><animate attributeName="cy" values="40;37;40" dur="0.6s" repeatCount="indefinite"/></ellipse>' +
+	"</svg></body></html>";
+
 const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string }> = {
+	// The wrong reply stops before </html>, which the scorer's "complete" check catches at stage 1.
+	"pelican-svg": () => ({ right: SVG_PAGE, wrong: SVG_PAGE.slice(0, SVG_PAGE.indexOf("</html>")) }),
 	// The markup sits ahead of the worker's 70-character answer preview, so the e2e sees it intact and
 	// can prove the page renders relay answers as text; yes_no scoring only reads the leading "No".
 	thibault: () => ({
@@ -150,6 +159,7 @@ const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string 
 // The marker comes first: the generator can also draw 糖果 as its noun.
 function topicOf(prompt: string): Topic | null {
 	if (prompt.includes(CANDY_VAR_MARKER)) return "candy-var";
+	if (prompt.includes("用SVG绘制")) return "pelican-svg";
 	if (prompt.includes("Thibault")) return "thibault";
 	// The ciallo prompt is the bare word on its own line; every other prompt is a longer sentence.
 	if (/^ciallo\s*$/m.test(prompt)) return "ciallo";
