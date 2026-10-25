@@ -361,20 +361,6 @@
 	gap: var(--space-4);
 }
 
-.watch-share-qr {
-	width: 240px;
-	height: 240px;
-	align-self: center;
-}
-
-.qr-bg {
-	fill: var(--surface);
-}
-
-.qr-fg {
-	fill: var(--fg);
-}
-
 .watch-share-link {
 	font-family: var(--font-mono);
 	font-size: var(--fs-12);
@@ -445,4 +431,180 @@
 
 .modal-body {
 	padding: var(--space-5);
+}
+
+/* 看板列表 */
+
+.view-toggle {
+	display: inline-flex;
+	border: var(--border-width) solid var(--border-strong);
+	border-radius: var(--radius-2);
+}
+
+.view-toggle-btn {
+	padding: 0 var(--space-3);
+	height: 28px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-2);
+	font: 500 var(--fs-13) / 1 var(--font-sans);
+	cursor: pointer;
+}
+
+.view-toggle-btn:first-child {
+	border-radius: var(--radius-2) 0 0 var(--radius-2);
+}
+
+.view-toggle-btn:last-child {
+	border-radius: 0 var(--radius-2) var(--radius-2) 0;
+}
+
+.view-toggle-btn + .view-toggle-btn {
+	border-left: var(--border-width) solid var(--border-strong);
+}
+
+.view-toggle-btn:hover {
+	color: var(--fg);
+}
+
+.view-toggle-btn[aria-pressed="true"] {
+	background: var(--surface-2);
+	color: var(--fg);
+}
+
+.watch-table-wrap {
+	overflow-x: auto;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-2);
+}
+
+.watch-table td {
+	padding: var(--space-2) var(--space-3);
+	font-size: var(--fs-13);
+	vertical-align: middle;
+}
+
+.watch-table .row-site {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.watch-table .row-state {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--fs-13);
+	color: var(--tone-text, var(--fg));
+	font-weight: 600;
+}
+
+.watch-table .row-state::before {
+	content: "";
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--tone, var(--none));
+}
+
+.watch-table .row-metrics {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--space-4);
+	margin-left: var(--space-4);
+	color: var(--tone-text, var(--fg));
+	font-variant-numeric: tabular-nums;
+}
+
+.watch-table .row-metrics .num {
+	min-width: 3.5em;
+	text-align: right;
+}
+
+.watch-table tr[data-paused] {
+	color: var(--fg-3);
+}
+
+.row-error {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--tone-text, var(--fg-2));
+}
+
+.mini-bar {
+	display: flex;
+	gap: 1px;
+	height: 12px;
+	min-width: 96px;
+}
+
+.mini-bar .segment {
+	flex: 1 1 0;
+	min-width: 0;
+	border-radius: 2px;
+	background: var(--tone, var(--none));
+}
+
+.mini-bar .segment:hover {
+	opacity: 1;
+}
+
+.row-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-1);
+}
+
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-2);
+	background: transparent;
+	color: var(--fg-2);
+	cursor: pointer;
+}
+
+.icon-btn:hover {
+	background: var(--surface-2);
+	color: var(--fg);
+}
+
+.icon-btn-danger:hover {
+	color: var(--bad);
+}
+
+.icon-btn svg {
+	display: block;
+	width: 16px;
+	height: 16px;
+}
+
+.icon-btn .icon-stroke {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.icon-btn .icon-fill {
+	fill: currentColor;
+}
+
+@media (max-width: 639px) {
+	.watch-table [data-col="bar"] {
+		display: none;
+	}
+
+	.watch-table .row-metrics .num[data-col="p50"] {
+		display: none;
+	}
 }
