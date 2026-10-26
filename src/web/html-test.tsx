@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, Protocol } from "../shared/types.ts";
 import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
@@ -109,8 +109,6 @@ export function HtmlTest() {
 	const keyInput = useRef<HTMLInputElement>(null);
 	const ctrl = useRef<AbortController | null>(null);
 	const target = { site: site.trim(), key };
-
-	useEffect(() => () => ctrl.current?.abort(), []);
 
 	const send = async () => {
 		const missing = missingFields(target, model);

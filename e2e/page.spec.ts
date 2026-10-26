@@ -74,14 +74,17 @@ test("custom 自定义题答错,回答按文本渲染", async ({ page, site, key
 		await expect(page.getByTestId("custom-q-answer").locator("b, img")).toHaveCount(0);
 	}));
 
-test("HTML 生成页签按所选推理强度调用一次,答对后可播放动画", async ({ page, site, key }) =>
+test("HTML 生成页签按所选推理强度调用一次,生成中切走再切回不中断,答对后可播放动画", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/#html");
 		await page.getByTestId("html-site").fill(site);
 		await page.getByTestId("html-key").fill(key);
-		await page.getByTestId("html-model").fill("mock-good");
+		await page.getByTestId("html-model").fill("mock-slow");
 		await page.getByTestId("html-effort").selectOption("xhigh");
 		await page.getByTestId("html-run").click();
+		await expect(page.getByTestId("html-cancel")).toBeVisible();
+		await page.getByTestId("tab-live").click();
+		await page.getByTestId("tab-html").click();
 		await expect(page.getByTestId("html-verdict")).toHaveAttribute("data-state", "ok", { timeout: 30_000 });
 		await expect(page.getByTestId("html-result")).toContainText("推理强度 xhigh");
 		await page.getByTestId("html-play").click();
