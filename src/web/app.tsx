@@ -272,32 +272,31 @@ export function App() {
 		<div class="container">
 			<SiteHeader />
 			<Tabs tab={tab} onSwitch={switchTab} />
-			{tab === "live" ? (
-				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live">
-					<details class="privacy">
-						<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
-						<dl>
-							{PRIVACY.map(([term, text]) => (
-								<div key={term}>
-									<dt>{term}</dt>
-									<dd>{text}</dd>
-								</div>
-							))}
-						</dl>
-					</details>
-					<main class="grid main-grid">
-						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
-						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
-						<History target={target} />
-						<ApiDocs />
-					</main>
-				</div>
-			) : tab === "html" ? (
-				<div id="html-pane" role="tabpanel" aria-labelledby="tab-html">
-					<HtmlTest />
-				</div>
-			) : (
+			{/* Live and HTML stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
+			<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
+				<details class="privacy">
+					<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
+					<dl>
+						{PRIVACY.map(([term, text]) => (
+							<div key={term}>
+								<dt>{term}</dt>
+								<dd>{text}</dd>
+							</div>
+						))}
+					</dl>
+				</details>
+				<main class="grid main-grid">
+					<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
+					{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+					<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
+					<History target={target} />
+					<ApiDocs />
+				</main>
+			</div>
+			<div id="html-pane" role="tabpanel" aria-labelledby="tab-html" hidden={tab !== "html"}>
+				<HtmlTest />
+			</div>
+			{tab === "watch" && (
 				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">
 					<WatchBoard />
 				</div>

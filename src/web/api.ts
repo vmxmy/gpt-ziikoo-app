@@ -55,7 +55,7 @@ export function missingFields(target: Target, model: string): string[] {
 	return [target.site.trim() === "" && "站点", target.key === "" && "密钥", model.trim() === "" && "模型"].filter((f) => f !== false);
 }
 
-type CustomProbeRequest = Omit<ProbeRequest, "question" | "runId" | "stage" | "seq" | "attempt" | "seed"> & { custom: CustomQuestion };
+type CustomProbeRequest = Omit<ProbeRequest, "question" | "runId" | "stage" | "seq" | "attempt" | "seed"> & { custom: NonNullable<ProbeRequest["custom"]> };
 
 async function probeOnce(body: ProbeRequest | CustomProbeRequest, signal?: AbortSignal): Promise<ProbeOutcome> {
 	let response: ProbeResponse;
@@ -81,8 +81,13 @@ export function makeProbe(target: Target, model: string, seed: number): Probe {
 // Runs only from its own tab as one call without runId, so it stays out of history and gets the worker's long-answer limits.
 export const HTML_QUESTION = "pelican-svg";
 
-export function probeHtml(target: Target, model: string, protocol: Protocol, effort: Effort | null, seed: number, signal: AbortSignal): Promise<ProbeOutcome> {
-	return probeOnce({ ...target, model, protocol, question: HTML_QUESTION, seed, ...(effort && { effort }) }, signal);
+export type HtmlSource = { seed: number } | { prompt: string };
+
+export function probeHtml(target: Target, model: string, protocol: Protocol, effort: Effort | null, source: HtmlSource, signal: AbortSignal): Promise<ProbeOutcome> {
+	const common = { ...target, model, protocol, ...(effort && { effort }) };
+	return "seed" in source
+		? probeOnce({ ...common, question: HTML_QUESTION, seed: source.seed }, signal)
+		: probeOnce({ ...common, custom: { prompt: source.prompt, html: true } }, signal);
 }
 
 export const MAX_CUSTOM_PROMPT = 2000;

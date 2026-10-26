@@ -43,7 +43,7 @@ it("instantiates a generator question per seed and leaves fixed questions as the
 
 it("generates the pelican prompt at seed 0 and another rider or vehicle per seed", () => {
 	const pelican = getQuestion("pelican-svg")!;
-	expect(pelican).toMatchObject({ generator: "pelican", inWatchRotation: false, scorer: { type: "svg_animation" } });
+	expect(pelican).toMatchObject({ generator: "pelican", inWatchRotation: false, html: true, scorer: { type: "svg_animation" } });
 	expect(pelican.prompt).toBe(
 		"创建一个HTML，内容是用SVG绘制一个鹈鹕骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
 	);

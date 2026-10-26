@@ -78,14 +78,6 @@ export function numberCheck(response: ProbeResponse | null): string {
 	return got === "none" ? `应为 ${want}，没有「答案」行` : `应为 ${want}，实际 ${got}`;
 }
 
-const HTML_PARTS: Record<string, string> = { html: "HTML 文档", svg: "SVG", animation: "动画代码", complete: "结尾的 </svg> 与 </html>" };
-
-// Couples to the svg_animation note in src/worker/scorers.ts: `ok` or `missing ["html","complete"]`.
-export function htmlCheck(note: string): string {
-	if (note === "ok") return "HTML 文档、SVG 与动画代码齐全，写到 </html> 结束";
-	return `缺 ${(note.match(/\w+(?=")/g) ?? []).map((part) => HTML_PARTS[part] ?? part).join("、")}`;
-}
-
 export function ms(value: number | null | undefined): string {
 	return value === null || value === undefined ? "—" : `${Math.round(value)} ms`;
 }
