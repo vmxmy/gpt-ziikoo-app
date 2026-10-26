@@ -493,6 +493,40 @@
 	vertical-align: middle;
 }
 
+.watch-table .sort-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.watch-table .sort-btn:hover,
+.watch-table th[aria-sort] .sort-btn {
+	color: var(--fg);
+}
+
+/* The arrow is decoration: aria-sort on the header cell already tells assistive tech the direction. */
+.watch-table .sort-btn::after {
+	content: "↕" / "";
+	width: 1em;
+	opacity: 0.4;
+}
+
+.watch-table th[aria-sort="ascending"] .sort-btn::after {
+	content: "↑" / "";
+	opacity: 1;
+}
+
+.watch-table th[aria-sort="descending"] .sort-btn::after {
+	content: "↓" / "";
+	opacity: 1;
+}
+
 .watch-table .row-site {
 	display: flex;
 	align-items: baseline;

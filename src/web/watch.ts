@@ -37,6 +37,31 @@ export const cardLabel = ({ alias, host }: { alias: string; host: string }): str
 
 export const cardId = (token: string): string => token.slice(0, 8);
 
+export type SortKey = "site" | "state" | "uptime" | "correct" | "p50";
+export type SortDir = "asc" | "desc";
+// null keeps the board's own order, the one 置顶/上移/下移 edit.
+export type TableSort = { key: SortKey; dir: SortDir } | null;
+
+export function nextSort(current: TableSort, key: SortKey): TableSort {
+	if (current?.key !== key) return { key, dir: "asc" };
+	return current.dir === "asc" ? { key, dir: "desc" } : null;
+}
+
+const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+
+// A row without a value (still loading, failed to read, no calls yet) says nothing about its rank, so it sinks in both directions.
+export function sortRows<T>(rows: readonly T[], value: (row: T) => string | number | null, dir: SortDir): T[] {
+	const sign = dir === "asc" ? 1 : -1;
+	return rows
+		.map((row) => ({ row, v: value(row) }))
+		.toSorted((a, b) => {
+			if (a.v === null || b.v === null) return Number(a.v === null) - Number(b.v === null);
+			const order = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : collator.compare(String(a.v), String(b.v));
+			return sign * order;
+		})
+		.map(({ row }) => row);
+}
+
 export type FieldError = { field: "site" | "key" | "model" | "consent" | "form"; message: string };
 
 export type WatchInput = {
