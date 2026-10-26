@@ -108,6 +108,19 @@ test("HTML 生成页签用自定义题面调用一次,结果显示该题面并�
 		await expect(page.locator("iframe.animation-frame")).toBeVisible();
 	}));
 
+test("HTML 生成页签的回答里没有 HTML 页面时不能播放,只显示回答片段", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/#html");
+		await page.getByTestId("html-site").fill(site);
+		await page.getByTestId("html-key").fill(key);
+		await page.getByTestId("html-model").fill("mock-good");
+		await page.getByTestId("html-prompt").fill("1+1 等于几？只回答数字");
+		await page.getByTestId("html-run").click();
+		await expect(page.getByTestId("html-no-page")).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId("html-answer")).toHaveText("OK");
+		await expect(page.getByTestId("html-play")).toHaveCount(0);
+	}));
+
 test("页面加载,题目清单,题面展开与复制和接口逐字节一致", async ({ page, context, questions }) => {
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await page.goto("/");

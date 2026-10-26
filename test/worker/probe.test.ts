@@ -222,19 +222,70 @@ describe("probe", () => {
 			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: `  ${html}\n` }) }],
 		});
 		const result = await probe(input({ question: question("pelican-svg") }), deps);
-		expect(result.response).toMatchObject({ ok: true, correct: true, artifact: html });
+		expect(result.response).toMatchObject({ ok: true, correct: true, artifact: { html, ending: "closed" } });
 		expect(result.capture).not.toHaveProperty("artifact");
 	});
 
-	it("returns a custom HTML question's full answer as the artifact without scoring it", async () => {
-		const html = "<!doctype html><html><body><canvas></canvas></body></html>";
+	it("cuts a custom HTML question's page out of a fenced answer without scoring it", async () => {
+		const answer = "下面是页面:\n```html\n<!DOCTYPE html>\n<html><body><canvas></canvas></body></html>\n```\n保存后用浏览器打开。";
 		const { deps } = fakeUpstream({
 			status: 200,
 			ttfb: 60,
-			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: html }) }],
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: answer }) }],
 		});
 		const result = await probe(input({ question: { ...customQuestion("写一个 HTML 时钟", undefined), html: true } }), deps);
-		expect(result.response).toMatchObject({ ok: true, correct: null, note: "unscored", artifact: html });
+		expect(result.response).toMatchObject({
+			ok: true,
+			correct: null,
+			note: "unscored",
+			artifact: { html: "<!DOCTYPE html>\n<html><body><canvas></canvas></body></html>", ending: "closed" },
+		});
+	});
+
+	it("plays the answer's last page and marks it unclosed when the answer stops before </html>", async () => {
+		const answer = "结构:\n```html\n<!DOCTYPE html><html><body>...</body></html>\n```\n现在写代码。\n```html\n<html><body><svg><circle r=\"9\"/>";
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: answer }) }],
+		});
+		const result = await probe(input({ question: { ...customQuestion("画一只企鹅", undefined), html: true } }), deps);
+		expect(result.response).toMatchObject({ ok: true, artifact: { html: '<html><body><svg><circle r="9"/>', ending: "unclosed" } });
+	});
+
+	it("plays a bare svg answer whole", async () => {
+		const answer = "<style>svg{width:100%}</style>\n<svg><animate/></svg>";
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: `\n${answer}\n` }) }],
+		});
+		const result = await probe(input({ question: { ...customQuestion("画一只企鹅", undefined), html: true } }), deps);
+		expect(result.response).toMatchObject({ ok: true, artifact: { html: answer, ending: "closed" } });
+	});
+
+	it("returns no artifact when a custom HTML question's answer holds no page", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: "2" }) }],
+		});
+		const result = await probe(input({ question: { ...customQuestion("1+1 等于几", undefined), html: true } }), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: null, answer: "2" });
+		expect(result.response).not.toHaveProperty("artifact");
+	});
+
+	it("marks the artifact's ending truncated when the HTML answer runs past the body cap", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 10,
+			chunks: [
+				{ at: 20, text: sse({ type: "response.output_text.delta", delta: "<!doctype html><html><body><svg>" }) },
+				{ at: 30, text: sse({ type: "response.output_text.delta", delta: "<g/>".repeat(1024) }) },
+			],
+		});
+		const result = await probe(input({ question: { ...customQuestion("画一只猫", undefined), html: true }, limits: { ...LONG_ANSWER_LIMITS, maxBodyBytes: 1024 } }), deps);
+		expect(result.response).toMatchObject({ ok: true, artifact: { html: "<!doctype html><html><body><svg>", ending: "truncated" } });
 	});
 
 	it("scores a custom yes_no question", async () => {

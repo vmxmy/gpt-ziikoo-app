@@ -20,7 +20,7 @@ export type QuestionMeta = {
 	kind: QuestionKind;
 	scorer?: Scorer;
 	generator?: GeneratorId;
-	// The answer is an HTML page: the probe returns it whole as `artifact` for the sandboxed player, and an unrecorded call gets the long-answer limits.
+	// Also gives a call without runId the long-answer limits.
 	html?: boolean;
 	inWatchRotation?: boolean;
 	expectedLabel: string;
@@ -80,8 +80,12 @@ export type ProbeOk = {
 	totalMs: number;
 	promptTokens: number | null;
 	cachedTokens: number | null;
-	artifact?: string;
+	artifact?: PlayablePage;
 };
+
+// unclosed: the answer ended before the page's </html>. truncated: the same, because the read cap cut the response.
+export type PageEnding = "closed" | "unclosed" | "truncated";
+export type PlayablePage = { html: string; ending: PageEnding };
 
 export type ProbeFail = {
 	ok: false;
