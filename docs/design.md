@@ -204,7 +204,7 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 
 2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。2026-10-26 起,页面只在「HTML 生成」页签里对这题单次调用,实时测试的选题清单不再列出它。
 
-- 清单只写 `generator: "pelican"` 与 `html: true`。`html` 标记表示回答是一页 HTML:探针返回完整的 `artifact`,不带 `runId` 时用长回答上限。带这个标记的题与自定义 HTML 题(见「自定义题」节)统称 HTML 题。
+- 清单只写 `generator: "pelican"` 与 `html: true`。`html` 标记表示回答是一页 HTML:探针从回答里取出页面作为 `artifact` 返回,取法见本节「取页面」;不带 `runId` 时用长回答上限。带这个标记的题与自定义 HTML 题(见「自定义题」节)统称 HTML 题。
 - 题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
 - 动物来自封闭词表 `RIDERS`(8 种),交通工具与动词来自封闭词表 `RIDES`(6 种)。组合序号是 `seed % 48`,站点无法只预置一个答案。seed 范围与 `candy-var` 相同。
 - seed 0 是鹈鹕骑自行车。题面原文如下:
@@ -221,9 +221,16 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
 - 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
-- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。表单另有可选的「题面」:留空时每次调用随机抽一个 seed 出这题;填写时改发自定义 HTML 题。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时、推理 token 数和本次题面,失败时显示原因。页面切走或刷新,结果即失。
+- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。表单另有可选的「题面」:留空时每次调用随机抽一个 seed 出这题;填写时改发自定义 HTML 题。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时、推理 token 数和本次题面,失败时显示原因。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
 - 上限:不带 `runId` 的 HTML 题调用,读取上限 2MB,超时 300 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;高推理强度要先推理几分钟。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
-- 播放:探针接口对 HTML 题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。「HTML 生成」页签的结果里有「播放动画」「复制 HTML」按钮和折叠的「查看 HTML」。源码只按文本显示。按下「播放动画」后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
+- 播放:探针接口对 HTML 题另返回 `artifact: { html, ending }`。`artifact` 不入库,也不进历史。
+- 取页面:Worker 只看回答,不看题面。这一步只决定能不能播放,不判对错(2026-10-27 维护者批准)。
+  1. 标记都不区分大小写。起点是最后一个 `<html`。它前面最近的 `<!doctype html` 与它之间没有 `</html>` 时,这个 doctype 属于同一页,起点前移到 doctype。回答里没有 `<html` 时,起点是最后一个 `<!doctype html`。取最后一份,因为边想边写的模型会先写一份骨架页面,再写正式页面。
+  2. 取到其后最后一个 `</html>` 为止,`ending` 为 `closed`。没有 `</html>` 时取到回答末尾:读取上限截断了响应时 `ending` 为 `truncated`,否则为 `unclosed`。这样去掉代码块标记与前后的说明文字。
+  3. 两个标记都没有、但有 `<svg` 时,`html` 是去掉首尾空白的整段回答。片段里可能有 `<svg>` 外的 `<script>` 与 `<style>`,所以不裁。读取上限截断了响应时 `ending` 为 `truncated`,否则为 `closed`。
+  4. 三个标记都没有时,不返回 `artifact`。页面不显示「播放动画」,只显示 `answer` 的前 70 字。
+- `ending` 不是 `closed` 时,页面提示页面不完整。`truncated` 提示站点响应超过 2MB 读取上限、回答被截断;`unclosed` 提示回答在页面写到 `</html>` 之前就结束了,可能是站点限制了输出长度。
+- 有 `artifact` 时,「HTML 生成」页签的结果里有「播放动画」「复制 HTML」按钮和折叠的「查看 HTML」。源码只按文本显示。按下「播放动画」后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把 `artifact.html` 发给它运行。规则见「安全边界」的「播放动画」。
 - 除 HTML 题外,本站从不渲染站点返回的 HTML,只按文本显示。
 - 题面模板或词表一改,同一 seed 的题就变了,题的 `version` 加 1。
 
@@ -241,7 +248,7 @@ type CustomQuestion = {
 // 或自定义 HTML 题:{ prompt: string; html: true },不带 scorer
 ```
 
-- 自定义 HTML 题(2026-10-27 授权):`custom` 写成 `{ prompt, html: true }`,与 `scorer` 同给返回 400。它不评分,`correct` 为 `null`,`note` 为 `unscored`。探针另返回完整回答 `artifact`,读取上限 2MB,超时 300 秒。页面只在「HTML 生成」页签用它,回答按「安全边界」的「播放动画」规则运行。
+- 自定义 HTML 题(2026-10-27 授权):`custom` 写成 `{ prompt, html: true }`,与 `scorer` 同给返回 400。它不评分,`correct` 为 `null`,`note` 为 `unscored`。读取上限 2MB,超时 300 秒。回答里有 HTML 页面时,探针另返回 `artifact`,取法见「生成器题 `pelican-svg`」节的「取页面」。回答里没有 HTML 页面时没有 `artifact`,与其他自定义题一样只回前 70 字。页面只在「HTML 生成」页签用它,回答按「安全边界」的「播放动画」规则运行。
 
 - `/api/probe` 增加可选对象字段 `custom`。给 `custom` 就不能再给 `question`与 `seed`;两个都给或都不给返回 400。`kind` 固定为 `knowledge`,`effort` 沿用请求值或默认空,不接受 `defaultEffort`。
 - 评分发生在 Worker,与题库题走同一张评分器表。`questionId` 记为 `custom`,`questionVersion` 记为 0。
@@ -412,7 +419,8 @@ POST /api/probe
       "answer": "No, I don't ...",
       "streamed": true, "ttfbMs": 420, "ttftMs": 2100, "totalMs": 8400,
       "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null
-      "artifact": "<!doctype html>..." }               // 只在 HTML 题上出现
+      "artifact": { "html": "<!doctype html>...",      // 只在 HTML 题、且回答里有 HTML 页面时出现
+                    "ending": "closed" | "unclosed" | "truncated" } }
 200 { "ok": false, "reason": "unauthorized" | "forbidden" | "not_found" |
       "rate_limited" | "upstream_error" | "timeout" | "bad_response",
       "httpStatus": 401 }
@@ -470,7 +478,7 @@ POST /api/watch/delete     { token }                立即清空密钥、样本�
 
 - 站点自身的失败用 200 加 `ok:false`,调用方能区分「站点出问题」和「我们出问题」。
 - 不提供跨域头。浏览器里的第三方网页不能调用,脚本和命令行不受影响。
-- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。例外是 HTML 题(`pelican-svg` 与自定义 HTML 题):`artifact` 字段带完整回答,只供当次播放,不入库。评 `yes_no` 或 `contains` 的自定义题没有 `artifact`。
+- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。例外是 HTML 题(`pelican-svg` 与自定义 HTML 题):`artifact.html` 带从回答里取出的 HTML 页面,只供当次播放,不入库。回答里没有 HTML 页面时没有 `artifact`。评 `yes_no` 或 `contains` 的自定义题没有 `artifact`。
 - `/api/frame` 是静态页,不限速。它由 Worker 返回,`public/_headers` 不作用于它。
 - 历史接口一律用 POST,密钥放请求体。对象不存在与对象为空返回相同结果,不泄露对象是否存在。
 
@@ -523,7 +531,7 @@ Free 套餐下限速的已知缺口,明确接受:
 2. iframe 没有 `allow-popups`、`allow-forms`、`allow-top-navigation`,所以不能开新窗口、提交表单或跳走顶层页面。
 3. `/api/frame` 自带 CSP:`default-src 'none'`,只放行内联脚本与样式,以及 `data:`、`blob:` 图片、字体与媒体。CSP 拦住全部网络请求,所以回答不能外传数据,也不能加载外部资源。CSP 另带 `sandbox allow-scripts`,有人直接打开这个地址也同样受限。`frame-ancestors 'self'` 只许本站嵌入它。
 4. 宿主页只接受一条消息:来源是父页面、数据是字符串。它用 `document.write` 写入这条消息,之后忽略其他消息。
-5. 页面用 `postMessage(artifact, "*")` 发送。目标必须写 `"*"`,因为不透明源没有可写的源名。发送的内容是用户自己的回答,不含密钥。
+5. 页面用 `postMessage(artifact.html, "*")` 发送。目标必须写 `"*"`,因为不透明源没有可写的源名。发送的内容是用户自己的回答,不含密钥。
 
 日志不含任何用户数据。回答原文与原始响应只存在于按密钥访问的对象存储里。每次探针写一条结构化日志,字段只有目标主机名、题 id、结果类别、状态码、延迟,密钥永远不放进请求头或 URL。调用日志(`invocation_logs`)关闭。
 
@@ -603,6 +611,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 播放动画 | 2026-10-25 授权。`svg_animation` 题的回答经探针接口的 `artifact` 返回,只在沙箱 iframe `/api/frame` 里运行。这是「回答只用文本节点渲染」的唯一例外 |
 | HTML 生成页签 | 2026-10-26 维护者决定。鹈鹕题移出实时测试,只在「HTML 生成」页签单次调用,题面每次随机。推理强度加 `xhigh`。不带 `runId` 的 `svg_animation` 调用读取上限 2MB、超时 300 秒,落库调用不变 |
 | 自定义 HTML 题 | 2026-10-27 维护者授权。「HTML 生成」页签可写自己的题面,经 `custom: { prompt, html: true }` 发出,不评分。页签对鹈鹕题也不再显示对错,由用户播放后自己判断。播放的例外从 `svg_animation` 题扩大到全部 HTML 题,沙箱规则不变 |
+| HTML 页面检查 | 2026-10-27 维护者批准。题面写什么都放行,不按题面拦截:题面没有可靠规则,按题面判断会误拦正常的题。Worker 只在回答里找到 HTML 页面时才返回 `artifact`,并去掉代码块与说明文字。这只决定能不能播放,不判对错。非 HTML 回答因此也只回前 70 字。取回答里的最后一份页面;页面没写到 `</html>` 时页面提示,并区分本站读取上限截断与站点自己结束 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。
