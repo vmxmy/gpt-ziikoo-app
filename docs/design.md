@@ -97,6 +97,8 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 随机生成题的展示 | 示例题面 | 样例、样本题 |
 | 用户自带的单次测试题 | 自定义题 | 自定义题目、用户题、私人题 |
 | 站点收到的输入量 | 输入 token 数 | prompt_tokens、提示用量 |
+| 站点返回的输出量,含推理 | 输出 token 数 | completion_tokens、生成 token |
+| 输出 token 数减推理 token 数 | 回答 token 数 | 正文 token、output token |
 | 一组持续监测的聚合对象 | 看板 | |
 | 运行 HTML 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
 | 把 HTML 题回答存成本机文件 | 下载 HTML | 导出、保存 |
@@ -222,7 +224,7 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
 - 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
-- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。调用带 `progress: true`:调用中显示倒计时圆环(从本次超时倒数)、当前阶段(等站点响应、等首字、正在接收回答)、已用时间和已收到的回答字符数,不显示回答原文(2026-10-27 维护者要求)。每次调用随机抽一个 seed 出这题,题面不能自己写(2026-10-27 维护者决定)。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时、推理 token 数和本次题面,失败时显示原因。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
+- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。调用带 `progress: true`:调用中显示倒计时圆环(从本次超时倒数)、当前阶段(等站点响应、等首字、正在接收回答)、已用时间和已收到的回答字符数,不显示回答原文(2026-10-27 维护者要求)。每次调用随机抽一个 seed 出这题,题面不能自己写(2026-10-27 维护者决定)。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时、token 数和本次题面,失败时显示原因。token 数在站点给出推理 token 数时分成推理 token 数与回答 token 数(输出 token 数减推理 token 数),没给时只显示输出 token 数(含推理)(2026-10-27 维护者批准)。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
 - 上限:不带 `runId` 的 HTML 题调用,读取上限 2MB,超时 300 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;高推理强度要先推理几分钟。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
 - 播放:探针接口对 HTML 题另返回 `artifact: { html, ending }`。`artifact` 不入库,也不进历史。
 - 取页面:Worker 只看回答,不看题面。这一步只决定能不能播放,不判对错(2026-10-27 维护者批准)。
@@ -304,7 +306,7 @@ Anthropic 协议(2026-10-27 维护者授权):
 - 请求 `POST /v1/messages`。密钥放在请求头 `x-api-key`,另带 `anthropic-version: 2023-06-01`,不带 `Authorization`。
 - 请求体固定 `max_tokens: 32000`,这个接口要求必填。32000 适合 Opus 4 以后的 Claude 模型,也够写完一页 HTML。
 - 调用方给了推理强度时,请求体带 `thinking: { type: "adaptive" }` 与 `output_config: { effort }`。题的默认推理强度不用于这个协议:它按 OpenAI 推理模型设定,而 4.6 以前的 Claude 模型拒绝自适应思考。
-- 回答只取 `text_delta`,不取 `thinking_delta`。用量合并 `message_start` 与 `message_delta` 两处。输入 token 数是 `input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` 之和,缓存 token 数是 `cache_read_input_tokens`。思考 token 不单独计数,推理 token 数为空。响应 ID 形如 `msg_...`,形态记为 `other`。
+- 回答只取 `text_delta`,不取 `thinking_delta`。用量合并 `message_start` 与 `message_delta` 两处。输入 token 数是 `input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` 之和,缓存 token 数是 `cache_read_input_tokens`。思考 token 不单独计数,推理 token 数为空,`message_delta` 的 `output_tokens` 记为含思考的输出 token 数。响应 ID 形如 `msg_...`,形态记为 `other`。
 - 有协议选择的表单(「HTML 生成」、自定义题、添加监测)按模型名给默认值:模型名含 `claude` 时切到 `anthropic`;改成别的模型名时,`anthropic` 退回 `responses`,手选的 `chat` 保持。模型列表不用来判断协议:本站用 `Authorization` 请求 `/v1/models`,站点按 OpenAI 格式返回,看不出是否支持 `/v1/messages`。
 
 ## 持久化
@@ -343,7 +345,7 @@ usage 原文
 | TTFT | 第一个非空文本增量的到达时刻 | 必须流式 |
 | 吞吐 | 输出 token 数除以首字到结束的时长 | 必须流式 |
 | 缓存命中率 | `cached_tokens / prompt_tokens`,token 口径 | 需要足够长的重复前缀 |
-| 推理 token 数、响应 ID 形态 | 来自 usage 与响应 | 无 |
+| 推理 token 数、输出 token 数、响应 ID 形态 | 来自 usage 与响应;输出 token 数只回给调用方,不落库 | 无 |
 | 各题通过率、成功率 | 由调用序列计算 | 无 |
 
 - 探针使用流式请求,聊天协议请求在末尾带回用量。Anthropic 协议的用量见「架构」节的「Anthropic 协议」。字段与选项名来自对 OpenAI 接口的了解,实现时先核对官方文档。
@@ -423,7 +425,8 @@ POST /api/probe
   "progress": true }                             // 可省,默认 false;为 true 时 200 响应按行返回,见下
 
 200 { "ok": true, "questionVersion": 1, "correct": false, "note": "NO",
-      "reasoningTokens": 12, "idShape": "hex" | "ft" | "base64" | "other",
+      "reasoningTokens": 12, "outputTokens": 40,       // outputTokens 含推理 token
+      "idShape": "hex" | "ft" | "base64" | "other",
       "answer": "No, I don't ...",
       "streamed": true, "ttfbMs": 420, "ttftMs": 2100, "totalMs": 8400,
       "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null

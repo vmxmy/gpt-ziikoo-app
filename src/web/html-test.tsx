@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/types.ts";
@@ -149,6 +150,16 @@ function ArtifactActions({ html, fileName }: { html: string; fileName: string })
 	);
 }
 
+// The output count includes reasoning, so without a reasoning count only the total is known. A relay that
+// reports less output than reasoning breaks that rule, and the difference would mean nothing.
+function tokenFields(reasoning: number | null, output: number | null): [string, number | null][] {
+	if (reasoning === null) return [["输出 token 数（含推理）", output]];
+	return [
+		["推理 token 数", reasoning],
+		["回答 token 数", output === null || output < reasoning ? null : output - reasoning],
+	];
+}
+
 // No verdict: the user judges the page by playing it, so only a failed call gets a state badge.
 function HtmlResult({ result, protocol, effort, prompt, fileName }: Done) {
 	return (
@@ -170,8 +181,12 @@ function HtmlResult({ result, protocol, effort, prompt, fileName }: Done) {
 						<dd class="num">{ms(result.response.totalMs)}</dd>
 						<dt>首字耗时</dt>
 						<dd class="num">{ms(result.response.ttftMs)}</dd>
-						<dt>推理 token 数</dt>
-						<dd class="num">{result.response.reasoningTokens ?? "—"}</dd>
+						{tokenFields(result.response.reasoningTokens, result.response.outputTokens).map(([label, value]) => (
+							<Fragment key={label}>
+								<dt>{label}</dt>
+								<dd class="num">{value ?? "—"}</dd>
+							</Fragment>
+						))}
 						<dt>题面</dt>
 						<dd data-testid="html-shown-prompt">{prompt}</dd>
 						{!result.response.artifact && (

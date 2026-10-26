@@ -84,6 +84,7 @@ test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生�
 		await page.getByTestId("html-run").click();
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId("html-result")).toContainText("协议 anthropic");
+		await expect(page.getByTestId("html-result")).toContainText("输出 token 数（含推理）");
 	}));
 
 test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计时与收到的字符数,切走再切回不中断,生成后可下载 HTML 并播放动画", async ({ page, site, key }) =>
@@ -101,6 +102,7 @@ test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计�
 		await page.getByTestId("tab-html").click();
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId("html-result")).toContainText("推理强度 xhigh");
+		await expect(page.getByTestId("html-result")).toContainText(/推理 token 数192回答 token 数\d+/);
 		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
 		await expect(page.getByTestId("html-prompt")).toHaveCount(0);
 		const pending = page.waitForEvent("download");

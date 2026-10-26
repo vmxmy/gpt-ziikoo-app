@@ -16,7 +16,7 @@ export type ParsedBody = {
 	error: boolean;
 };
 
-export type Usage = { promptTokens: number | null; cachedTokens: number | null; reasoningTokens: number | null };
+export type Usage = { promptTokens: number | null; cachedTokens: number | null; reasoningTokens: number | null; outputTokens: number | null };
 
 const SSE_START = /^\s*(data|event|id|retry)?:/;
 
@@ -116,6 +116,8 @@ export function readUsage(usage: unknown): Usage {
 		reasoningTokens:
 			num(get(usage, "output_tokens_details", "reasoning_tokens")) ??
 			num(get(usage, "completion_tokens_details", "reasoning_tokens")),
+		// Includes the reasoning tokens on every protocol; Anthropic reports no separate reasoning count.
+		outputTokens: num(get(usage, "output_tokens")) ?? num(get(usage, "completion_tokens")),
 	};
 }
 

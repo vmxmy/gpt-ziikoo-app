@@ -11,6 +11,7 @@ const okWith = (note: string): ProbeResponse => ({
 	correct: note === "ok",
 	note,
 	reasoningTokens: null,
+	outputTokens: null,
 	idShape: "other",
 	answer: "21",
 	streamed: false,

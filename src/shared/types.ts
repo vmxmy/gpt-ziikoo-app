@@ -70,6 +70,7 @@ export type ProbeOk = {
 	correct: boolean | null;
 	note: string;
 	reasoningTokens: number | null;
+	outputTokens: number | null;
 	idShape: IdShape;
 	answer: string;
 	streamed: boolean;
