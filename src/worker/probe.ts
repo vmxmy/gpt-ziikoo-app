@@ -5,8 +5,14 @@ import { score } from "./scorers.ts";
 
 export const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 export const MAX_BODY_BYTES = 256 * 1024;
-export const TIMEOUT_MS = 120_000;
 const ANSWER_PREVIEW_CHARS = 70;
+
+export type ProbeLimits = { maxBodyBytes: number; timeoutMs: number };
+
+export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 120_000 };
+// A streamed HTML page costs about 200 bytes of events per token, past the stored-call cap, and a high effort
+// reasons for minutes first. Only unrecorded calls get these limits, so storage keeps its cap.
+export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 2 * 1024 * 1024, timeoutMs: 300_000 };
 
 export type ProbeInput = {
 	origin: string;
@@ -15,6 +21,7 @@ export type ProbeInput = {
 	model: string;
 	question: Question;
 	effort: Effort | null;
+	limits: ProbeLimits;
 };
 
 export type ProbeCapture = Omit<
@@ -92,6 +99,7 @@ function headersOf(headers: Headers, key: string): Record<string, string> {
 async function readCapped(
 	body: ReadableStream<Uint8Array> | null,
 	since: () => number,
+	maxBytes: number,
 ): Promise<{ chunks: TimedText[]; truncated: boolean }> {
 	if (!body) return { chunks: [], truncated: false };
 	const reader = body.getReader();
@@ -99,7 +107,7 @@ async function readCapped(
 	const chunks: TimedText[] = [];
 	let bytes = 0;
 	for (let next = await reader.read(); !next.done; next = await reader.read()) {
-		const piece = next.value.subarray(0, MAX_BODY_BYTES - bytes);
+		const piece = next.value.subarray(0, maxBytes - bytes);
 		bytes += piece.byteLength;
 		chunks.push({ t: since(), text: decoder.decode(piece, { stream: true }) });
 		if (piece.byteLength < next.value.byteLength) {
@@ -176,7 +184,7 @@ export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): 
 			},
 			body: JSON.stringify(body),
 			redirect: "manual",
-			signal: AbortSignal.timeout(TIMEOUT_MS),
+			signal: AbortSignal.timeout(input.limits.timeoutMs),
 		})
 		.catch(thrownReason);
 	if (typeof response === "string") return failed(response, { ...EMPTY_CAPTURE, totalMs: since() });
@@ -191,7 +199,7 @@ export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): 
 		await response.body?.cancel();
 		return failed("upstream_error", { ...base, totalMs: since() });
 	}
-	const read = await readCapped(response.body, since).catch(thrownReason);
+	const read = await readCapped(response.body, since, input.limits.maxBodyBytes).catch(thrownReason);
 	if (typeof read === "string") return failed(read, { ...base, totalMs: since() });
 	return finish(input, { ...base, truncated: read.truncated }, read.chunks, {
 		status: response.status,

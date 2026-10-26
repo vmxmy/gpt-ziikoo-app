@@ -21,7 +21,7 @@ type RawMeta = Omit<QuestionMeta, "status" | "kind" | "scorer" | "generator" | "
 export const SAMPLE_SEED = 0;
 
 const KINDS: readonly QuestionKind[] = ["knowledge", "reasoning", "metrics"];
-const EFFORTS: readonly Effort[] = ["low", "medium", "high"];
+const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
 
 function isOneOf<T extends string>(values: readonly T[], value: string): value is T {
 	return (values as readonly string[]).includes(value);

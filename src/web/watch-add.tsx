@@ -21,9 +21,17 @@ function FieldMessage({ error, field }: { error: FieldError | null; field: Field
 const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 	error?.field === field ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
 
-function ChoiceField<T extends string | number>(props: { label: string; testId: string; value: T; options: readonly T[]; text: (v: T) => string; onChange: (v: T) => void }) {
+export function ChoiceField<T extends string | number>(props: {
+	label: string;
+	testId: string;
+	value: T;
+	options: readonly T[];
+	text: (v: T) => string;
+	onChange: (v: T) => void;
+	class?: string;
+}) {
 	return (
-		<label class="field col-12 col-md-6 col-lg-4">
+		<label class={`field ${props.class ?? "col-12 col-md-6 col-lg-4"}`}>
 			<span class="field-label">{props.label}</span>
 			<select
 				value={String(props.value)}

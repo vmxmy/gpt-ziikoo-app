@@ -1,10 +1,8 @@
-import { useState } from "preact/hooks";
 import { STAGES, evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
 import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
 import { diagnosis, dotLabel, FAILURE_ADVICE, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
 import { callState, ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
-import { Modal } from "./modal.tsx";
 
 const DOT_LEGEND = [
 	["ok", "答对"],
@@ -12,19 +10,6 @@ const DOT_LEGEND = [
 	["fail", "失败"],
 	["pending", "进行中"],
 ] as const;
-
-// The frame has an opaque origin, so "*" is the only target that reaches it; the answer is the user's own and holds no key.
-function AnimationFrame({ artifact }: { artifact: string }) {
-	return (
-		<iframe
-			class="animation-frame"
-			sandbox="allow-scripts"
-			src="/api/frame"
-			title="动画"
-			onLoad={(e) => e.currentTarget.contentWindow?.postMessage(artifact, "*")}
-		/>
-	);
-}
 
 function Ladder({ id, attempts }: { id: string; attempts: Attempt[] }) {
 	return (
@@ -58,15 +43,12 @@ function Ladder({ id, attempts }: { id: string; attempts: Attempt[] }) {
 	);
 }
 
-const DETAIL_COLUMNS = ["关", "序号", "尝试", "结果", "推理 token 数", "响应 ID 形态", "首字耗时", "总耗时"] as const;
+const DETAIL_COLUMNS = ["关", "序号", "尝试", "结果", "推理 token 数", "响应 ID 形态", "首字耗时", "总耗时", "回答片段"] as const;
 const NUMERIC_COLUMNS = new Set(["关", "序号", "尝试", "推理 token 数", "首字耗时", "总耗时"]);
 
 function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
-	const [playing, setPlaying] = useState<string | null>(null);
 	const showNumberCheck = attempts.some((a) => numberCheck(a.response) !== "");
-	const hasArtifact = attempts.some((a) => a.response?.ok && a.response.artifact);
-	const tailColumn = hasArtifact ? "播放动画" : "回答片段";
-	const columns = [...DETAIL_COLUMNS, tailColumn, ...(showNumberCheck ? ["数字核对"] : [])];
+	const columns = [...DETAIL_COLUMNS, ...(showNumberCheck ? ["数字核对"] : [])];
 	return (
 		<details class="detail">
 			<summary>逐次明细</summary>
@@ -84,7 +66,6 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 					<tbody>
 						{attempts.map((a) => {
 							const r = a.response?.ok ? a.response : null;
-							const artifact = r?.artifact;
 							const failure = !a.response?.ok ? (a.response ? FAILURE_ADVICE[a.response.reason].reason : "连不上本站接口") : null;
 							return (
 								<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
@@ -98,17 +79,7 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 											<td class="mono" data-label="响应 ID 形态">{r?.idShape ?? "—"}</td>
 											<td class="num" data-label="首字耗时">{ms(r?.ttftMs)}</td>
 											<td class="num" data-label="总耗时">{ms(r?.totalMs)}</td>
-											<td class="answer" data-label={tailColumn}>
-												{hasArtifact ? (
-													artifact && (
-														<button type="button" class="btn-text" onClick={() => setPlaying(artifact)}>
-															播放动画
-														</button>
-													)
-												) : (
-													(r?.answer ?? "")
-												)}
-											</td>
+											<td class="answer" data-label="回答片段">{r?.answer ?? ""}</td>
 											{showNumberCheck && <td class="num" data-label="数字核对">{numberCheck(a.response)}</td>}
 										</>
 									) : (
@@ -119,9 +90,6 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 						})}
 					</tbody>
 				</table>
-				<Modal open={playing !== null} onClose={() => setPlaying(null)} title="播放动画">
-					{playing !== null && <AnimationFrame artifact={playing} />}
-				</Modal>
 			</div>
 		</details>
 	);

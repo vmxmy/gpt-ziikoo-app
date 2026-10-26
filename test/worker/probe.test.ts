@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getQuestion } from "../../questions/index.ts";
 import type { Question } from "../../src/shared/types.ts";
-import { MAX_BODY_BYTES, probe, type ProbeInput, UA } from "../../src/worker/probe.ts";
+import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, MAX_BODY_BYTES, probe, type ProbeInput, UA } from "../../src/worker/probe.ts";
 
 const KEY = "sk-test-12345678";
 
@@ -52,6 +52,7 @@ function input(overrides: Partial<ProbeInput>): ProbeInput {
 		model: "gpt-6-astra",
 		question: question("thibault"),
 		effort: null,
+		limits: DEFAULT_LIMITS,
 		...overrides,
 	};
 }
@@ -311,5 +312,18 @@ describe("probe", () => {
 		expect(state.cancelled).toBe(true);
 		expect(storedBytes).toBeLessThanOrEqual(MAX_BODY_BYTES);
 		expect(result.capture.rawEvents).toHaveLength(3);
+	});
+
+	it("reads an HTML answer past the default cap under the long-answer limits", async () => {
+		const body = `<svg>${"<g/>".repeat(25 * 1024)}<animate/></svg>`;
+		const parts = ["<!doctype html><html><body>", body, body, body, "</body></html>"];
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 10,
+			chunks: parts.map((delta, i) => ({ at: 20 + i, text: sse({ type: "response.output_text.delta", delta }) })),
+		});
+		const result = await probe(input({ question: question("pelican-svg"), limits: LONG_ANSWER_LIMITS }), deps);
+		expect(result.capture.truncated).toBe(false);
+		expect(result.response).toMatchObject({ ok: true, correct: true, note: "ok" });
 	});
 });

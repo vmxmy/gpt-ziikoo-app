@@ -22,10 +22,12 @@ export const test = base.extend<Fixtures, E2eOptions>({
 		const res = await request.post("/api/history/delete", { data: { site, key } });
 		expect(res.status()).toBe(200);
 	},
+	// The live tab's checklist: the HTML question runs only from its own tab.
 	questions: async ({ request }, use) => {
 		const res = await request.get("/api/questions");
 		expect(res.status()).toBe(200);
-		await use(await res.json());
+		const list: QuestionListItem[] = await res.json();
+		await use(list.filter((q) => q.id !== "pelican-svg"));
 	},
 	page: async ({ page }, use) => {
 		page.on("dialog", (dialog) => void dialog.accept());
@@ -40,7 +42,7 @@ export async function scrubbed(page: Page, body: () => Promise<void>): Promise<v
 	try {
 		await body();
 	} finally {
-		await page.getByTestId("key-input").evaluateAll((inputs) => {
+		await page.locator('[data-testid="key-input"], [data-testid="html-key"]').evaluateAll((inputs) => {
 			for (const input of inputs) if (input instanceof HTMLInputElement) input.value = "";
 		});
 	}

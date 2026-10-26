@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
-import { fetchQuestions, makeProbe, missingFields, type Target } from "./api.ts";
+import { fetchQuestions, HTML_QUESTION, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
+import { HtmlTest } from "./html-test.tsx";
 import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
@@ -95,7 +96,7 @@ function useQuestions() {
 	useEffect(() => {
 		fetchQuestions().then(
 			(list) => {
-				const ladder = list.filter((q) => q.kind !== "metrics");
+				const ladder = list.filter((q) => q.kind !== "metrics" && q.id !== HTML_QUESTION);
 				setQuestions(ladder);
 				setSelected(defaultSelection(ladder));
 			},
@@ -165,11 +166,14 @@ function SiteHeader() {
 	);
 }
 
-type TabId = "live" | "watch";
+type TabId = "live" | "html" | "watch";
 
 // The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
 function useTab(): [TabId, (tab: TabId) => void] {
-	const read = (): TabId => (location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live");
+	const read = (): TabId => {
+		if (location.hash === "#html") return "html";
+		return location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live";
+	};
 	const [tab, setTab] = useState<TabId>(read);
 	useEffect(() => {
 		const onHash = () => setTab(read());
@@ -177,13 +181,14 @@ function useTab(): [TabId, (tab: TabId) => void] {
 		return () => removeEventListener("hashchange", onHash);
 	}, []);
 	return [tab, (next) => {
-		location.hash = next === "live" ? "#live" : "#watch";
+		location.hash = `#${next}`;
 	}];
 }
 
 function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void }) {
 	const tabs: [TabId, string][] = [
 		["live", "实时测试"],
+		["html", "HTML 生成"],
 		["watch", "持续监测"],
 	];
 	return (
@@ -194,7 +199,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 					role="tab"
 					id={`tab-${id}`}
 					aria-selected={tab === id}
-					aria-controls={id === "live" ? "live-pane" : "watch-pane"}
+					aria-controls={`${id}-pane`}
 					class={tab === id ? "tab is-active" : "tab"}
 					onClick={() => onSwitch(id)}
 					data-testid={`tab-${id}`}
@@ -287,6 +292,10 @@ export function App() {
 						<History target={target} />
 						<ApiDocs />
 					</main>
+				</div>
+			) : tab === "html" ? (
+				<div id="html-pane" role="tabpanel" aria-labelledby="tab-html">
+					<HtmlTest />
 				</div>
 			) : (
 				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">
