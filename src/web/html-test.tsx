@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
-import type { Effort, Protocol } from "../shared/types.ts";
+import type { Effort, PageEnding, Protocol } from "../shared/types.ts";
 import { codePoints, customResult, MAX_CUSTOM_PROMPT, missingFields, probeHtml, type CustomResult, type HtmlSource } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
@@ -17,24 +17,29 @@ type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; pr
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "cancelled" } | ({ kind: "done" } & Done);
 type CopyStatus = "copied" | "failed";
 
+const ENDING_WARNING: Record<Exclude<PageEnding, "closed">, string> = {
+	unclosed: "回答在页面写到 </html> 之前就结束了，页面不完整，可能是站点限制了输出长度。",
+	truncated: "站点响应超过 2MB 读取上限，回答被截断，页面可能不完整。",
+};
+
 // The frame has an opaque origin, so "*" is the only target that reaches it; the answer is the user's own and holds no key.
-function AnimationFrame({ artifact }: { artifact: string }) {
+function AnimationFrame({ html }: { html: string }) {
 	return (
 		<iframe
 			class="animation-frame"
 			sandbox="allow-scripts"
 			src="/api/frame"
 			title="动画"
-			onLoad={(e) => e.currentTarget.contentWindow?.postMessage(artifact, "*")}
+			onLoad={(e) => e.currentTarget.contentWindow?.postMessage(html, "*")}
 		/>
 	);
 }
 
-function ArtifactActions({ artifact }: { artifact: string }) {
+function ArtifactActions({ html }: { html: string }) {
 	const [playing, setPlaying] = useState(false);
 	const [copy, setCopy] = useState<CopyStatus | null>(null);
 	const doCopy = () => {
-		const write = navigator.clipboard?.writeText(artifact) ?? Promise.reject(new Error("clipboard unavailable"));
+		const write = navigator.clipboard?.writeText(html) ?? Promise.reject(new Error("clipboard unavailable"));
 		write.then(
 			() => setCopy("copied"),
 			() => setCopy("failed"),
@@ -56,11 +61,11 @@ function ArtifactActions({ artifact }: { artifact: string }) {
 			<details>
 				<summary class="small">查看 HTML</summary>
 				<pre class="prompt html-source" data-testid="html-source">
-					{artifact}
+					{html}
 				</pre>
 			</details>
 			<Modal open={playing} onClose={() => setPlaying(false)} title="播放动画">
-				<AnimationFrame artifact={artifact} />
+				<AnimationFrame html={html} />
 			</Modal>
 		</>
 	);
@@ -91,8 +96,27 @@ function HtmlResult({ result, protocol, effort, prompt }: Done) {
 						<dd class="num">{result.response.reasoningTokens ?? "—"}</dd>
 						<dt>题面</dt>
 						<dd data-testid="html-shown-prompt">{prompt}</dd>
+						{!result.response.artifact && (
+							<>
+								<dt>回答片段</dt>
+								<dd data-testid="html-answer">{result.response.answer}</dd>
+							</>
+						)}
 					</dl>
-					{result.response.artifact && <ArtifactActions artifact={result.response.artifact} />}
+					{result.response.artifact ? (
+						<>
+							{result.response.artifact.ending !== "closed" && (
+								<p class="warn" data-testid="html-unfinished">
+									{ENDING_WARNING[result.response.artifact.ending]}
+								</p>
+							)}
+							<ArtifactActions html={result.response.artifact.html} />
+						</>
+					) : (
+						<p class="warn" data-testid="html-no-page">
+							回答里没有 HTML 页面，不能播放。
+						</p>
+					)}
 				</>
 			)}
 		</div>
@@ -137,7 +161,8 @@ export function HtmlTest() {
 			<h2 id="html-h">HTML 生成</h2>
 			<p class="muted small">
 				让模型直接写一个 HTML 页面，在沙箱里播放，由你看效果判断，本站不判对错。题面留空时，随机让模型用 SVG
-				画一种动物骑一种交通工具的 2D 动画；也可以写自己的题面，不要在题面里写密钥。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
+				画一种动物骑一种交通工具的 2D 动画；也可以写自己的题面，题面要让模型输出完整的 HTML 页面，不要在题面里写密钥。回答里没有 HTML
+				页面时不能播放，只显示回答片段。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
 			</p>
 			<form
 				class="grid html-form"

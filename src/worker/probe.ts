@@ -1,4 +1,4 @@
-import type { Effort, FailReason, ProbeResponse, Protocol, Question, RawCall } from "../shared/types.ts";
+import type { Effort, FailReason, PlayablePage, ProbeResponse, Protocol, Question, RawCall } from "../shared/types.ts";
 import { idShape, parseBody, readUsage, type TimedText } from "./parse.ts";
 import { redact } from "./redact.ts";
 import { score } from "./scorers.ts";
@@ -118,6 +118,26 @@ async function readCapped(
 	return { chunks: [...chunks, { t: since(), text: decoder.decode() }], truncated: false };
 }
 
+const lastMatch = (text: string, pattern: RegExp) => [...text.matchAll(pattern)].at(-1);
+
+// The last page, because a model that plans aloud writes a skeleton page before the real one.
+function pageStart(answer: string): number | undefined {
+	const html = lastMatch(answer, /<html/gi)?.index;
+	const doctype = lastMatch(answer.slice(0, html), /<!doctype html/gi)?.index;
+	if (html === undefined || doctype === undefined) return html ?? doctype;
+	return /<\/html>/i.test(answer.slice(doctype, html)) ? html : doctype;
+}
+
+function playablePage(answer: string, truncated: boolean): PlayablePage | null {
+	const start = pageStart(answer);
+	// A bare fragment may carry <script> or <style> outside the <svg>, so it plays whole.
+	if (start === undefined) return /<svg/i.test(answer) ? { html: answer, ending: truncated ? "truncated" : "closed" } : null;
+	const page = answer.slice(start);
+	const close = lastMatch(page, /<\/html>/gi);
+	if (close) return { html: page.slice(0, close.index + close[0].length), ending: "closed" };
+	return { html: page, ending: truncated ? "truncated" : "unclosed" };
+}
+
 function failed(reason: FailReason, capture: ProbeCapture): ProbeResult {
 	return { response: { ok: false, reason, httpStatus: capture.httpStatus }, capture: { ...capture, ok: false, reason } };
 }
@@ -146,6 +166,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 	const reason = statusReason(status) ?? (parsed.error ? "upstream_error" : answer ? null : "bad_response");
 	if (reason) return failed(reason, capture);
 	const { scorer } = input.question;
+	const page = input.question.html ? playablePage(answer, base.truncated) : null;
 	const { correct, note } = scorer ? score(answer, scorer) : { correct: null, note: "unscored" };
 	return {
 		response: {
@@ -162,7 +183,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 			totalMs,
 			promptTokens: usage.promptTokens,
 			cachedTokens: usage.cachedTokens,
-			...(input.question.html && { artifact: answer }),
+			...(page !== null && { artifact: page }),
 		},
 		capture: { ...capture, ok: true, correct, note },
 	};
