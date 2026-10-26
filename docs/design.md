@@ -98,7 +98,7 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 用户自带的单次测试题 | 自定义题 | 自定义题目、用户题、私人题 |
 | 站点收到的输入量 | 输入 token 数 | prompt_tokens、提示用量 |
 | 一组持续监测的聚合对象 | 看板 | |
-| 运行 `svg_animation` 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
+| 运行 HTML 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
 | 单次调用 `pelican-svg` 的页签 | HTML 生成 | |
 | 看板的 16 字节标识 | 看板码 | |
 | 把卡片移到看板第一位 | 置顶 | 固定、钉住、顶置 |
@@ -204,7 +204,8 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 
 2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。2026-10-26 起,页面只在「HTML 生成」页签里对这题单次调用,实时测试的选题清单不再列出它。
 
-- 清单只写 `generator: "pelican"`。题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
+- 清单只写 `generator: "pelican"` 与 `html: true`。`html` 标记表示回答是一页 HTML:探针返回完整的 `artifact`,不带 `runId` 时用长回答上限。带这个标记的题与自定义 HTML 题(见「自定义题」节)统称 HTML 题。
+- 题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
 - 动物来自封闭词表 `RIDERS`(8 种),交通工具与动词来自封闭词表 `RIDES`(6 种)。组合序号是 `seed % 48`,站点无法只预置一个答案。seed 范围与 `candy-var` 相同。
 - seed 0 是鹈鹕骑自行车。题面原文如下:
 
@@ -220,10 +221,10 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
 - 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
-- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。每次调用随机抽一个 seed。结果显示答对、答错或失败,以及评分说明、总耗时、首字耗时、推理 token 数和本次题面。页面切走或刷新,结果即失。
-- 上限:不带 `runId` 的这题调用,读取上限 2MB,超时 300 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;高推理强度要先推理几分钟。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
-- 播放:探针接口对这题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。「HTML 生成」页签的结果里有「播放动画」「复制 HTML」按钮和折叠的「查看 HTML」。源码只按文本显示。按下「播放动画」后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
-- 除这题外,本站从不渲染站点返回的 HTML,只按文本显示。
+- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。表单另有可选的「题面」:留空时每次调用随机抽一个 seed 出这题;填写时改发自定义 HTML 题。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时、推理 token 数和本次题面,失败时显示原因。页面切走或刷新,结果即失。
+- 上限:不带 `runId` 的 HTML 题调用,读取上限 2MB,超时 300 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;高推理强度要先推理几分钟。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
+- 播放:探针接口对 HTML 题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。「HTML 生成」页签的结果里有「播放动画」「复制 HTML」按钮和折叠的「查看 HTML」。源码只按文本显示。按下「播放动画」后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
+- 除 HTML 题外,本站从不渲染站点返回的 HTML,只按文本显示。
 - 题面模板或词表一改,同一 seed 的题就变了,题的 `version` 加 1。
 
 ### 自定义题
@@ -237,11 +238,14 @@ type CustomQuestion = {
     | { type: "yes_no"; expected: "YES" | "NO" }
     | { type: "contains"; expected: string }   // 1 到 500 个码位,区分大小写
 }
+// 或自定义 HTML 题:{ prompt: string; html: true },不带 scorer
 ```
+
+- 自定义 HTML 题(2026-10-27 授权):`custom` 写成 `{ prompt, html: true }`,与 `scorer` 同给返回 400。它不评分,`correct` 为 `null`,`note` 为 `unscored`。探针另返回完整回答 `artifact`,读取上限 2MB,超时 300 秒。页面只在「HTML 生成」页签用它,回答按「安全边界」的「播放动画」规则运行。
 
 - `/api/probe` 增加可选对象字段 `custom`。给 `custom` 就不能再给 `question`与 `seed`;两个都给或都不给返回 400。`kind` 固定为 `knowledge`,`effort` 沿用请求值或默认空,不接受 `defaultEffort`。
 - 评分发生在 Worker,与题库题走同一张评分器表。`questionId` 记为 `custom`,`questionVersion` 记为 0。
-- 自定义题不持久化:无 `runId`、不写 `Target` 对象、不进历史、不进 `/api/questions` 清单、不参与监测轮转。`answer` 仍只回前 70 字,完整回答不保存,页面刷新即失。
+- 自定义题不持久化:无 `runId`、不写 `Target` 对象、不进历史、不进 `/api/questions` 清单、不参与监测轮转。`answer` 仍只回前 70 字,完整回答不保存,页面刷新即失。自定义 HTML 题另带的 `artifact` 同样不保存。
 - 自定义题与题库题共用同一套限速(IP、主机、每轮上限)与地址校验,滥用面与题库题相同。
 - 日志规则不变:自定义题的 `question` 字段记 `custom`,不记题面。
 
@@ -256,7 +260,7 @@ type CustomQuestion = {
 
 - 每关内并发 3 到 5。某关已不可能达标时立即停掉本关剩余调用。
 - 单次调用最多重试 3 次,连续 3 次无有效响应判「无法测试」。
-- 每次探针自设 120 秒超时(不带 `runId` 的 `svg_animation` 题是 300 秒),超时作为探针结果返回。
+- 每次探针自设 120 秒超时(不带 `runId` 的 HTML 题是 300 秒),超时作为探针结果返回。
 - 梯度逻辑在页面脚本里,规则写入页面的 API 说明,脚本调用方自己循环。
 - 每次探针带 `runId`、关卡号和序号。一轮的结论不单独存,读取时由调用序列用同一个共享函数算出。
 
@@ -401,13 +405,14 @@ POST /api/probe
   "custom": { "prompt": "...",                   // 与 question 二选一;自定义题不持久化,
               "scorer": { "type": "contains",    // 不带 runId,规则见「自定义题」节
                           "expected": "..." } } }
+                                                 // 自定义 HTML 题写 "custom": { "prompt": "...", "html": true }
 
 200 { "ok": true, "questionVersion": 1, "correct": false, "note": "NO",
       "reasoningTokens": 12, "idShape": "hex" | "ft" | "base64" | "other",
       "answer": "No, I don't ...",
       "streamed": true, "ttfbMs": 420, "ttftMs": 2100, "totalMs": 8400,
       "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null
-      "artifact": "<!doctype html>..." }               // 只在评分为 svg_animation 的题上出现
+      "artifact": "<!doctype html>..." }               // 只在 HTML 题上出现
 200 { "ok": false, "reason": "unauthorized" | "forbidden" | "not_found" |
       "rate_limited" | "upstream_error" | "timeout" | "bad_response",
       "httpStatus": 401 }
@@ -465,7 +470,7 @@ POST /api/watch/delete     { token }                立即清空密钥、样本�
 
 - 站点自身的失败用 200 加 `ok:false`,调用方能区分「站点出问题」和「我们出问题」。
 - 不提供跨域头。浏览器里的第三方网页不能调用,脚本和命令行不受影响。
-- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。例外是 `svg_animation` 题:`artifact` 字段带完整回答,只供当次播放,不入库。自定义题只评 `yes_no` 与 `contains`,所以永远没有 `artifact`。
+- 探针接口的 `answer` 只返回前 70 字。完整回答在历史接口的原始数据里。例外是 HTML 题(`pelican-svg` 与自定义 HTML 题):`artifact` 字段带完整回答,只供当次播放,不入库。评 `yes_no` 或 `contains` 的自定义题没有 `artifact`。
 - `/api/frame` 是静态页,不限速。它由 Worker 返回,`public/_headers` 不作用于它。
 - 历史接口一律用 POST,密钥放请求体。对象不存在与对象为空返回相同结果,不泄露对象是否存在。
 
@@ -475,7 +480,7 @@ POST /api/watch/delete     { token }                立即清空密钥、样本�
 
 | 调用方能控制 | 不能控制 |
 | --- | --- |
-| 目标站点(经校验)、自己的密钥、模型名、推理强度、自定义题的题面与评分规则(限长、只评 `yes_no` 与 `contains`、当次即弃) | 请求路径(`/api/models` 固定请求 `GET /v1/models`)、请求体、题库题面(封闭枚举)、返回内容(只回摘要字段) |
+| 目标站点(经校验)、自己的密钥、模型名、推理强度、自定义题的题面与评分规则(限长、只评 `yes_no` 与 `contains` 或是不评分的 HTML 题、当次即弃) | 请求路径(`/api/models` 固定请求 `GET /v1/models`)、请求体、题库题面(封闭枚举)、返回内容(只回摘要字段) |
 
 | 滥用 | 措施 |
 | --- | --- |
@@ -512,7 +517,7 @@ Free 套餐下限速的已知缺口,明确接受:
 
 机器人防护:Bot Fight Mode 必须保持关闭。官方文档写明它不能被任何 WAF 规则跳过,会质询匿名脚本,也没有按路径的例外。Free zone 没有 Super Bot Fight Mode。
 
-播放动画:`svg_animation` 题的回答是站点给的 HTML,可能含恶意脚本。本站只在沙箱 iframe 里运行它,规则如下。
+播放动画:HTML 题(`pelican-svg` 与自定义 HTML 题)的回答是站点给的 HTML,可能含恶意脚本。本站只在沙箱 iframe 里运行它,规则如下。
 
 1. iframe 只带 `sandbox="allow-scripts"`。它没有 `allow-same-origin`,所以是不透明源,读不到本站的 Cookie、`localStorage` 与页面 DOM。
 2. iframe 没有 `allow-popups`、`allow-forms`、`allow-top-navigation`,所以不能开新窗口、提交表单或跳走顶层页面。
@@ -597,6 +602,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 部署 | GitHub Actions 加 `cf`:PR 跑 `cf deploy --dry-run`,合并后构建一次并 `--prebuilt` 部署。不用 Workers Builds,因为没有查到它支持 `cf deploy` |
 | 播放动画 | 2026-10-25 授权。`svg_animation` 题的回答经探针接口的 `artifact` 返回,只在沙箱 iframe `/api/frame` 里运行。这是「回答只用文本节点渲染」的唯一例外 |
 | HTML 生成页签 | 2026-10-26 维护者决定。鹈鹕题移出实时测试,只在「HTML 生成」页签单次调用,题面每次随机。推理强度加 `xhigh`。不带 `runId` 的 `svg_animation` 调用读取上限 2MB、超时 300 秒,落库调用不变 |
+| 自定义 HTML 题 | 2026-10-27 维护者授权。「HTML 生成」页签可写自己的题面,经 `custom: { prompt, html: true }` 发出,不评分。页签对鹈鹕题也不再显示对错,由用户播放后自己判断。播放的例外从 `svg_animation` 题扩大到全部 HTML 题,沙箱规则不变 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。

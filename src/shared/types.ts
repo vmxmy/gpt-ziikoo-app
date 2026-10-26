@@ -20,6 +20,8 @@ export type QuestionMeta = {
 	kind: QuestionKind;
 	scorer?: Scorer;
 	generator?: GeneratorId;
+	// The answer is an HTML page: the probe returns it whole as `artifact` for the sandboxed player, and an unrecorded call gets the long-answer limits.
+	html?: boolean;
 	inWatchRotation?: boolean;
 	expectedLabel: string;
 	defaultEffort?: Effort;
@@ -34,6 +36,9 @@ export type CustomQuestion = {
 	prompt: string;
 	scorer: Extract<Scorer, { type: "yes_no" | "contains" }>;
 };
+
+// Never scored: the user judges the page by playing it.
+export type CustomHtmlQuestion = { prompt: string; html: true };
 
 export type IdShape = "hex" | "ft" | "base64" | "other";
 
@@ -58,7 +63,7 @@ export type ProbeRequest = {
 	seq?: number;
 	attempt?: number;
 	seed?: number;
-	custom?: CustomQuestion;
+	custom?: CustomQuestion | CustomHtmlQuestion;
 };
 
 export type ProbeOk = {

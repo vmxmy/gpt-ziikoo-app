@@ -1,10 +1,10 @@
 import { useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, Protocol } from "../shared/types.ts";
-import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
+import { codePoints, customResult, MAX_CUSTOM_PROMPT, missingFields, probeHtml, type CustomResult, type HtmlSource } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
-import { DEFAULT_MODEL, htmlCheck, ms, normalizeKey } from "./results.ts";
+import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { ChoiceField } from "./watch-add.tsx";
 import { PROTOCOLS } from "./watch.ts";
@@ -66,34 +66,35 @@ function ArtifactActions({ artifact }: { artifact: string }) {
 	);
 }
 
+// No verdict: the user judges the page by playing it, so only a failed call gets a state badge.
 function HtmlResult({ result, protocol, effort, prompt }: Done) {
 	return (
 		<div class="html-result" data-testid="html-result">
-			<p>
-				<span class="html-verdict" data-state={result.state} data-testid="html-verdict">
-					{result.label}
-				</span>{" "}
-				<span class="muted small">
-					协议 {protocol} · 推理强度 {effortText(effort)}
-				</span>
+			<p class="muted small">
+				协议 {protocol} · 推理强度 {effortText(effort)}
 			</p>
 			{result.state === "fail" ? (
-				<p data-testid="html-reason">{result.reason}</p>
+				<p>
+					<span class="html-verdict" data-state="fail">
+						{result.label}
+					</span>{" "}
+					<span data-testid="html-reason">{result.reason}</span>
+				</p>
 			) : (
-				<dl class="html-fields">
-					<dt>评分说明</dt>
-					<dd data-testid="html-note">{htmlCheck(result.response.note)}</dd>
-					<dt>总耗时</dt>
-					<dd class="num">{ms(result.response.totalMs)}</dd>
-					<dt>首字耗时</dt>
-					<dd class="num">{ms(result.response.ttftMs)}</dd>
-					<dt>推理 token 数</dt>
-					<dd class="num">{result.response.reasoningTokens ?? "—"}</dd>
-					<dt>题面</dt>
-					<dd>{prompt}</dd>
-				</dl>
+				<>
+					<dl class="html-fields">
+						<dt>总耗时</dt>
+						<dd class="num">{ms(result.response.totalMs)}</dd>
+						<dt>首字耗时</dt>
+						<dd class="num">{ms(result.response.ttftMs)}</dd>
+						<dt>推理 token 数</dt>
+						<dd class="num">{result.response.reasoningTokens ?? "—"}</dd>
+						<dt>题面</dt>
+						<dd data-testid="html-shown-prompt">{prompt}</dd>
+					</dl>
+					{result.response.artifact && <ArtifactActions artifact={result.response.artifact} />}
+				</>
 			)}
-			{result.state !== "fail" && result.response.artifact && <ArtifactActions artifact={result.response.artifact} />}
 		</div>
 	);
 }
@@ -104,6 +105,7 @@ export function HtmlTest() {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [effort, setEffort] = useState<EffortChoice>("");
+	const [prompt, setPrompt] = useState("");
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [formError, setFormError] = useState("");
 	const keyInput = useRef<HTMLInputElement>(null);
@@ -113,14 +115,17 @@ export function HtmlTest() {
 	const send = async () => {
 		const missing = missingFields(target, model);
 		if (missing.length > 0) return setFormError(`请填写${missing.join("、")}`);
+		const length = codePoints(prompt);
+		if (length > MAX_CUSTOM_PROMPT) return setFormError(`题面最多 ${MAX_CUSTOM_PROMPT} 个字符，现在 ${length} 个`);
 		setFormError("");
 		const controller = new AbortController();
 		ctrl.current = controller;
-		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+		const source: HtmlSource = prompt.trim() === "" ? { seed: crypto.getRandomValues(new Uint32Array(1))[0] } : { prompt };
 		setStatus({ kind: "sending" });
 		try {
-			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal);
-			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed) });
+			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, source, controller.signal);
+			const shown = "seed" in source ? generatePelican(source.seed) : source.prompt;
+			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: shown });
 		} catch (err) {
 			if (!controller.signal.aborted) throw err;
 			setStatus({ kind: "cancelled" });
@@ -131,7 +136,8 @@ export function HtmlTest() {
 		<section class="panel" aria-labelledby="html-h">
 			<h2 id="html-h">HTML 生成</h2>
 			<p class="muted small">
-				让模型直接写一个 HTML，用 SVG 画动物骑交通工具的 2D 动画。每次随机换一种动物和交通工具，只调用一次站点。不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
+				让模型直接写一个 HTML 页面，在沙箱里播放，由你看效果判断，本站不判对错。题面留空时，随机让模型用 SVG
+				画一种动物骑一种交通工具的 2D 动画；也可以写自己的题面，不要在题面里写密钥。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
 			</p>
 			<form
 				class="grid html-form"
@@ -158,6 +164,20 @@ export function HtmlTest() {
 				</label>
 				<ChoiceField label="协议" testId="html-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="推理强度" testId="html-effort" value={effort} options={EFFORTS} text={effortText} onChange={setEffort} class="col-6 col-lg-2" />
+				<label class="field col-12">
+					<span class="field-label">题面（可选）</span>
+					{/* Uncontrolled like the custom question's prompt: no value prop, so the text never becomes a DOM attribute. */}
+					<textarea
+						rows={3}
+						spellcheck={false}
+						placeholder="留空时随机出题：用 SVG 画动物骑交通工具的 2D 动画"
+						onInput={(e) => setPrompt(e.currentTarget.value)}
+						data-testid="html-prompt"
+					/>
+					<span class="muted small num" data-testid="html-prompt-count">
+						{codePoints(prompt)}/{MAX_CUSTOM_PROMPT}
+					</span>
+				</label>
 				{/* From 720px up the button sits beside the model field, where the open model list cannot cover it. */}
 				<ModelField value={model} onInput={setModel} target={target} testId="html-model" class="col-12 col-md-6 col-lg-4" />
 				<div class="actions col-12 col-md-6 col-lg-4">

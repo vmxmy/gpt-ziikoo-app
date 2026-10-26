@@ -1,5 +1,5 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
-import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
+import type { CustomHtmlQuestion, CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
@@ -61,11 +61,15 @@ function inCodePoints(value: string, max: number): boolean {
 	return n >= 1 && n <= max;
 }
 
-function parseCustom(raw: unknown): Result<CustomQuestion> {
+function parseCustom(raw: unknown): Result<CustomQuestion | CustomHtmlQuestion> {
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return bad("custom 必须是对象");
-	const { prompt, scorer } = raw as Record<string, unknown>;
+	const { prompt, scorer, html } = raw as Record<string, unknown>;
 	if (typeof prompt !== "string" || !inCodePoints(prompt, MAX_CUSTOM_PROMPT)) {
 		return bad(`custom.prompt 必须是 1 到 ${MAX_CUSTOM_PROMPT} 个码位的字符串`);
+	}
+	if (html !== undefined) {
+		if (html !== true || scorer !== undefined) return bad("custom.html 只接受 true，且不能与 scorer 同给");
+		return { ok: true, value: { prompt, html } };
 	}
 	if (typeof scorer !== "object" || scorer === null || Array.isArray(scorer)) return bad("custom.scorer 只接受 yes_no 或 contains");
 	const { type, expected } = scorer as Record<string, unknown>;
@@ -77,7 +81,7 @@ function parseCustom(raw: unknown): Result<CustomQuestion> {
 	return bad("custom.scorer 只接受 yes_no 或 contains");
 }
 
-function customQuestion({ prompt, scorer }: CustomQuestion): Question {
+function customQuestion(custom: CustomQuestion | CustomHtmlQuestion): Question {
 	return {
 		id: "custom",
 		version: 0,
@@ -85,11 +89,11 @@ function customQuestion({ prompt, scorer }: CustomQuestion): Question {
 		title: "",
 		measures: "",
 		kind: "knowledge",
-		scorer,
+		...("html" in custom ? { html: true } : { scorer: custom.scorer }),
 		expectedLabel: "",
 		calibratedModels: [],
 		failureHint: "",
-		prompt,
+		prompt: custom.prompt,
 	};
 }
 
@@ -121,17 +125,18 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 		if (!parsedCustom.ok) return parsedCustom;
 		if (f.runId !== undefined) return bad("custom 请求不能带 runId");
 		if (f.seed !== undefined) return bad("custom 请求不能带 seed");
+		const question = customQuestion(parsedCustom.value);
 		return {
 			ok: true,
 			value: {
 				...target.value,
 				protocol,
 				model,
-				question: customQuestion(parsedCustom.value),
+				question,
 				effort: effort ?? null,
 				seed: null,
 				run: null,
-				limits: DEFAULT_LIMITS,
+				limits: question.html ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
 			},
 		};
 	}
@@ -152,7 +157,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 			effort: effort ?? question.defaultEffort ?? null,
 			seed: question.generator ? effectiveSeed : null,
 			run: run.value,
-			limits: run.value === null && question.scorer?.type === "svg_animation" ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
+			limits: run.value === null && question.html ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
 		},
 	};
 }

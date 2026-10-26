@@ -226,6 +226,17 @@ describe("probe", () => {
 		expect(result.capture).not.toHaveProperty("artifact");
 	});
 
+	it("returns a custom HTML question's full answer as the artifact without scoring it", async () => {
+		const html = "<!doctype html><html><body><canvas></canvas></body></html>";
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 60,
+			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: html }) }],
+		});
+		const result = await probe(input({ question: { ...customQuestion("写一个 HTML 时钟", undefined), html: true } }), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: null, note: "unscored", artifact: html });
+	});
+
 	it("scores a custom yes_no question", async () => {
 		const { deps } = fakeUpstream({
 			status: 200,

@@ -164,7 +164,7 @@ describe("parseProbeRequest limits", () => {
 	const target = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m" };
 	const run = { runId: "00000000-0000-4000-8000-00000000000a", stage: 1, seq: 1 };
 
-	it("gives only an unrecorded svg_animation call the long-answer limits, at any effort up to xhigh", () => {
+	it("gives only an unrecorded call of an HTML question the long-answer limits, at any effort up to xhigh", () => {
 		expect(parseProbeRequest({ ...target, question: "pelican-svg", seed: 7, effort: "xhigh" })).toMatchObject({
 			ok: true,
 			value: { effort: "xhigh", seed: 7, run: null, limits: LONG_ANSWER_LIMITS },
@@ -194,6 +194,14 @@ describe("parseProbeRequest custom", () => {
 			ok: true,
 			value: { question: { id: "custom", version: 0, scorer: { type: "yes_no", expected: "YES" } }, effort: "low", seed: null, run: null },
 		});
+	});
+
+	it("accepts an unscored HTML question with the long-answer limits, and rejects html beside a scorer", () => {
+		const html = parseProbeRequest({ ...target, custom: { prompt: "写一个 HTML 时钟", html: true }, effort: "xhigh" });
+		expect(html).toMatchObject({ ok: true, value: { question: { id: "custom", html: true, prompt: "写一个 HTML 时钟" }, effort: "xhigh", limits: LONG_ANSWER_LIMITS } });
+		expect(html.ok && html.value.question.scorer).toBeUndefined();
+		expect(parseProbeRequest({ ...target, custom })).toMatchObject({ ok: true, value: { limits: DEFAULT_LIMITS } });
+		expect(parseProbeRequest({ ...target, custom: { ...custom, html: true } })).toEqual({ ok: false, message: "custom.html 只接受 true，且不能与 scorer 同给" });
 	});
 
 	it("counts code points, not UTF-16 units, at the prompt limit", () => {

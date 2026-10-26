@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProbeResponse, QuestionVerdict } from "../../src/shared/types.ts";
-import { costLine, diagnosis, dotLabel, failureAdvice, htmlCheck, MAX_CALLS_PER_QUESTION, normalizeKey, numberCheck } from "../../src/web/results.ts";
+import { costLine, diagnosis, dotLabel, failureAdvice, MAX_CALLS_PER_QUESTION, normalizeKey, numberCheck } from "../../src/web/results.ts";
 import type { Attempt } from "../../src/web/runner.ts";
 
 const base = { question: "candy", protocol: "responses" as const, runId: "r", stage: 1, seq: 1, attempt: 1, done: true };
@@ -88,13 +88,6 @@ describe("numberCheck", () => {
 		expect(numberCheck(okWith("want 24/11/13 got 25/12/13"))).toBe("应为 24、11、13，实际 25、12、13");
 		expect(numberCheck(okWith("want 24/11/13 got 25/12"))).toBe("应为 24、11、13，实际 25、12");
 		expect(numberCheck(okWith("want 24/11/13 got none"))).toBe("应为 24、11、13，没有「答案」行");
-	});
-});
-
-describe("htmlCheck", () => {
-	it("names the parts the svg_animation scorer reported missing", () => {
-		expect(htmlCheck('missing ["animation","complete"]')).toBe("缺 动画代码、结尾的 </svg> 与 </html>");
-		expect(htmlCheck("ok")).toBe("HTML 文档、SVG 与动画代码齐全，写到 </html> 结束");
 	});
 });
 

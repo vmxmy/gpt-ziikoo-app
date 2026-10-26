@@ -6,6 +6,7 @@
   "measures": "测模型能否一次写出完整的 HTML，用 SVG 画出动物骑交通工具的 2D 动画",
   "kind": "reasoning",
   "generator": "pelican",
+  "html": true,
   "inWatchRotation": false,
   "expectedLabel": "每轮的动物和交通工具不同。回答要含 HTML 文档、SVG 与动画代码，并写到 </svg> 和 </html> 结束",
   "calibratedModels": [],
