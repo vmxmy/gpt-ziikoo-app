@@ -14,11 +14,15 @@ import {
 	clearLegacyTokens,
 	loadBoard,
 	loadLegacyTokens,
+	nextSort,
 	parseBoardHash,
 	parseWatchInput,
 	saveBoard,
+	sortRows,
 	statusNotice,
 	type FieldError,
+	type SortKey,
+	type TableSort,
 	type WatchInput,
 } from "./watch.ts";
 
@@ -45,9 +49,11 @@ const cardName = (card: WatchCard): string => (card.kind === "live" ? cardLabel(
 type LiveRowCells = { kind: "live"; host: string; alias: string | null; state: MonitorState; label: string; uptime: string; correct: string; p50: string; states: MonitorState[]; status: WatchStatus["kind"] };
 type LiveCard = Extract<WatchCard, { kind: "live" }>;
 
+const bucketsOf = (view: WatchView) => (view.monitor.buckets.length === MONITOR.buckets ? view.monitor.buckets : emptyBuckets());
+
 function rowCells(card: LiveCard): LiveRowCells {
 	const view = monitorView(card.view.monitor);
-	const buckets = card.view.monitor.buckets.length === MONITOR.buckets ? card.view.monitor.buckets : emptyBuckets();
+	const buckets = bucketsOf(card.view);
 	return {
 		kind: "live",
 		host: card.view.host,
@@ -62,16 +68,23 @@ function rowCells(card: LiveCard): LiveRowCells {
 	};
 }
 
-type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove">;
+// Ranked by health so that ascending puts the worst site first, as it does for 可用率 and 答对率.
+// insufficient and no_data carry no verdict and sort with the rows that have no value.
+const HEALTH: Partial<Record<MonitorState, number>> = { down: 0, degraded: 1, quality: 2, fair: 3, operational: 4 };
 
-function RowActions({
-	card,
-	onToggle,
-	onRemove,
-	index,
-	count,
-	onMove,
-}: { card: WatchCard; index: number; count: number } & Pick<BoardActions, "onToggle" | "onRemove" | "onMove">) {
+const SORT_VALUE: Record<SortKey, (view: WatchView) => string | number | null> = {
+	site: (view) => view.alias || view.host,
+	state: (view) => HEALTH[view.monitor.state] ?? null,
+	uptime: (view) => view.monitor.uptimePct,
+	correct: (view) => view.monitor.correctPct,
+	p50: (view) => latencyP50(bucketsOf(view)),
+};
+
+type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove">;
+// Without onMove the row has no 置顶/上移/下移: a sorted list would not show the move.
+type RowActionProps = { card: WatchCard; index: number; count: number } & Pick<BoardActions, "onToggle" | "onRemove"> & Partial<Pick<BoardActions, "onMove">>;
+
+function RowActions({ card, onToggle, onRemove, index, count, onMove }: RowActionProps) {
 	const t = `custom-${cardId(card.token)}`;
 	return (
 		<>
@@ -89,7 +102,7 @@ function RowActions({
 					</svg>
 				</button>
 			)}
-			{count >= 2 && (
+			{onMove && count >= 2 && (
 				<>
 					<button type="button" class="icon-btn" aria-label="置顶" title="置顶" disabled={index === 0} onClick={() => onMove(card.token, "top")} data-testid={`${t}-top`}>
 						<svg viewBox="0 0 16 16" aria-hidden="true">
@@ -180,7 +193,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 	);
 }
 
-function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove }: { card: WatchCard; index: number; count: number } & BoardActions) {
+function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove }: RowActionProps & Pick<BoardActions, "onRetry">) {
 	const t = `custom-${cardId(card.token)}`;
 	if (card.kind !== "live") {
 		return (
@@ -241,27 +254,39 @@ function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove
 	);
 }
 
+function SortHeader({ label, sortKey, sort, onSort, num, col }: { label: string; sortKey: SortKey; sort: TableSort; onSort: (key: SortKey) => void; num?: boolean; col?: string }) {
+	const dir = sort?.key === sortKey ? sort.dir : null;
+	return (
+		<th class={num ? "num" : undefined} data-col={col} aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+			<button type="button" class="sort-btn" onClick={() => onSort(sortKey)} data-testid={`watch-sort-${sortKey}`}>
+				{label}
+			</button>
+		</th>
+	);
+}
+
 function WatchTable(props: { cards: WatchCard[] } & BoardActions) {
-	const { cards, ...rest } = props;
+	const { cards, onMove, ...rest } = props;
+	const [sort, setSort] = useState<TableSort>(null);
+	const rows = sort ? sortRows(cards, (card) => (card.kind === "live" ? SORT_VALUE[sort.key](card.view) : null), sort.dir) : cards;
+	const header = { sort, onSort: (key: SortKey) => setSort(nextSort(sort, key)) };
 	return (
 		<div class="watch-table-wrap">
 			<table class="watch-table">
 				<thead>
 					<tr>
-						<th>站点</th>
-						<th>状态</th>
-						<th class="num">可用率</th>
-						<th class="num">答对率</th>
-						<th class="num" data-col="p50">
-							总耗时中位数
-						</th>
+						<SortHeader label="站点" sortKey="site" {...header} />
+						<SortHeader label="状态" sortKey="state" {...header} />
+						<SortHeader label="可用率" sortKey="uptime" num {...header} />
+						<SortHeader label="答对率" sortKey="correct" num {...header} />
+						<SortHeader label="总耗时中位数" sortKey="p50" num col="p50" {...header} />
 						<th data-col="bar">近24小时</th>
 						<th>操作</th>
 					</tr>
 				</thead>
 				<tbody>
-					{cards.map((card, i) => (
-						<WatchTableRow key={card.token} card={card} index={i} count={cards.length} {...rest} />
+					{rows.map((card, i) => (
+						<WatchTableRow key={card.token} card={card} index={i} count={rows.length} onMove={sort ? undefined : onMove} {...rest} />
 					))}
 				</tbody>
 			</table>

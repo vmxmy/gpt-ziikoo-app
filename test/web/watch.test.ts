@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardId, cardLabel, normalizeAlias, parseSite, parseTokens, parseWatchInput, protocolForModel, statusNotice } from "../../src/web/watch.ts";
+import { cardId, cardLabel, nextSort, normalizeAlias, parseSite, parseTokens, parseWatchInput, protocolForModel, sortRows, statusNotice } from "../../src/web/watch.ts";
 
 const KEY = "sk-live-known-secret-0042";
 const TOKEN = "A".repeat(43);
@@ -67,6 +67,29 @@ describe("protocolForModel", () => {
 		expect(protocolForModel("anthropic/Claude-Opus-5", "responses")).toBe("anthropic");
 		expect(protocolForModel("gpt-6-astra", "anthropic")).toBe("responses");
 		expect(protocolForModel("gpt-6-astra", "chat")).toBe("chat");
+	});
+});
+
+describe("table sort", () => {
+	it("sorts ascending, then descending, then returns to the board order", () => {
+		const first = nextSort(null, "uptime");
+		expect(first).toEqual({ key: "uptime", dir: "asc" });
+		expect(nextSort(first, "uptime")).toEqual({ key: "uptime", dir: "desc" });
+		expect(nextSort({ key: "uptime", dir: "desc" }, "uptime")).toBeNull();
+		expect(nextSort({ key: "uptime", dir: "desc" }, "p50")).toEqual({ key: "p50", dir: "asc" });
+	});
+
+	it("keeps rows without a value at the bottom in both directions", () => {
+		const rows = [
+			{ id: "a", v: 99.5 },
+			{ id: "loading", v: null },
+			{ id: "b", v: 12 },
+			{ id: "c", v: 100 },
+		];
+		const ids = (dir: "asc" | "desc") => sortRows(rows, (r) => r.v, dir).map((r) => r.id);
+		expect(ids("asc")).toEqual(["b", "a", "c", "loading"]);
+		expect(ids("desc")).toEqual(["c", "a", "b", "loading"]);
+		expect(sortRows([{ s: "relay-10" }, { s: "Relay-9" }, { s: "备用" }], (r) => r.s, "asc").map((r) => r.s)).toEqual(["备用", "Relay-9", "relay-10"]);
 	});
 });
 
