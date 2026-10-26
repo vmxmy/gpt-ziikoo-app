@@ -43,6 +43,7 @@
 
 ```
 页头      标题、一句话说明、锚点导航
+页签      实时测试、HTML 生成、持续监测;HTML 生成见「生成器题 `pelican-svg`」
 监测页签  一句说明加工具条(添加站点、看板链接、卡片/列表切换)、区块级图例、卡片栅格或列表
 隐私说明  一行摘要,可展开看四条详情
 站点与密钥 站点、密钥、模型(字段带下拉)加开始按钮一行(宽屏),720 到 1039px 两行,窄屏单列   (全宽)
@@ -98,6 +99,7 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 站点收到的输入量 | 输入 token 数 | prompt_tokens、提示用量 |
 | 一组持续监测的聚合对象 | 看板 | |
 | 运行 `svg_animation` 题回答的动作 | 播放动画 | 预览、渲染、动画预览 |
+| 单次调用 `pelican-svg` 的页签 | HTML 生成 | |
 | 看板的 16 字节标识 | 看板码 | |
 | 把卡片移到看板第一位 | 置顶 | 固定、钉住、顶置 |
 | 站点返回的可用模型清单 | 模型列表 | 模型清单、模型目录 |
@@ -124,7 +126,7 @@ type QuestionManifest = {
   generator?: "candy" | "pelican"  // 生成器题:题面与评分由服务端按 seed 生成
   inWatchRotation?: boolean        // false 时不进监测轮转,缺省为 true
   expectedLabel: string            // 给人看的答案说明,评分不用它
-  defaultEffort?: "low" | "medium" | "high"
+  defaultEffort?: "low" | "medium" | "high" | "xhigh"
   calibratedModels: string[]
   failureHint: string              // 本题淘汰时的诊断句
 }
@@ -200,7 +202,7 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 
 ### 生成器题 `pelican-svg`
 
-2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。
+2026-10-25 加入。题面要模型直接写出一个 HTML,内容是用 SVG 画的动物骑交通工具的 2D 动画。这题测模型能否一次写完一段长而完整的代码。2026-10-26 起,页面只在「HTML 生成」页签里对这题单次调用,实时测试的选题清单不再列出它。
 
 - 清单只写 `generator: "pelican"`。题面由 `src/shared/pelican-gen.ts` 按 seed 生成。
 - 动物来自封闭词表 `RIDERS`(8 种),交通工具与动词来自封闭词表 `RIDES`(6 种)。组合序号是 `seed % 48`,站点无法只预置一个答案。seed 范围与 `candy-var` 相同。
@@ -217,8 +219,10 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
   4. `complete`:同时含 `</svg>` 与 `</html>`,没写完的回答答错。
 - 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
-- 成本:回答很长,跑满四关是 31 次调用。
-- 播放:探针接口对这题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。逐次明细里有 `artifact` 的行显示「播放动画」按钮。按下后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
+- 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
+- 「HTML 生成」页签:站点、密钥、模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。每次调用随机抽一个 seed。结果显示答对、答错或失败,以及评分说明、总耗时、首字耗时、推理 token 数和本次题面。页面切走或刷新,结果即失。
+- 上限:不带 `runId` 的这题调用,读取上限 2MB,超时 300 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;高推理强度要先推理几分钟。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
+- 播放:探针接口对这题另返回 `artifact`,内容是去掉首尾空白的完整回答。`artifact` 不入库,也不进历史。「HTML 生成」页签的结果里有「播放动画」「复制 HTML」按钮和折叠的「查看 HTML」。源码只按文本显示。按下「播放动画」后,弹窗里的沙箱 iframe 载入 `/api/frame`,页面再把回答发给它运行。规则见「安全边界」的「播放动画」。
 - 除这题外,本站从不渲染站点返回的 HTML,只按文本显示。
 - 题面模板或词表一改,同一 seed 的题就变了,题的 `version` 加 1。
 
@@ -252,7 +256,7 @@ type CustomQuestion = {
 
 - 每关内并发 3 到 5。某关已不可能达标时立即停掉本关剩余调用。
 - 单次调用最多重试 3 次,连续 3 次无有效响应判「无法测试」。
-- 每次探针自设 120 秒超时,超时作为探针结果返回。
+- 每次探针自设 120 秒超时(不带 `runId` 的 `svg_animation` 题是 300 秒),超时作为探针结果返回。
 - 梯度逻辑在页面脚本里,规则写入页面的 API 说明,脚本调用方自己循环。
 - 每次探针带 `runId`、关卡号和序号。一轮的结论不单独存,读取时由调用序列用同一个共享函数算出。
 
@@ -343,7 +347,7 @@ usage 原文
 
 ## 监测
 
-监测只有一个类型:持续监测,由服务端执行。页面分两个页签:`#live` 实时测试(一次完整的批量测试,行为不变),`#watch` 持续监测,默认实时测试。2026-10-22 去掉了浏览器端监测(页面打开期间由浏览器驱动、`gpt.monitors.v1` 本地存储),原因是它测不到页面关闭后的表现,而用户要的正是持续采集。更早的 2026-10-18 还去掉过运营方网关的服务端「官方监测」(定时触发、`Monitor` Durable Object、`GET /api/monitor`、`GAOXIN_KEY` 秘密)。
+监测只有一个类型:持续监测,由服务端执行。页面分三个页签:`#live` 实时测试(一次完整的批量测试,行为不变),`#html` HTML 生成(见「生成器题 `pelican-svg`」),`#watch` 持续监测,默认实时测试。2026-10-22 去掉了浏览器端监测(页面打开期间由浏览器驱动、`gpt.monitors.v1` 本地存储),原因是它测不到页面关闭后的表现,而用户要的正是持续采集。更早的 2026-10-18 还去掉过运营方网关的服务端「官方监测」(定时触发、`Monitor` Durable Object、`GET /api/monitor`、`GAOXIN_KEY` 秘密)。
 
 每个站点一张卡片,展示内容见下表。
 
@@ -391,7 +395,7 @@ GET /api/questions
 POST /api/probe
 { "site": "https://example.com", "key": "sk-...",
   "protocol": "responses" | "chat", "model": "gpt-6-astra",
-  "question": "<题库 id>", "effort": "low" | "medium" | "high",   // effort 可省
+  "question": "<题库 id>", "effort": "low" | "medium" | "high" | "xhigh",   // effort 可省
   "runId": "<uuid>", "stage": 2, "seq": 3,      // 三项可省,带 runId 才持久化
   "seed": 12345,                                 // 可省,默认 0;只对生成器题生效,固定题忽略
   "custom": { "prompt": "...",                   // 与 question 二选一;自定义题不持久化,
@@ -592,6 +596,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 糖果评分 | 21、9、12 须同时出现 |
 | 部署 | GitHub Actions 加 `cf`:PR 跑 `cf deploy --dry-run`,合并后构建一次并 `--prebuilt` 部署。不用 Workers Builds,因为没有查到它支持 `cf deploy` |
 | 播放动画 | 2026-10-25 授权。`svg_animation` 题的回答经探针接口的 `artifact` 返回,只在沙箱 iframe `/api/frame` 里运行。这是「回答只用文本节点渲染」的唯一例外 |
+| HTML 生成页签 | 2026-10-26 维护者决定。鹈鹕题移出实时测试,只在「HTML 生成」页签单次调用,题面每次随机。推理强度加 `xhigh`。不带 `runId` 的 `svg_animation` 调用读取上限 2MB、超时 300 秒,落库调用不变 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。

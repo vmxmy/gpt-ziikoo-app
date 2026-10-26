@@ -3,7 +3,7 @@ import { activeQuestions, instantiate, SAMPLE_SEED } from "../../questions/index
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchIntervalMin, type WatchStatus, type WatchView } from "../shared/watch.ts";
-import { probe, type ProbeResult } from "./probe.ts";
+import { DEFAULT_LIMITS, probe, type ProbeResult } from "./probe.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
 const MINUTE_MS = 60_000;
@@ -106,6 +106,7 @@ async function probeRound(env: Env, state: WatchState, key: string): Promise<{ q
 		model: state.model,
 		question: instantiate(question, SAMPLE_SEED),
 		effort: question.defaultEffort ?? null,
+		limits: DEFAULT_LIMITS,
 	};
 	let response: ProbeResponse | null = null;
 	for (let n = 0; n <= RETRIES && (response === null || isTransient(response)); n++) {

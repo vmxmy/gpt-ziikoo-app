@@ -1,6 +1,7 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
+import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -17,12 +18,13 @@ export type ProbeCommand = {
 	effort: Effort | null;
 	seed: number | null;
 	run: RunRef | null;
+	limits: ProbeLimits;
 };
 
 export type HistoryCommand = { origin: string; key: string };
 
 const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
-const EFFORTS: readonly Effort[] = ["low", "medium", "high"];
+const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // No character JSON or HTML encoders escape: redact() matches the key literally, so an escaped echo would slip through.
 const KEY = /^[A-Za-z0-9_.-]{8,1024}$/;
@@ -112,7 +114,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
 	}
-	if (effort !== undefined && !isOneOf(EFFORTS, effort)) return bad("effort 必须是 low、medium 或 high");
+	if (effort !== undefined && !isOneOf(EFFORTS, effort)) return bad("effort 必须是 low、medium、high 或 xhigh");
 	if (custom !== undefined && f.question !== undefined) return bad("question 与 custom 只能给一个");
 	if (custom !== undefined) {
 		const parsedCustom = parseCustom(custom);
@@ -129,6 +131,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 				effort: effort ?? null,
 				seed: null,
 				run: null,
+				limits: DEFAULT_LIMITS,
 			},
 		};
 	}
@@ -149,6 +152,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 			effort: effort ?? question.defaultEffort ?? null,
 			seed: question.generator ? effectiveSeed : null,
 			run: run.value,
+			limits: run.value === null && question.scorer?.type === "svg_animation" ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
 		},
 	};
 }

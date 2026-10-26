@@ -460,17 +460,20 @@ a {
 	}
 }
 
-.custom-q-result {
+.custom-q-result,
+.html-result {
 	display: grid;
 	gap: var(--space-2);
 }
 
-.custom-q-verdict {
+.custom-q-verdict,
+.html-verdict {
 	color: var(--tone-text);
 	font-weight: 600;
 }
 
-.custom-q-fields {
+.custom-q-fields,
+.html-fields {
 	display: grid;
 	grid-template-columns: max-content 1fr;
 	gap: var(--space-1) var(--space-4);
@@ -478,11 +481,33 @@ a {
 	font-size: var(--fs-13);
 }
 
-.custom-q-fields dt {
+.custom-q-fields dt,
+.html-fields dt {
 	color: var(--fg-2);
 }
 
-.custom-q-fields dd {
+.custom-q-fields dd,
+.html-fields dd {
 	margin: 0;
 	min-width: 0;
+}
+
+.html-form {
+	gap: var(--space-4) var(--space-5);
+	margin-top: var(--space-4);
+}
+
+.html-form > .actions {
+	align-self: end;
+}
+
+.html-result {
+	margin-top: var(--space-5);
+	padding-top: var(--space-5);
+	border-top: var(--border-width) solid var(--border);
+}
+
+.html-source {
+	max-height: 480px;
+	overflow-y: auto;
 }

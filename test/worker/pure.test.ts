@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Scorer } from "../../src/shared/types.ts";
 import { objectId } from "../../src/worker/identity.ts";
+import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS } from "../../src/worker/probe.ts";
 import { redact } from "../../src/worker/redact.ts";
 import { parseHistoryRequest, parseProbeRequest } from "../../src/worker/request.ts";
 import { score } from "../../src/worker/scorers.ts";
@@ -156,6 +157,20 @@ describe("objectId", () => {
 		const idA = await objectId(pepper, a.origin, "sk-test-12345678");
 		expect(await objectId(pepper, b.origin, "sk-test-12345678")).toBe(idA);
 		expect(await objectId(pepper, c.origin, "sk-test-12345678")).not.toBe(idA);
+	});
+});
+
+describe("parseProbeRequest limits", () => {
+	const target = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m" };
+	const run = { runId: "00000000-0000-4000-8000-00000000000a", stage: 1, seq: 1 };
+
+	it("gives only an unrecorded svg_animation call the long-answer limits, at any effort up to xhigh", () => {
+		expect(parseProbeRequest({ ...target, question: "pelican-svg", seed: 7, effort: "xhigh" })).toMatchObject({
+			ok: true,
+			value: { effort: "xhigh", seed: 7, run: null, limits: LONG_ANSWER_LIMITS },
+		});
+		expect(parseProbeRequest({ ...target, question: "pelican-svg", ...run })).toMatchObject({ ok: true, value: { limits: DEFAULT_LIMITS } });
+		expect(parseProbeRequest({ ...target, question: "thibault" })).toMatchObject({ ok: true, value: { limits: DEFAULT_LIMITS } });
 	});
 });
 

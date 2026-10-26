@@ -7,7 +7,7 @@ export type Scorer =
 	| { type: "contains"; expected: string }
 	| { type: "svg_animation" };
 
-export type Effort = "low" | "medium" | "high";
+export type Effort = "low" | "medium" | "high" | "xhigh";
 export type Protocol = "responses" | "chat";
 export type GeneratorId = "candy" | "pelican";
 
