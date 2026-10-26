@@ -11,7 +11,7 @@
 - 读取与删除历史必须出示同一站点和同一密钥。对象不存在与为空返回相同结果。
 - 探针接口发的题只来自题库里的固定题、服务端用封闭词表生成的题,或调用方随请求给出的自定义题(2026-10-23 授权,规则见「自定义题」节)。自定义题只在 `/api/probe` 当次调用内存在:不落库、不进历史、不进监测轮转、不占用题库 id。只访问 `/v1/responses` 或 `/v1/chat/completions`。另有 `/api/models` 只访问 `GET /v1/models`,只回模型 id,不入库不进日志(2026-10-25 授权)。
 - 目标地址只允许 `https`,拒绝 IP 字面量与 `localhost`,不跟随重定向。
-- 来自中转站的回答是不可信内容。页面只用文本节点渲染,不拼 HTML。唯一例外(2026-10-25 授权,2026-10-27 扩大到自定义 HTML 题):HTML 题(`pelican-svg` 与 `custom: { prompt, html: true }`)的回答只在沙箱 iframe `/api/frame` 里运行。该 iframe 是不透明源,有自己的 CSP,不能联网。iframe 不得加 `allow-same-origin`、`allow-popups`、`allow-forms`、`allow-top-navigation`。
+- 来自中转站的回答是不可信内容。页面只用文本节点渲染,不拼 HTML。唯一例外(2026-10-25 授权;2026-10-27 曾扩大到自定义 HTML 题,同日收回):`pelican-svg` 的回答只在沙箱 iframe `/api/frame` 里运行。该 iframe 是不透明源,有自己的 CSP,不能联网。iframe 不得加 `allow-same-origin`、`allow-popups`、`allow-forms`、`allow-top-navigation`。
 - `workers.dev` 与预览地址保持关闭,否则绕过边缘限速。这个开关写在 `cloudflare.config.ts` 的 `triggers` 里。
 - 工具链是 `cf`(测试版)加 `cloudflare.config.ts`,不使用 `wrangler` 命令与 `wrangler.jsonc`。Node.js 22.18 或更高。CI 里不依赖自动配置,配置必须本地生成、审阅并提交。
 - `cf` 是测试版,升级版本后先读变更说明再改配置。查资料时官方多数示例仍是 Wrangler 写法,对照「Wrangler 到 cf 对照」页。

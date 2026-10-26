@@ -196,12 +196,9 @@ describe("parseProbeRequest custom", () => {
 		});
 	});
 
-	it("accepts an unscored HTML question with the long-answer limits, and rejects html beside a scorer", () => {
-		const html = parseProbeRequest({ ...target, custom: { prompt: "写一个 HTML 时钟", html: true }, effort: "xhigh" });
-		expect(html).toMatchObject({ ok: true, value: { question: { id: "custom", html: true, prompt: "写一个 HTML 时钟" }, effort: "xhigh", limits: LONG_ANSWER_LIMITS } });
-		expect(html.ok && html.value.question.scorer).toBeUndefined();
+	it("rejects an unscored custom HTML question, so only pelican-svg answers reach the player", () => {
+		expect(parseProbeRequest({ ...target, custom: { prompt: "写一个 HTML 时钟", html: true } })).toEqual({ ok: false, message: "custom.scorer 只接受 yes_no 或 contains" });
 		expect(parseProbeRequest({ ...target, custom })).toMatchObject({ ok: true, value: { limits: DEFAULT_LIMITS } });
-		expect(parseProbeRequest({ ...target, custom: { ...custom, html: true } })).toEqual({ ok: false, message: "custom.html 只接受 true，且不能与 scorer 同给" });
 	});
 
 	it("counts code points, not UTF-16 units, at the prompt limit", () => {

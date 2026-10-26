@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { expect, it } from "vitest";
 import { activeQuestions, getQuestion, instantiate, QUESTIONS } from "../../questions/index.ts";
+import { BIRDS, SCENES } from "../../src/shared/pelican-gen.ts";
 
 it("registers exactly the directories under questions/", () => {
 	const files = Object.keys(import.meta.glob("../../questions/*/*"));
@@ -41,15 +42,14 @@ it("instantiates a generator question per seed and leaves fixed questions as the
 	expect(instantiate(candyVar, 1).prompt).toBe(one.prompt);
 });
 
-it("generates the pelican prompt at seed 0 and another rider or vehicle per seed", () => {
+it("generates the pelican prompt at seed 0 and another bird or scene per seed, always on a bicycle", () => {
 	const pelican = getQuestion("pelican-svg")!;
-	expect(pelican).toMatchObject({ generator: "pelican", inWatchRotation: false, html: true, scorer: { type: "svg_animation" } });
+	expect(pelican).toMatchObject({ version: 2, generator: "pelican", inWatchRotation: false, html: true, scorer: { type: "svg_animation" } });
 	expect(pelican.prompt).toBe(
-		"创建一个HTML，内容是用SVG绘制一个鹈鹕骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
+		"创建一个HTML，内容是用SVG绘制一只鹈鹕骑自行车的2D动画，场景是落日下的海边木栈道，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
 	);
-	const one = instantiate(pelican, 1);
-	expect(one.prompt).toBe(
-		"创建一个HTML，内容是用SVG绘制一个企鹅骑自行车的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成",
-	);
-	expect(instantiate(pelican, 1).prompt).toBe(one.prompt);
+	expect(instantiate(pelican, 1).prompt).toContain("绘制一只企鹅骑自行车的2D动画，场景是落日下的海边木栈道，");
+	expect(instantiate(pelican, 50).prompt).toContain("绘制一只鹈鹕骑自行车的2D动画，场景是飘着雪花的松树林小路，");
+	expect(instantiate(pelican, 2499).prompt).toBe(instantiate(pelican, 4999).prompt);
+	expect([new Set(BIRDS).size, new Set(SCENES).size]).toEqual([50, 50]);
 });

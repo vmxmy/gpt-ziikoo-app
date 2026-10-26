@@ -37,9 +37,6 @@ export type CustomQuestion = {
 	scorer: Extract<Scorer, { type: "yes_no" | "contains" }>;
 };
 
-// Never scored: the user judges the page by playing it.
-export type CustomHtmlQuestion = { prompt: string; html: true };
-
 export type IdShape = "hex" | "ft" | "base64" | "other";
 
 export type FailReason =
@@ -63,7 +60,7 @@ export type ProbeRequest = {
 	seq?: number;
 	attempt?: number;
 	seed?: number;
-	custom?: CustomQuestion | CustomHtmlQuestion;
+	custom?: CustomQuestion;
 };
 
 export type ProbeOk = {
