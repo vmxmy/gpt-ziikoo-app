@@ -76,7 +76,12 @@ describe("probe", () => {
 						type: "response.completed",
 						response: {
 							id,
-							usage: { input_tokens: 31, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 12 } },
+							usage: {
+								input_tokens: 31,
+								input_tokens_details: { cached_tokens: 0 },
+								output_tokens: 20,
+								output_tokens_details: { reasoning_tokens: 12 },
+							},
 						},
 					}),
 				},
@@ -89,6 +94,7 @@ describe("probe", () => {
 			correct: true,
 			note: "YES",
 			reasoningTokens: 12,
+			outputTokens: 20,
 			idShape: "hex",
 			answer: "Yes, I know him.",
 			streamed: true,
@@ -128,6 +134,7 @@ describe("probe", () => {
 			usage: {
 				prompt_tokens: 128,
 				prompt_tokens_details: { cached_tokens: 64 },
+				completion_tokens: 320,
 				completion_tokens_details: { reasoning_tokens: 300 },
 			},
 		});
@@ -149,6 +156,7 @@ describe("probe", () => {
 			correct: true,
 			note: "ok",
 			reasoningTokens: 300,
+			outputTokens: 320,
 			idShape: "other",
 			answer: "至少 21 颗:9 颗圆形,12 颗五角星",
 			streamed: true,
@@ -194,6 +202,7 @@ describe("probe", () => {
 			correct: true,
 			note: "YES",
 			reasoningTokens: null,
+			outputTokens: 40,
 			idShape: "other",
 			answer: "Yes, I know him.",
 			streamed: true,
@@ -245,6 +254,7 @@ describe("probe", () => {
 			correct: false,
 			note: "NO",
 			reasoningTokens: 2,
+			outputTokens: null,
 			idShape: "ft",
 			answer: "No,\nI don't",
 			streamed: false,

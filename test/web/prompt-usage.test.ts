@@ -39,6 +39,7 @@ const call = (q: string, promptTokens: number | null, protocol: Protocol = "resp
 		correct: false,
 		note: "",
 		reasoningTokens: null,
+		outputTokens: null,
 		idShape: "other",
 		answer: "",
 		streamed: true,

@@ -13,6 +13,7 @@ const okResponse = (correct: boolean): ProbeResponse => ({
 	correct,
 	note: correct ? "YES" : "NO",
 	reasoningTokens: 10,
+	outputTokens: null,
 	idShape: "hex",
 	answer: correct ? "Yes" : "No",
 	streamed: true,

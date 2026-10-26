@@ -191,7 +191,8 @@ type Received = { status: number; ttfbMs: number; totalMs: number };
 
 function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { status, ttfbMs, totalMs }: Received): ProbeResult {
 	const parsed = parseBody(chunks, input.key);
-	const usage = readUsage(parsed.usage);
+	// The stored call keeps the raw usage, so the output count only goes to the caller.
+	const { outputTokens, ...usage } = readUsage(parsed.usage);
 	const answer = parsed.text.trim();
 	const shape = idShape(parsed.id);
 	const capture: ProbeCapture = {
@@ -220,6 +221,7 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 			correct,
 			note,
 			reasoningTokens: usage.reasoningTokens,
+			outputTokens,
 			idShape: shape,
 			answer: [...answer].slice(0, ANSWER_PREVIEW_CHARS).join(""),
 			streamed: parsed.streamed,
