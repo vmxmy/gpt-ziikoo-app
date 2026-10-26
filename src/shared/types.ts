@@ -61,6 +61,7 @@ export type ProbeRequest = {
 	attempt?: number;
 	seed?: number;
 	custom?: CustomQuestion;
+	progress?: boolean;
 };
 
 export type ProbeOk = {
@@ -91,6 +92,11 @@ export type ProbeFail = {
 };
 
 export type ProbeResponse = ProbeOk | ProbeFail;
+
+// With progress: true, /api/probe answers one of these per line. The first progress line means the site has answered;
+// chars counts the answer text received so far.
+export type ProbeProgress = { type: "start"; timeoutMs: number } | { type: "progress"; chars: number };
+export type ProbeLine = ProbeProgress | { type: "result"; response: ProbeResponse };
 
 export type ApiError = {
 	error: "bad_request" | "rate_limited" | "too_many_calls" | "not_found" | "watch_limit" | "stale";

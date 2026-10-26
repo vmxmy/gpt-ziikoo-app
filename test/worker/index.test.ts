@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 
@@ -11,9 +11,9 @@ function limiter(success: boolean) {
 	return { keys, limit: async ({ key }: RateLimitOptions) => (keys.push(key), { success }) };
 }
 
-function harness(ipAllowed: boolean) {
+function harness(ipAllowed: boolean, hostAllowed = false) {
 	const ip = limiter(ipAllowed);
-	const host = limiter(false);
+	const host = limiter(hostAllowed);
 	const reached = { target: false };
 	const env = { PEPPER: "pepper-for-tests", IP_LIMITER: ip, HOST_LIMITER: host };
 	const ctx = {
@@ -63,6 +63,33 @@ describe("worker rate limits", () => {
 		});
 		expect(res.status).toBe(429);
 		expect(host.keys).toEqual(["api.example.com"]);
+	});
+});
+
+describe("probe progress", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it("sends one JSON line on start with the call's timeout, one when the site answers, and the result last", async () => {
+		const page = "<!doctype html><html><body><svg></svg></body></html>";
+		vi.stubGlobal("fetch", async () => new Response(`data: ${JSON.stringify({ type: "response.output_text.delta", delta: page })}\n\n`));
+		const { call } = harness(true, true);
+		const res = await call("/api/probe", {
+			site: "https://api.example.com",
+			key: KEY,
+			protocol: "responses",
+			model: "gpt-6-astra",
+			question: "pelican-svg",
+			seed: 7,
+			progress: true,
+		});
+		expect(res.headers.get("Content-Type")).toBe("application/x-ndjson");
+		const lines = (await res.text()).split("\n");
+		expect(lines.pop()).toBe("");
+		expect(lines.map((line) => JSON.parse(line))).toEqual([
+			{ type: "start", timeoutMs: 300_000 },
+			{ type: "progress", chars: 0 },
+			{ type: "result", response: expect.objectContaining({ ok: true, artifact: { html: page, ending: "closed" } }) },
+		]);
 	});
 });
 

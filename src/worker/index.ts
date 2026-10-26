@@ -1,5 +1,5 @@
 import { activeQuestions } from "../../questions/index.ts";
-import type { ApiError, HistoryDeleteResponse, HistoryResponse, Question } from "../shared/types.ts";
+import type { ApiError, HistoryDeleteResponse, HistoryResponse, ProbeLine, ProbeResponse, Question } from "../shared/types.ts";
 import {
 	BOARD_MAX_WATCHES,
 	type BoardAdoptResponse,
@@ -126,6 +126,20 @@ async function persist(cmd: ProbeCommand, run: RunRef, startedAt: number, result
 	});
 }
 
+function progressStream(cmd: ProbeCommand, settle: (result: ProbeResult) => ProbeResponse): Response {
+	const encoder = new TextEncoder();
+	const body = new ReadableStream<Uint8Array>({
+		async start(controller) {
+			const send = (line: ProbeLine) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+			send({ type: "start", timeoutMs: cmd.limits.timeoutMs });
+			const result = await probe({ ...cmd, onProgress: (chars) => send({ type: "progress", chars }) });
+			send({ type: "result", response: settle(result) });
+			controller.close();
+		},
+	});
+	return new Response(body, { headers: { ...API_HEADERS, "Content-Type": "application/x-ndjson" } });
+}
+
 const handleProbe: Handler = async (request, env, ctx) => {
 	const parsed = parseProbeRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
@@ -138,10 +152,13 @@ const handleProbe: Handler = async (request, env, ctx) => {
 		return apiError(429, { error: "too_many_calls", message: `每轮最多 ${MAX_CALLS_PER_RUN} 次调用` });
 	}
 	const startedAt = Date.now();
-	const result = await probe(cmd);
-	logProbe(cmd, result);
-	if (run && stub) ctx.waitUntil(persist(cmd, run, startedAt, result, stub));
-	return json(result.response);
+	const settle = (result: ProbeResult) => {
+		logProbe(cmd, result);
+		if (run && stub) ctx.waitUntil(persist(cmd, run, startedAt, result, stub));
+		return result.response;
+	};
+	if (cmd.progress) return progressStream(cmd, settle);
+	return json(settle(await probe(cmd)));
 };
 
 const handleQuestions: Handler = async () => {

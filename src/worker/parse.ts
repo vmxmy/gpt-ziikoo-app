@@ -150,6 +150,21 @@ function eventPayload(block: string): unknown {
 	return data === "" || data === "[DONE]" ? undefined : lenientJson(data);
 }
 
+// Counts answer characters chunk by chunk while the body is still arriving; parseBody reads the whole body again at the end.
+export function answerCounter(): (text: string) => number {
+	let buffer = "";
+	let chars = 0;
+	return (text) => {
+		buffer = (buffer + text).replace(/\r\n/g, "\n");
+		for (let end = buffer.indexOf("\n\n"); end !== -1; end = buffer.indexOf("\n\n")) {
+			const p = eventPayload(buffer.slice(0, end));
+			chars += p === undefined ? 0 : deltaText(p).length;
+			buffer = buffer.slice(end + 2);
+		}
+		return chars;
+	};
+}
+
 function parseSse(chunks: TimedText[], key: string): ParsedBody {
 	const events = splitEvents(chunks, key);
 	let text = "";

@@ -19,6 +19,7 @@ export type ProbeCommand = {
 	seed: number | null;
 	run: RunRef | null;
 	limits: ProbeLimits;
+	progress: boolean;
 };
 
 export type HistoryCommand = { origin: string; key: string };
@@ -109,12 +110,13 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	if (!f) return bad("请求体必须是 JSON 对象");
 	const target = parseTarget(f);
 	if (!target.ok) return target;
-	const { protocol, model, effort, seed, custom } = f;
+	const { protocol, model, effort, seed, custom, progress = false } = f;
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
 	}
 	if (effort !== undefined && !isOneOf(EFFORTS, effort)) return bad("effort 必须是 low、medium、high 或 xhigh");
+	if (typeof progress !== "boolean") return bad("progress 必须是 true 或 false");
 	if (custom !== undefined && f.question !== undefined) return bad("question 与 custom 只能给一个");
 	if (custom !== undefined) {
 		const parsedCustom = parseCustom(custom);
@@ -133,6 +135,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 				seed: null,
 				run: null,
 				limits: DEFAULT_LIMITS,
+				progress,
 			},
 		};
 	}
@@ -154,6 +157,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 			seed: question.generator ? effectiveSeed : null,
 			run: run.value,
 			limits: run.value === null && question.html ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
+			progress,
 		},
 	};
 }
