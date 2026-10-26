@@ -431,8 +431,7 @@ a {
 	border-top: var(--border-width) solid var(--border);
 }
 
-.custom-q textarea,
-.html-form textarea {
+.custom-q textarea {
 	width: 100%;
 	min-width: 0;
 	padding: var(--space-2) var(--space-3);
@@ -444,8 +443,7 @@ a {
 	resize: vertical;
 }
 
-.custom-q textarea:focus,
-.html-form textarea:focus {
+.custom-q textarea:focus {
 	outline: 2px solid var(--focus);
 	outline-offset: -1px;
 	border-color: var(--focus);

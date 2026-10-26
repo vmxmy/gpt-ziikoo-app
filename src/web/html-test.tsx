@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, PageEnding, Protocol } from "../shared/types.ts";
-import { codePoints, customResult, MAX_CUSTOM_PROMPT, missingFields, probeHtml, type CustomResult, type HtmlSource } from "./api.ts";
+import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
@@ -129,7 +129,6 @@ export function HtmlTest() {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [effort, setEffort] = useState<EffortChoice>("");
-	const [prompt, setPrompt] = useState("");
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [formError, setFormError] = useState("");
 	const keyInput = useRef<HTMLInputElement>(null);
@@ -139,17 +138,14 @@ export function HtmlTest() {
 	const send = async () => {
 		const missing = missingFields(target, model);
 		if (missing.length > 0) return setFormError(`请填写${missing.join("、")}`);
-		const length = codePoints(prompt);
-		if (length > MAX_CUSTOM_PROMPT) return setFormError(`题面最多 ${MAX_CUSTOM_PROMPT} 个字符，现在 ${length} 个`);
 		setFormError("");
 		const controller = new AbortController();
 		ctrl.current = controller;
-		const source: HtmlSource = prompt.trim() === "" ? { seed: crypto.getRandomValues(new Uint32Array(1))[0] } : { prompt };
+		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
 		setStatus({ kind: "sending" });
 		try {
-			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, source, controller.signal);
-			const shown = "seed" in source ? generatePelican(source.seed) : source.prompt;
-			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: shown });
+			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal);
+			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed) });
 		} catch (err) {
 			if (!controller.signal.aborted) throw err;
 			setStatus({ kind: "cancelled" });
@@ -160,9 +156,8 @@ export function HtmlTest() {
 		<section class="panel" aria-labelledby="html-h">
 			<h2 id="html-h">HTML 生成</h2>
 			<p class="muted small">
-				让模型直接写一个 HTML 页面，在沙箱里播放，由你看效果判断，本站不判对错。题面留空时，随机让模型用 SVG
-				画一种动物骑一种交通工具的 2D 动画；也可以写自己的题面，题面要让模型输出完整的 HTML 页面，不要在题面里写密钥。回答里没有 HTML
-				页面时不能播放，只显示回答片段。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
+				让模型直接写一个 HTML 页面，在沙箱里播放，由你看效果判断，本站不判对错。每次随机抽一种鸟和一个场景，让模型用 SVG
+				画这只鸟在这个场景里骑自行车的 2D 动画。回答里没有 HTML 页面时不能播放，只显示回答片段。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
 			</p>
 			<form
 				class="grid html-form"
@@ -189,20 +184,6 @@ export function HtmlTest() {
 				</label>
 				<ChoiceField label="协议" testId="html-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="推理强度" testId="html-effort" value={effort} options={EFFORTS} text={effortText} onChange={setEffort} class="col-6 col-lg-2" />
-				<label class="field col-12">
-					<span class="field-label">题面（可选）</span>
-					{/* Uncontrolled like the custom question's prompt: no value prop, so the text never becomes a DOM attribute. */}
-					<textarea
-						rows={3}
-						spellcheck={false}
-						placeholder="留空时随机出题：用 SVG 画动物骑交通工具的 2D 动画"
-						onInput={(e) => setPrompt(e.currentTarget.value)}
-						data-testid="html-prompt"
-					/>
-					<span class="muted small num" data-testid="html-prompt-count">
-						{codePoints(prompt)}/{MAX_CUSTOM_PROMPT}
-					</span>
-				</label>
 				{/* From 720px up the button sits beside the model field, where the open model list cannot cover it. */}
 				<ModelField value={model} onInput={setModel} target={target} testId="html-model" class="col-12 col-md-6 col-lg-4" />
 				<div class="actions col-12 col-md-6 col-lg-4">

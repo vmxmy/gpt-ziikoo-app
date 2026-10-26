@@ -81,13 +81,8 @@ export function makeProbe(target: Target, model: string, seed: number): Probe {
 // Runs only from its own tab as one call without runId, so it stays out of history and gets the worker's long-answer limits.
 export const HTML_QUESTION = "pelican-svg";
 
-export type HtmlSource = { seed: number } | { prompt: string };
-
-export function probeHtml(target: Target, model: string, protocol: Protocol, effort: Effort | null, source: HtmlSource, signal: AbortSignal): Promise<ProbeOutcome> {
-	const common = { ...target, model, protocol, ...(effort && { effort }) };
-	return "seed" in source
-		? probeOnce({ ...common, question: HTML_QUESTION, seed: source.seed }, signal)
-		: probeOnce({ ...common, custom: { prompt: source.prompt, html: true } }, signal);
+export function probeHtml(target: Target, model: string, protocol: Protocol, effort: Effort | null, seed: number, signal: AbortSignal): Promise<ProbeOutcome> {
+	return probeOnce({ ...target, model, protocol, ...(effort && { effort }), question: HTML_QUESTION, seed }, signal);
 }
 
 export const MAX_CUSTOM_PROMPT = 2000;

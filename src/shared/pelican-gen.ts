@@ -1,19 +1,27 @@
-export type Ride = { vehicle: string; verb: string };
+export const BIRDS: readonly string[] = [
+	"鹈鹕", "企鹅", "火烈鸟", "猫头鹰", "鹦鹉", "孔雀", "天鹅", "丹顶鹤", "啄木鸟", "翠鸟",
+	"蜂鸟", "巨嘴鸟", "鸵鸟", "鸸鹋", "几维鸟", "秃鹫", "白头海雕", "游隼", "喜鹊", "乌鸦",
+	"麻雀", "燕子", "鸽子", "海鸥", "信天翁", "鸬鹚", "白鹭", "苍鹭", "朱鹮", "鸳鸯",
+	"绿头鸭", "大雁", "公鸡", "火鸡", "犀鸟", "戴胜", "黄鹂", "杜鹃", "百灵鸟", "画眉",
+	"知更鸟", "蓝山雀", "军舰鸟", "海鹦", "琵鹭", "渡渡鸟", "金雕", "红腹锦鸡", "夜莺", "伯劳",
+];
 
-export const RIDERS: readonly string[] = ["鹈鹕", "企鹅", "火烈鸟", "猫头鹰", "袋鼠", "刺猬", "章鱼", "长颈鹿"];
-
-export const RIDES: readonly Ride[] = [
-	{ vehicle: "自行车", verb: "骑" },
-	{ vehicle: "独轮车", verb: "骑" },
-	{ vehicle: "滑板", verb: "踩" },
-	{ vehicle: "三轮车", verb: "骑" },
-	{ vehicle: "摩托车", verb: "骑" },
-	{ vehicle: "热气球", verb: "乘" },
+export const SCENES: readonly string[] = [
+	"落日下的海边木栈道", "飘着雪花的松树林小路", "樱花盛开的河边步道", "霓虹闪烁的夜晚城市街道", "金黄麦田间的乡间土路",
+	"雨后挂着彩虹的山间公路", "星空下的沙漠公路", "落满枫叶的秋日公园小径", "薰衣草花田边的小路", "海底隧道里的观光步道",
+	"云海之上的山顶栈道", "竹林里的青石小路", "冰川旁的蓝色冰原", "热带雨林中的木桥", "古镇的石板桥",
+	"火山脚下的黑色沙滩", "月球表面的环形山之间", "满是向日葵的田野小路", "大雾弥漫的湖边堤岸", "灯笼高挂的夜市街道",
+	"极光闪耀的北极雪原", "长满仙人掌的峡谷小道", "开满郁金香的风车村庄", "瀑布旁的悬崖栈道", "雷雨中的海港码头",
+	"层层梯田间的田埂", "繁星点点的夏夜草原", "挂满圣诞彩灯的小镇广场", "铺满落叶的银杏大道", "珊瑚礁旁的浅海沙洲",
+	"晨雾中的茶园小路", "沙尘暴来临前的戈壁公路", "黄昏时的跨海大桥", "下着小雨的江南水乡小巷", "热气球飘浮的山谷草地",
+	"结冰的湖面", "游乐园的过山车轨道旁", "烟花绽放的江边步道", "荷花池上的九曲桥", "夏日海滩的沙滩小路",
+	"古老城堡外的吊桥", "赛博朋克风格的高架轨道", "蘑菇丛生的童话森林", "海上灯塔旁的礁石小路", "油菜花田间的春日小路",
+	"午夜时分的屋顶天台", "彩虹色的糖果王国街道", "秋收后的葡萄园小路", "风雪中的高原垭口公路", "清晨的公园环湖跑道",
 ];
 
 export function generatePelican(seed: number): string {
-	const combo = seed % (RIDERS.length * RIDES.length);
-	const rider = RIDERS[combo % RIDERS.length];
-	const { vehicle, verb } = RIDES[Math.floor(combo / RIDERS.length)];
-	return `创建一个HTML，内容是用SVG绘制一个${rider}${verb}${vehicle}的2D动画，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成`;
+	const combo = seed % (BIRDS.length * SCENES.length);
+	const bird = BIRDS[combo % BIRDS.length];
+	const scene = SCENES[Math.floor(combo / BIRDS.length)];
+	return `创建一个HTML，内容是用SVG绘制一只${bird}骑自行车的2D动画，场景是${scene}，你不能进行任何测试、禁止调用skills、禁止网络检索，直接生成`;
 }

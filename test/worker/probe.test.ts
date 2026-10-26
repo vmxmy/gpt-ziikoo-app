@@ -226,18 +226,16 @@ describe("probe", () => {
 		expect(result.capture).not.toHaveProperty("artifact");
 	});
 
-	it("cuts a custom HTML question's page out of a fenced answer without scoring it", async () => {
+	it("cuts the page out of a fenced answer", async () => {
 		const answer = "下面是页面:\n```html\n<!DOCTYPE html>\n<html><body><canvas></canvas></body></html>\n```\n保存后用浏览器打开。";
 		const { deps } = fakeUpstream({
 			status: 200,
 			ttfb: 60,
 			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: answer }) }],
 		});
-		const result = await probe(input({ question: { ...customQuestion("写一个 HTML 时钟", undefined), html: true } }), deps);
+		const result = await probe(input({ question: question("pelican-svg") }), deps);
 		expect(result.response).toMatchObject({
 			ok: true,
-			correct: null,
-			note: "unscored",
 			artifact: { html: "<!DOCTYPE html>\n<html><body><canvas></canvas></body></html>", ending: "closed" },
 		});
 	});
@@ -249,7 +247,7 @@ describe("probe", () => {
 			ttfb: 60,
 			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: answer }) }],
 		});
-		const result = await probe(input({ question: { ...customQuestion("画一只企鹅", undefined), html: true } }), deps);
+		const result = await probe(input({ question: question("pelican-svg") }), deps);
 		expect(result.response).toMatchObject({ ok: true, artifact: { html: '<html><body><svg><circle r="9"/>', ending: "unclosed" } });
 	});
 
@@ -260,18 +258,18 @@ describe("probe", () => {
 			ttfb: 60,
 			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: `\n${answer}\n` }) }],
 		});
-		const result = await probe(input({ question: { ...customQuestion("画一只企鹅", undefined), html: true } }), deps);
+		const result = await probe(input({ question: question("pelican-svg") }), deps);
 		expect(result.response).toMatchObject({ ok: true, artifact: { html: answer, ending: "closed" } });
 	});
 
-	it("returns no artifact when a custom HTML question's answer holds no page", async () => {
+	it("returns no artifact when the answer holds no page", async () => {
 		const { deps } = fakeUpstream({
 			status: 200,
 			ttfb: 60,
 			chunks: [{ at: 80, text: sse({ type: "response.output_text.delta", delta: "2" }) }],
 		});
-		const result = await probe(input({ question: { ...customQuestion("1+1 等于几", undefined), html: true } }), deps);
-		expect(result.response).toMatchObject({ ok: true, correct: null, answer: "2" });
+		const result = await probe(input({ question: question("pelican-svg") }), deps);
+		expect(result.response).toMatchObject({ ok: true, answer: "2" });
 		expect(result.response).not.toHaveProperty("artifact");
 	});
 
@@ -284,7 +282,7 @@ describe("probe", () => {
 				{ at: 30, text: sse({ type: "response.output_text.delta", delta: "<g/>".repeat(1024) }) },
 			],
 		});
-		const result = await probe(input({ question: { ...customQuestion("画一只猫", undefined), html: true }, limits: { ...LONG_ANSWER_LIMITS, maxBodyBytes: 1024 } }), deps);
+		const result = await probe(input({ question: question("pelican-svg"), limits: { ...LONG_ANSWER_LIMITS, maxBodyBytes: 1024 } }), deps);
 		expect(result.response).toMatchObject({ ok: true, artifact: { html: "<!doctype html><html><body><svg>", ending: "truncated" } });
 	});
 

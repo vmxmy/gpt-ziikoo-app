@@ -87,38 +87,11 @@ test("HTML 生成页签按所选推理强度调用一次,生成中切走再切�
 		await page.getByTestId("tab-html").click();
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId("html-result")).toContainText("推理强度 xhigh");
+		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
+		await expect(page.getByTestId("html-prompt")).toHaveCount(0);
 		await page.getByTestId("html-play").click();
 		await expect(page.locator("iframe.animation-frame")).toBeVisible();
 		await expect(page.getByTestId("call-dot")).toHaveCount(0);
-	}));
-
-// The mock answers any prompt that asks for 用SVG绘制 with its SVG page, so a custom prompt still yields a playable answer.
-test("HTML 生成页签用自定义题面调用一次,结果显示该题面并可播放", async ({ page, site, key }) =>
-	scrubbed(page, async () => {
-		const prompt = "写一个HTML页面，用SVG绘制一只猫弹钢琴的动画";
-		await page.goto("/#html");
-		await page.getByTestId("html-site").fill(site);
-		await page.getByTestId("html-key").fill(key);
-		await page.getByTestId("html-model").fill("mock-good");
-		await page.getByTestId("html-prompt").fill(prompt);
-		await page.getByTestId("html-run").click();
-		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByTestId("html-shown-prompt")).toHaveText(prompt);
-		await page.getByTestId("html-play").click();
-		await expect(page.locator("iframe.animation-frame")).toBeVisible();
-	}));
-
-test("HTML 生成页签的回答里没有 HTML 页面时不能播放,只显示回答片段", async ({ page, site, key }) =>
-	scrubbed(page, async () => {
-		await page.goto("/#html");
-		await page.getByTestId("html-site").fill(site);
-		await page.getByTestId("html-key").fill(key);
-		await page.getByTestId("html-model").fill("mock-good");
-		await page.getByTestId("html-prompt").fill("1+1 等于几？只回答数字");
-		await page.getByTestId("html-run").click();
-		await expect(page.getByTestId("html-no-page")).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByTestId("html-answer")).toHaveText("OK");
-		await expect(page.getByTestId("html-play")).toHaveCount(0);
 	}));
 
 test("页面加载,题目清单,题面展开与复制和接口逐字节一致", async ({ page, context, questions }) => {
