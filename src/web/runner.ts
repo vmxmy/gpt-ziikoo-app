@@ -25,6 +25,7 @@ export type StopInfo = { status: number; message: string; retryAfterSec: number 
 
 export type RunSnapshot = {
 	runId: string;
+	race: readonly [Protocol, Protocol];
 	protocol: Protocol | null;
 	attempts: Attempt[];
 	stop: StopInfo | null;
@@ -37,6 +38,7 @@ export type RunOptions = {
 	questions: string[];
 	probe: Probe;
 	signal: AbortSignal;
+	race: readonly [Protocol, Protocol];
 	protocol?: Protocol;
 	concurrency?: number;
 	onUpdate?: (snapshot: RunSnapshot) => void;
@@ -84,6 +86,7 @@ export async function runLadder(opts: RunOptions): Promise<RunSnapshot> {
 	const runSignal = AbortSignal.any([opts.signal, stopCtrl.signal]);
 	let snap: RunSnapshot = {
 		runId,
+		race: opts.race,
 		protocol: opts.protocol ?? null,
 		attempts: [],
 		stop: null,
@@ -137,17 +140,15 @@ export async function runLadder(opts: RunOptions): Promise<RunSnapshot> {
 	}
 
 	async function detectProtocol(question: string): Promise<Protocol> {
+		const [first, second] = opts.race;
 		for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 			const base = { question, runId, stage: 1, seq: 1, attempt };
-			const [responses, chat] = await Promise.all([
-				call({ ...base, protocol: "responses" }, runSignal),
-				call({ ...base, protocol: "chat" }, runSignal),
-			]);
-			if (responses !== "aborted" && responses?.ok) return "responses";
-			if (chat !== "aborted" && chat?.ok) return "chat";
+			const [a, b] = await Promise.all([call({ ...base, protocol: first }, runSignal), call({ ...base, protocol: second }, runSignal)]);
+			if (a !== "aborted" && a?.ok) return first;
+			if (b !== "aborted" && b?.ok) return second;
 			if (runSignal.aborted) break;
 		}
-		return "responses";
+		return first;
 	}
 
 	async function runStage(question: string, protocol: Protocol, index: number) {

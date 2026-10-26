@@ -7,7 +7,7 @@ import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { ChoiceField } from "./watch-add.tsx";
-import { PROTOCOLS } from "./watch.ts";
+import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
 type EffortChoice = Effort | "";
 const EFFORTS: readonly EffortChoice[] = ["", "low", "medium", "high", "xhigh"];
@@ -134,6 +134,10 @@ export function HtmlTest() {
 	const keyInput = useRef<HTMLInputElement>(null);
 	const ctrl = useRef<AbortController | null>(null);
 	const target = { site: site.trim(), key };
+	const chooseModel = (next: string) => {
+		setModel(next);
+		setProtocol((current) => protocolForModel(next, current));
+	};
 
 	const send = async () => {
 		const missing = missingFields(target, model);
@@ -185,7 +189,7 @@ export function HtmlTest() {
 				<ChoiceField label="协议" testId="html-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="推理强度" testId="html-effort" value={effort} options={EFFORTS} text={effortText} onChange={setEffort} class="col-6 col-lg-2" />
 				{/* From 720px up the button sits beside the model field, where the open model list cannot cover it. */}
-				<ModelField value={model} onInput={setModel} target={target} testId="html-model" class="col-12 col-md-6 col-lg-4" />
+				<ModelField value={model} onInput={chooseModel} target={target} testId="html-model" class="col-12 col-md-6 col-lg-4" />
 				<div class="actions col-12 col-md-6 col-lg-4">
 					{status.kind === "sending" ? (
 						<button key="cancel" type="button" class="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="html-cancel">

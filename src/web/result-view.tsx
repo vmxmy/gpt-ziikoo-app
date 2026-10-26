@@ -170,7 +170,7 @@ export function Results(props: {
 	const verdicts = questions.map((q) => ({ q, v: evaluateQuestion(ladderCalls(run.attempts, q.id, run.protocol)) }));
 	const overall = summarizeRun(verdicts.map(({ v }) => v.status));
 	const passed = verdicts.filter(({ v }) => v.status === "passed").length;
-	const other: Protocol = run.protocol === "chat" ? "responses" : "chat";
+	const other = run.race.find((p) => p !== run.protocol) ?? run.race[0];
 	return (
 		<section class="panel col-12" id="results" aria-labelledby="result-h">
 			<div class="section-head">

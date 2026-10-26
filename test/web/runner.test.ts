@@ -3,6 +3,7 @@ import { evaluateQuestion } from "../../src/shared/ladder.ts";
 import type { ProbeResponse } from "../../src/shared/types.ts";
 import { checkCustom, customResult, probeCustom, type CustomDraft } from "../../src/web/api.ts";
 import { ladderCalls, RATE_LIMIT_RETRIES, runLadder, type ProbeArgs, type ProbeOutcome } from "../../src/web/runner.ts";
+import { raceProtocols } from "../../src/web/watch.ts";
 
 const RUN_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -53,13 +54,14 @@ function scriptedProbe(script: Script) {
 	return { probe, calls, maxInFlight: () => maxInFlight };
 }
 
-const run = (script: Script, opts: { questions?: string[]; protocol?: "responses" | "chat"; signal?: AbortSignal } = {}) => {
+const run = (script: Script, opts: { questions?: string[]; model?: string; protocol?: "responses" | "chat"; signal?: AbortSignal } = {}) => {
 	const p = scriptedProbe(script);
 	const done = runLadder({
 		runId: RUN_ID,
 		questions: opts.questions ?? ["thibault"],
 		probe: p.probe,
 		signal: opts.signal ?? new AbortController().signal,
+		race: raceProtocols(opts.model ?? "gpt-6-astra"),
 		protocol: opts.protocol,
 	});
 	return { ...p, done };
@@ -181,6 +183,14 @@ describe("protocol detection", () => {
 	it("defaults to responses when both protocols answer", async () => {
 		const { done } = run(() => CORRECT);
 		expect((await done).protocol).toBe("responses");
+	});
+
+	it("races anthropic against chat for a Claude model and keeps anthropic when both answer", async () => {
+		const { done, calls } = run(() => CORRECT, { model: "claude-opus-5-5" });
+		const snap = await done;
+		expect(snap.protocol).toBe("anthropic");
+		expect(snap.race).toEqual(["anthropic", "chat"]);
+		expect(calls.filter((c) => c.stage === 1 && c.seq === 1).map((c) => c.protocol)).toEqual(["anthropic", "chat"]);
 	});
 
 	it("does not start other questions when the race finds no working protocol", async () => {

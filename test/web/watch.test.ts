@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardId, cardLabel, normalizeAlias, parseSite, parseTokens, parseWatchInput, statusNotice } from "../../src/web/watch.ts";
+import { cardId, cardLabel, normalizeAlias, parseSite, parseTokens, parseWatchInput, protocolForModel, statusNotice } from "../../src/web/watch.ts";
 
 const KEY = "sk-live-known-secret-0042";
 const TOKEN = "A".repeat(43);
@@ -58,6 +58,15 @@ describe("statusNotice", () => {
 		expect(statusNotice({ kind: "running" })).toBeNull();
 		expect(statusNotice({ kind: "paused" })).toBe("已暂停");
 		expect(statusNotice({ kind: "bad_key" })).toContain("密钥无效");
+	});
+});
+
+describe("protocolForModel", () => {
+	it("picks anthropic for a Claude model and leaves it again when the model changes", () => {
+		expect(protocolForModel("claude-sonnet-5-5", "chat")).toBe("anthropic");
+		expect(protocolForModel("anthropic/Claude-Opus-5", "responses")).toBe("anthropic");
+		expect(protocolForModel("gpt-6-astra", "anthropic")).toBe("responses");
+		expect(protocolForModel("gpt-6-astra", "chat")).toBe("chat");
 	});
 });
 

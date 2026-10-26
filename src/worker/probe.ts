@@ -13,6 +13,9 @@ export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeo
 // A streamed HTML page costs about 200 bytes of events per token, past the stored-call cap, and a high effort
 // reasons for minutes first. Only unrecorded calls get these limits, so storage keeps its cap.
 export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 2 * 1024 * 1024, timeoutMs: 300_000 };
+// The Messages API requires max_tokens; 32000 fits every Claude model from Opus 4 on and leaves room for an HTML page.
+const ANTHROPIC_MAX_TOKENS = 32_000;
+const ANTHROPIC_VERSION = "2023-06-01";
 
 export type ProbeInput = {
 	origin: string;
@@ -72,7 +75,29 @@ const REQUEST_BUILDERS: Record<Protocol, (input: ProbeInput) => { path: string; 
 			...(effort && { reasoning_effort: effort }),
 		},
 	}),
+	anthropic: ({ model, question, effort }) => ({
+		path: "/v1/messages",
+		body: {
+			model,
+			max_tokens: ANTHROPIC_MAX_TOKENS,
+			messages: [{ role: "user", content: question.prompt }],
+			stream: true,
+			...(effort && { thinking: { type: "adaptive" }, output_config: { effort } }),
+		},
+	}),
 };
+
+const AUTH_HEADERS: Record<Protocol, (key: string) => Record<string, string>> = {
+	responses: (key) => ({ Authorization: `Bearer ${key}` }),
+	chat: (key) => ({ Authorization: `Bearer ${key}` }),
+	anthropic: (key) => ({ "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION }),
+};
+
+// A question's default effort is tuned for OpenAI reasoning models; on anthropic it would switch on adaptive thinking,
+// which Claude models before 4.6 reject, so only an effort the caller chose reaches them.
+export function defaultEffort(question: Question, protocol: Protocol): Effort | null {
+	return protocol === "anthropic" ? null : (question.defaultEffort ?? null);
+}
 
 const STATUS_REASONS: Partial<Record<number, FailReason>> = {
 	401: "unauthorized",
@@ -199,7 +224,7 @@ export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): 
 			method: "POST",
 			headers: {
 				"User-Agent": UA,
-				Authorization: `Bearer ${input.key}`,
+				...AUTH_HEADERS[input.protocol](input.key),
 				"Content-Type": "application/json",
 				Accept: "text/event-stream",
 			},

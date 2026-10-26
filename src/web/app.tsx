@@ -9,6 +9,7 @@ import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TestForm } from "./test-form.tsx";
+import { raceProtocols } from "./watch.ts";
 import { WatchBoard } from "./watch-board.tsx";
 
 const PRIVACY = [
@@ -247,6 +248,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 			questions: chosen.map((q) => q.id),
 			probe: makeProbe({ site: site.trim(), key }, model.trim(), seed),
 			signal: controller.signal,
+			race: raceProtocols(model.trim()),
 			protocol,
 			onUpdate: setRun,
 		}).catch((err: unknown) => setFormError(err instanceof Error ? err.message : "测试中断"));

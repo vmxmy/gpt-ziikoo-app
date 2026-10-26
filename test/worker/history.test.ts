@@ -141,6 +141,13 @@ describe("stage-1 protocol race", () => {
 		expect(view.questions[0].verdict?.stages.slice(0, 2).map((s) => s.state)).toEqual(["passed", "passed"]);
 		expect(view.questions[0].metrics.calls).toBe(7);
 	});
+
+	it("counts the anthropic answer when a Claude race has anthropic and chat both answering", () => {
+		const anthropicStage2 = stage2.map((c) => ({ ...c, protocol: "anthropic" as const }));
+		const [view] = buildRunViews([raceChatWrong, call({ protocol: "anthropic" }), ...anthropicStage2], () => "knowledge");
+		expect(view.protocol).toBe("anthropic");
+		expect(view.questions[0].verdict?.stages.slice(0, 2).map((s) => s.state)).toEqual(["passed", "passed"]);
+	});
 });
 
 function rawCall(overrides: Partial<RawCall>): RawCall {

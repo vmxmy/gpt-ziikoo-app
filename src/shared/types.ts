@@ -8,7 +8,7 @@ export type Scorer =
 	| { type: "svg_animation" };
 
 export type Effort = "low" | "medium" | "high" | "xhigh";
-export type Protocol = "responses" | "chat";
+export type Protocol = "responses" | "chat" | "anthropic";
 export type GeneratorId = "candy" | "pelican";
 
 export type QuestionMeta = {

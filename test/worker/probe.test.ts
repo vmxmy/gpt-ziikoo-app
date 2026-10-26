@@ -168,6 +168,66 @@ describe("probe", () => {
 		});
 	});
 
+	it("parses a streamed anthropic call, sending the key as x-api-key and counting cached input as prompt", async () => {
+		const event = (type: string, fields: object = {}) => `event: ${type}\n${sse({ type, ...fields })}`;
+		const { deps, requests } = fakeUpstream({
+			status: 200,
+			ttfb: 70,
+			chunks: [
+				{
+					at: 90,
+					text: event("message_start", {
+						message: { id: "msg_01AbC", usage: { input_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 11, output_tokens: 1 } },
+					}),
+				},
+				{ at: 120, text: event("content_block_delta", { index: 0, delta: { type: "thinking_delta", thinking: "他是谁" } }) },
+				{ at: 200, text: event("content_block_delta", { index: 1, delta: { type: "text_delta", text: "Yes, I know" } }) },
+				{ at: 230, text: event("content_block_delta", { index: 1, delta: { type: "text_delta", text: " him." } }) },
+				{ at: 260, text: event("message_delta", { delta: { stop_reason: "end_turn" }, usage: { output_tokens: 40 } }) },
+				{ at: 270, text: event("message_stop") },
+			],
+		});
+		const result = await probe(input({ protocol: "anthropic", model: "claude-opus-5-5", effort: "high" }), deps);
+		expect(result.response).toEqual({
+			ok: true,
+			questionVersion: 1,
+			correct: true,
+			note: "YES",
+			reasoningTokens: null,
+			idShape: "other",
+			answer: "Yes, I know him.",
+			streamed: true,
+			ttfbMs: 70,
+			ttftMs: 200,
+			totalMs: 270,
+			promptTokens: 31,
+			cachedTokens: 11,
+		});
+		expect(requests[0].url).toBe("https://api.example.com/v1/messages");
+		expect(requests[0].init.headers).toEqual({
+			"User-Agent": UA,
+			"x-api-key": KEY,
+			"anthropic-version": "2023-06-01",
+			"Content-Type": "application/json",
+			Accept: "text/event-stream",
+		});
+		expect(JSON.parse(String(requests[0].init.body))).toEqual({
+			model: "claude-opus-5-5",
+			max_tokens: 32000,
+			messages: [{ role: "user", content: question("thibault").prompt }],
+			stream: true,
+			thinking: { type: "adaptive" },
+			output_config: { effort: "high" },
+		});
+	});
+
+	it("reads a whole anthropic message when the relay ignores stream", async () => {
+		const body = { id: "msg_01AbC", type: "message", content: [{ type: "thinking", thinking: "嗯" }, { type: "text", text: "No, I don't." }], usage: { input_tokens: 31 } };
+		const { deps } = fakeUpstream({ status: 200, ttfb: 50, chunks: [{ at: 60, text: JSON.stringify(body) }] });
+		const result = await probe(input({ protocol: "anthropic" }), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: false, answer: "No, I don't.", streamed: false, promptTokens: 31, cachedTokens: null });
+	});
+
 	it("falls back to a whole JSON body with raw control characters", async () => {
 		const body =
 			'{"id":"resp_ft_123","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"No,\nI don\'t"}]}],' +
