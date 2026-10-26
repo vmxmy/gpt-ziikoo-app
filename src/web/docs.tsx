@@ -20,13 +20,18 @@ export function ApiDocs() {
 					<code>GET /api/questions</code>：题目清单，含题面。
 				</li>
 				<li>
-					<code>POST /api/probe</code>：请求体 <code>{"{ site, key, protocol, model, question, effort?, runId?, stage?, seq?, attempt?, seed? }"}</code>
+					<code>POST /api/probe</code>：请求体 <code>{"{ site, key, protocol, model, question, effort?, runId?, stage?, seq?, attempt?, seed?, progress? }"}</code>
 					。一次调用一道题。<code>effort</code> 可选 low、medium、high、xhigh。带 <code>runId</code> 时必须同时带 <code>stage</code> 与 <code>seq</code>，结果才保存。
 				</li>
 				<li>
 					生成题（<code>candy-var</code> 与 <code>pelican-svg</code>）按 <code>seed</code> 出题。同一轮的所有调用用同一个 <code>seed</code>，不带 <code>seed</code> 时用示例 seed 0。
 				</li>
 				<li>站点自身的失败返回 200 加 <code>ok:false</code> 与 <code>reason</code>；参数不合法返回 400；本站限流或超出每轮调用上限返回 429。</li>
+				<li>
+					请求体加 <code>progress: true</code> 时，200 响应改为每行一个 JSON：先是 <code>{"{ type: \"start\", timeoutMs }"}</code>，站点响应后每半秒最多一行{" "}
+					<code>{"{ type: \"progress\", chars }"}</code>（已收到的回答字符数），最后一行 <code>{"{ type: \"result\", response }"}</code>，<code>response</code>{" "}
+					与不带这个字段时的响应体相同。
+				</li>
 				<li>
 					<code>POST /api/history</code>、<code>/api/history/raw</code>、<code>/api/history/delete</code>：请求体带同一站点与密钥。密钥只放请求体，不放请求头和 URL。
 				</li>

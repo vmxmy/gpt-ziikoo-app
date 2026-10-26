@@ -511,3 +511,56 @@ a {
 	max-height: 480px;
 	overflow-y: auto;
 }
+
+.html-progress {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	margin-top: var(--space-5);
+}
+
+.html-progress-text p {
+	margin: 0 0 var(--space-1);
+}
+
+.countdown {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 72px;
+	height: 72px;
+}
+
+.countdown > * {
+	grid-area: 1 / 1;
+}
+
+.countdown svg {
+	width: 100%;
+	height: 100%;
+}
+
+.countdown circle {
+	fill: none;
+	stroke-width: 4;
+}
+
+.countdown-track {
+	stroke: var(--border);
+}
+
+.countdown-bar {
+	stroke: var(--accent);
+	transition: stroke-dashoffset 1s linear;
+}
+
+.countdown-text {
+	font-size: var(--fs-14);
+	font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.countdown-bar {
+		transition: none;
+	}
+}

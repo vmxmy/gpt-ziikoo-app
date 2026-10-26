@@ -5,7 +5,9 @@ import type {
 	HistoryRawResponse,
 	HistoryResponse,
 	ModelsResponse,
+	ProbeLine,
 	ProbeOk,
+	ProbeProgress,
 	ProbeRequest,
 	ProbeResponse,
 	Protocol,
@@ -57,7 +59,11 @@ export function missingFields(target: Target, model: string): string[] {
 
 type CustomProbeRequest = Omit<ProbeRequest, "question" | "runId" | "stage" | "seq" | "attempt" | "seed"> & { custom: NonNullable<ProbeRequest["custom"]> };
 
-async function probeOnce(body: ProbeRequest | CustomProbeRequest, signal?: AbortSignal): Promise<ProbeOutcome> {
+async function probeOnce(
+	body: ProbeRequest | CustomProbeRequest,
+	signal?: AbortSignal,
+	read: (res: Response) => Promise<ProbeResponse> = (res) => res.json(),
+): Promise<ProbeOutcome> {
 	let response: ProbeResponse;
 	try {
 		const res = await post("/api/probe", body, signal);
@@ -65,7 +71,7 @@ async function probeOnce(body: ProbeRequest | CustomProbeRequest, signal?: Abort
 			const f = await failure(res);
 			return { kind: "stop", status: f.status, message: f.message, retryAfterSec: f.retryAfterSec };
 		}
-		response = await res.json();
+		response = await read(res);
 	} catch (err) {
 		if (signal?.aborted) throw err;
 		return { kind: "network_error" };
@@ -81,8 +87,34 @@ export function makeProbe(target: Target, model: string, seed: number): Probe {
 // Runs only from its own tab as one call without runId, so it stays out of history and gets the worker's long-answer limits.
 export const HTML_QUESTION = "pelican-svg";
 
-export function probeHtml(target: Target, model: string, protocol: Protocol, effort: Effort | null, seed: number, signal: AbortSignal): Promise<ProbeOutcome> {
-	return probeOnce({ ...target, model, protocol, ...(effort && { effort }), question: HTML_QUESTION, seed }, signal);
+// A stream that ends before the result line was cut off on the way, which the caller reports as a network error.
+async function readProgress(res: Response, onProgress: (line: ProbeProgress) => void): Promise<ProbeResponse> {
+	if (!res.body) throw new Error("progress stream has no body");
+	const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+	let rest = "";
+	for (let next = await reader.read(); !next.done; next = await reader.read()) {
+		const lines = (rest + next.value).split("\n");
+		rest = lines.pop() ?? "";
+		for (const text of lines) {
+			const line: ProbeLine = JSON.parse(text);
+			if (line.type === "result") return line.response;
+			onProgress(line);
+		}
+	}
+	throw new Error("progress stream ended without a result");
+}
+
+export function probeHtml(
+	target: Target,
+	model: string,
+	protocol: Protocol,
+	effort: Effort | null,
+	seed: number,
+	signal: AbortSignal,
+	onProgress: (line: ProbeProgress) => void,
+): Promise<ProbeOutcome> {
+	const body = { ...target, model, protocol, ...(effort && { effort }), question: HTML_QUESTION, seed, progress: true };
+	return probeOnce(body, signal, (res) => readProgress(res, onProgress));
 }
 
 export const MAX_CUSTOM_PROMPT = 2000;

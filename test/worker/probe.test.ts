@@ -434,6 +434,23 @@ describe("probe", () => {
 		expect(result.capture.rawEvents).toHaveLength(3);
 	});
 
+	it("reports answer characters once the site answers, at most once per half second", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 100,
+			chunks: [
+				{ at: 200, text: sse({ type: "response.created", response: { id: "resp_1" } }) },
+				{ at: 300, text: `data: {"type":"response.output_text.delta","del` },
+				{ at: 400, text: `ta":"<html>"}\r\n\r\n` },
+				{ at: 700, text: sse({ type: "response.output_text.delta", delta: "<body>" }) },
+				{ at: 800, text: sse({ type: "response.output_text.delta", delta: "</body></html>" }) },
+			],
+		});
+		const reports: number[] = [];
+		await probe(input({ question: question("pelican-svg"), onProgress: (chars) => reports.push(chars) }), deps);
+		expect(reports).toEqual([0, 12]);
+	});
+
 	it("reads an HTML answer past the default cap under the long-answer limits", async () => {
 		const body = `<svg>${"<g/>".repeat(25 * 1024)}<animate/></svg>`;
 		const parts = ["<!doctype html><html><body>", body, body, body, "</body></html>"];

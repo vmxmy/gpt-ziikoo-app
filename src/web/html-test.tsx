@@ -1,6 +1,6 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
-import type { Effort, PageEnding, Protocol } from "../shared/types.ts";
+import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/types.ts";
 import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
@@ -14,7 +14,9 @@ const EFFORTS: readonly EffortChoice[] = ["", "low", "medium", "high", "xhigh"];
 const effortText = (e: EffortChoice) => e || "不指定";
 
 type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; prompt: string; fileName: string };
-type Status = { kind: "idle" } | { kind: "sending" } | { kind: "cancelled" } | ({ kind: "done" } & Done);
+// timeoutMs arrives with the first progress line; chars stays null until the site answers.
+type Sending = { kind: "sending"; startedAt: number; timeoutMs: number | null; chars: number | null };
+type Status = { kind: "idle" } | Sending | { kind: "cancelled" } | ({ kind: "done" } & Done);
 type CopyStatus = "copied" | "failed";
 
 const ENDING_WARNING: Record<Exclude<PageEnding, "closed">, string> = {
@@ -36,6 +38,61 @@ function AnimationFrame({ html }: { html: string }) {
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+const TICK_MS = 1_000;
+const RING_RADIUS = 26;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${pad(sec % 60)}`;
+
+function stageText(chars: number | null): string {
+	if (chars === null) return "已发出调用，等站点响应";
+	if (chars === 0) return "站点已响应，等首字。推理强度高时可能要几分钟";
+	return "正在接收回答";
+}
+
+// The countdown runs on the page's clock from the click, so it reaches 0 a little before the worker gives up.
+function HtmlProgress({ startedAt, timeoutMs, chars }: Sending) {
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+		return () => clearInterval(timer);
+	}, []);
+	const elapsed = now - startedAt;
+	const left = timeoutMs === null ? null : Math.max(0, timeoutMs - elapsed);
+	const spent = timeoutMs === null ? 0 : Math.min(1, elapsed / timeoutMs);
+	return (
+		<div class="html-progress" data-testid="html-progress">
+			<div class="countdown" role="timer" aria-label="剩余时间">
+				<svg viewBox="0 0 60 60" aria-hidden="true">
+					<circle class="countdown-track" cx="30" cy="30" r={RING_RADIUS} />
+					<circle
+						class="countdown-bar"
+						cx="30"
+						cy="30"
+						r={RING_RADIUS}
+						transform="rotate(-90 30 30)"
+						stroke-dasharray={RING_LENGTH}
+						stroke-dashoffset={RING_LENGTH * spent}
+					/>
+				</svg>
+				<span class="countdown-text num" data-testid="html-countdown">
+					{left === null ? "--:--" : clock(Math.ceil(left / 1000))}
+				</span>
+			</div>
+			<div class="html-progress-text">
+				<p role="status" data-testid="html-stage">
+					{stageText(chars)}
+				</p>
+				<p class="muted small num" data-testid="html-received">
+					已用 {clock(Math.floor(elapsed / 1000))}
+					{chars ? ` · 已收到 ${chars.toLocaleString("zh-CN")} 个字符` : ""}
+				</p>
+				<p class="muted small">倒计时到 0 时还没写完，本次按超时算失败。</p>
+			</div>
+		</div>
+	);
+}
 
 function htmlFileName(model: string, at: Date): string {
 	const stamp = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
@@ -167,9 +224,13 @@ export function HtmlTest() {
 		const controller = new AbortController();
 		ctrl.current = controller;
 		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-		setStatus({ kind: "sending" });
+		setStatus({ kind: "sending", startedAt: Date.now(), timeoutMs: null, chars: null });
+		const onProgress = (line: ProbeProgress) =>
+			setStatus((current) =>
+				current.kind !== "sending" ? current : line.type === "start" ? { ...current, timeoutMs: line.timeoutMs } : { ...current, chars: line.chars },
+			);
 		try {
-			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal);
+			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal, onProgress);
 			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed), fileName: htmlFileName(model.trim(), new Date()) });
 		} catch (err) {
 			if (!controller.signal.aborted) throw err;
@@ -221,7 +282,6 @@ export function HtmlTest() {
 							生成一次
 						</button>
 					)}
-					{status.kind === "sending" && <span class="muted small">生成中，最长等 5 分钟…</span>}
 				</div>
 				{formError && (
 					<p class="field-error" role="alert" data-testid="html-form-error">
@@ -229,6 +289,7 @@ export function HtmlTest() {
 					</p>
 				)}
 			</form>
+			{status.kind === "sending" && <HtmlProgress {...status} />}
 			<div aria-live="polite">
 				{status.kind === "cancelled" && <p class="warn">已取消。</p>}
 				{status.kind === "done" && <HtmlResult {...status} />}

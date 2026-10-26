@@ -86,7 +86,7 @@ test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生�
 		await expect(page.getByTestId("html-result")).toContainText("协议 anthropic");
 	}));
 
-test("HTML 生成页签按所选推理强度调用一次,生成中切走再切回不中断,生成后可下载 HTML 并播放动画", async ({ page, site, key }) =>
+test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计时与收到的字符数,切走再切回不中断,生成后可下载 HTML 并播放动画", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/#html");
 		await page.getByTestId("html-site").fill(site);
@@ -95,6 +95,8 @@ test("HTML 生成页签按所选推理强度调用一次,生成中切走再切�
 		await page.getByTestId("html-effort").selectOption("xhigh");
 		await page.getByTestId("html-run").click();
 		await expect(page.getByTestId("html-cancel")).toBeVisible();
+		await expect(page.getByTestId("html-countdown")).toHaveText(/^[45]:\d{2}$/);
+		await expect(page.getByTestId("html-received")).toContainText("个字符");
 		await page.getByTestId("tab-live").click();
 		await page.getByTestId("tab-html").click();
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
