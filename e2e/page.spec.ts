@@ -86,7 +86,7 @@ test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生�
 		await expect(page.getByTestId("html-result")).toContainText("协议 anthropic");
 	}));
 
-test("HTML 生成页签按所选推理强度调用一次,生成中切走再切回不中断,生成后可播放动画", async ({ page, site, key }) =>
+test("HTML 生成页签按所选推理强度调用一次,生成中切走再切回不中断,生成后可下载 HTML 并播放动画", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/#html");
 		await page.getByTestId("html-site").fill(site);
@@ -101,6 +101,11 @@ test("HTML 生成页签按所选推理强度调用一次,生成中切走再切�
 		await expect(page.getByTestId("html-result")).toContainText("推理强度 xhigh");
 		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
 		await expect(page.getByTestId("html-prompt")).toHaveCount(0);
+		const pending = page.waitForEvent("download");
+		await page.getByTestId("html-download").click();
+		const download = await pending;
+		expect(download.suggestedFilename()).toMatch(/^mock-slow-\d{8}-\d{6}\.html$/);
+		expect(await download.failure()).toBeNull();
 		await page.getByTestId("html-play").click();
 		await expect(page.locator("iframe.animation-frame")).toBeVisible();
 		await expect(page.getByTestId("call-dot")).toHaveCount(0);

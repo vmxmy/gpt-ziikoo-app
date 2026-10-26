@@ -13,7 +13,7 @@ type EffortChoice = Effort | "";
 const EFFORTS: readonly EffortChoice[] = ["", "low", "medium", "high", "xhigh"];
 const effortText = (e: EffortChoice) => e || "不指定";
 
-type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; prompt: string };
+type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; prompt: string; fileName: string };
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "cancelled" } | ({ kind: "done" } & Done);
 type CopyStatus = "copied" | "failed";
 
@@ -35,7 +35,25 @@ function AnimationFrame({ html }: { html: string }) {
 	);
 }
 
-function ArtifactActions({ html }: { html: string }) {
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function htmlFileName(model: string, at: Date): string {
+	const stamp = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+	return `${model.replace(/[^\w.-]+/g, "-")}-${stamp}.html`;
+}
+
+// The frame decodes the page as UTF-8 whatever it declares; the BOM makes a browser opening the file do the same.
+// octet-stream because a text/html blob URL, if ever navigated to, would run the untrusted page on this site's origin.
+function downloadHtml(html: string, fileName: string) {
+	const url = URL.createObjectURL(new Blob(["\uFEFF", html], { type: "application/octet-stream" }));
+	const link = document.createElement("a");
+	link.href = url;
+	link.download = fileName;
+	link.click();
+	URL.revokeObjectURL(url);
+}
+
+function ArtifactActions({ html, fileName }: { html: string; fileName: string }) {
 	const [playing, setPlaying] = useState(false);
 	const [copy, setCopy] = useState<CopyStatus | null>(null);
 	const doCopy = () => {
@@ -53,6 +71,9 @@ function ArtifactActions({ html }: { html: string }) {
 				</button>
 				<button type="button" class="btn-text" onClick={doCopy} data-testid="html-copy">
 					复制 HTML
+				</button>
+				<button type="button" class="btn-text" onClick={() => downloadHtml(html, fileName)} data-testid="html-download">
+					下载 HTML
 				</button>
 				<span class="muted small" role="status">
 					{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请在下面手动选中" : ""}
@@ -72,7 +93,7 @@ function ArtifactActions({ html }: { html: string }) {
 }
 
 // No verdict: the user judges the page by playing it, so only a failed call gets a state badge.
-function HtmlResult({ result, protocol, effort, prompt }: Done) {
+function HtmlResult({ result, protocol, effort, prompt, fileName }: Done) {
 	return (
 		<div class="html-result" data-testid="html-result">
 			<p class="muted small">
@@ -110,7 +131,7 @@ function HtmlResult({ result, protocol, effort, prompt }: Done) {
 									{ENDING_WARNING[result.response.artifact.ending]}
 								</p>
 							)}
-							<ArtifactActions html={result.response.artifact.html} />
+							<ArtifactActions html={result.response.artifact.html} fileName={fileName} />
 						</>
 					) : (
 						<p class="warn" data-testid="html-no-page">
@@ -149,7 +170,7 @@ export function HtmlTest() {
 		setStatus({ kind: "sending" });
 		try {
 			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal);
-			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed) });
+			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed), fileName: htmlFileName(model.trim(), new Date()) });
 		} catch (err) {
 			if (!controller.signal.aborted) throw err;
 			setStatus({ kind: "cancelled" });
@@ -210,7 +231,7 @@ export function HtmlTest() {
 			</form>
 			<div aria-live="polite">
 				{status.kind === "cancelled" && <p class="warn">已取消。</p>}
-				{status.kind === "done" && <HtmlResult result={status.result} protocol={status.protocol} effort={status.effort} prompt={status.prompt} />}
+				{status.kind === "done" && <HtmlResult {...status} />}
 			</div>
 		</section>
 	);
