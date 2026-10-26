@@ -74,6 +74,18 @@ test("custom 自定义题答错,回答按文本渲染", async ({ page, site, key
 		await expect(page.getByTestId("custom-q-answer").locator("b, img")).toHaveCount(0);
 	}));
 
+test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生成后可播放", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/#html");
+		await page.getByTestId("html-site").fill(site);
+		await page.getByTestId("html-key").fill(key);
+		await page.getByTestId("html-model").fill("mock-claude");
+		await expect(page.getByTestId("html-protocol")).toHaveValue("anthropic");
+		await page.getByTestId("html-run").click();
+		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId("html-result")).toContainText("协议 anthropic");
+	}));
+
 test("HTML 生成页签按所选推理强度调用一次,生成中切走再切回不中断,生成后可播放动画", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/#html");

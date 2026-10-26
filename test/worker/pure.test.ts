@@ -174,6 +174,18 @@ describe("parseProbeRequest limits", () => {
 	});
 });
 
+describe("parseProbeRequest protocol", () => {
+	const target = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m" };
+
+	// candy's default effort would switch on adaptive thinking, which Claude models before 4.6 reject.
+	it("accepts the anthropic protocol and skips a question's default effort for it", () => {
+		expect(parseProbeRequest({ ...target, protocol: "anthropic", question: "candy" })).toMatchObject({ ok: true, value: { protocol: "anthropic", effort: null } });
+		expect(parseProbeRequest({ ...target, protocol: "anthropic", question: "candy", effort: "high" })).toMatchObject({ ok: true, value: { effort: "high" } });
+		expect(parseProbeRequest({ ...target, question: "candy" })).toMatchObject({ ok: true, value: { effort: "low" } });
+		expect(parseProbeRequest({ ...target, protocol: "gemini", question: "candy" })).toEqual({ ok: false, message: "protocol 必须是 responses、chat 或 anthropic" });
+	});
+});
+
 describe("parseProbeRequest custom", () => {
 	const target = { site: "https://api.example.com", key: "sk-test-12345678", protocol: "responses", model: "m" };
 	const custom = { prompt: "回答:2+2 等于几?", scorer: { type: "contains", expected: "4" } };

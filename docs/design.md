@@ -82,7 +82,7 @@ API 说明  默认折叠,含接口约定、分关规则、curl 示例、限额  
 | 概念 | 只用 | 不用 |
 | --- | --- | --- |
 | 被测的服务 | 站点 | 中转站、目标 |
-| responses 与 chat 两种接口格式 | 协议 | 通道(API 字段仍叫 `protocol`) |
+| responses、chat 与 anthropic 三种接口格式 | 协议 | 通道(API 字段仍叫 `protocol`) |
 | 同一站点的不同线路,别名用它区分 | 通道 | |
 | 一次对站点的请求 | 调用 | 探测、样本(请求体、请求头等 HTTP 术语除外) |
 | 同一调用的第几次再发 | 尝试 | |
@@ -279,7 +279,7 @@ type CustomQuestion = {
 POST /api/probe   (Worker,匿名,限速)
    │ 校验目标 → 代发一次 → 评分
    ▼
-中转站 /v1/responses 或 /v1/chat/completions
+中转站 /v1/responses、/v1/chat/completions 或 /v1/messages
 ```
 
 为什么服务端代发:预检测试中,官方接口放行跨域,一家中转站对预检返回 403 且无 CORS 头。样本只有一家中转站,不能推广,但足以说明浏览器直连不可靠。代价是放弃「密钥不出浏览器」。
@@ -295,7 +295,15 @@ POST /api/probe   (Worker,匿名,限速)
 | 服务端 | 题库、评分、代发、流式计时、抽取 reasoning tokens 与响应 ID 形态、地址校验、限速、持久化与脱敏 |
 | 前端 | 四关阈值、并发、取消、进度、结论文案 |
 
-协议探测不另设接口:第 1 关两路并发发一次,哪路返回有效答案用哪路,都通默认 `responses`。「也测另一通道」作为结果后的按钮,默认不翻倍花费。
+协议探测不另设接口:第 1 关两路并发发一次,哪路返回有效答案用哪路,都通或都不通时用第一路。模型名含 `claude`(不分大小写)时两路是 `anthropic` 与 `chat`,否则是 `responses` 与 `chat`。「也测另一协议」作为结果后的按钮,换成同一对里的另一路,默认不翻倍花费。
+
+Anthropic 协议(2026-10-27 维护者授权):
+
+- 请求 `POST /v1/messages`。密钥放在请求头 `x-api-key`,另带 `anthropic-version: 2023-06-01`,不带 `Authorization`。
+- 请求体固定 `max_tokens: 32000`,这个接口要求必填。32000 适合 Opus 4 以后的 Claude 模型,也够写完一页 HTML。
+- 调用方给了推理强度时,请求体带 `thinking: { type: "adaptive" }` 与 `output_config: { effort }`。题的默认推理强度不用于这个协议:它按 OpenAI 推理模型设定,而 4.6 以前的 Claude 模型拒绝自适应思考。
+- 回答只取 `text_delta`,不取 `thinking_delta`。用量合并 `message_start` 与 `message_delta` 两处。输入 token 数是 `input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` 之和,缓存 token 数是 `cache_read_input_tokens`。思考 token 不单独计数,推理 token 数为空。响应 ID 形如 `msg_...`,形态记为 `other`。
+- 有协议选择的表单(「HTML 生成」、自定义题、添加监测)按模型名给默认值:模型名含 `claude` 时切到 `anthropic`;改成别的模型名时,`anthropic` 退回 `responses`,手选的 `chat` 保持。模型列表不用来判断协议:本站用 `Authorization` 请求 `/v1/models`,站点按 OpenAI 格式返回,看不出是否支持 `/v1/messages`。
 
 ## 持久化
 
@@ -336,7 +344,7 @@ usage 原文
 | 推理 token 数、响应 ID 形态 | 来自 usage 与响应 | 无 |
 | 各题通过率、成功率 | 由调用序列计算 | 无 |
 
-- 探针使用流式请求,聊天协议请求在末尾带回用量。字段与选项名来自对 OpenAI 接口的了解,实现时先核对官方文档。
+- 探针使用流式请求,聊天协议请求在末尾带回用量。Anthropic 协议的用量见「架构」节的「Anthropic 协议」。字段与选项名来自对 OpenAI 接口的了解,实现时先核对官方文档。
 - 首字时延 TTFT 是首个非空文本增量到达边缘的时刻,即「从边缘看到的首字」。响应是 SSE 就一律记录它,不再按到达节奏猜测是否被缓冲:短答案的增量与完成事件常在同一个网络块里到达,按节奏判断会把它们全部误判成非流式。站点缓冲了流时 TTFT 本来就应该很晚。站点忽略流式参数、返回整块 JSON 时,`streamed` 为 false,TTFT 记为空,不编数。
 - 原始数据以「事件加相对到达时间」存储,将来任何指标都能重算。
 - 时延是从 Cloudflare 边缘到站点的,不是用户本机到站点的。结果里要说明。
@@ -345,7 +353,7 @@ usage 原文
 
 ### 输入用量核对
 
-结果区末尾有一个默认折叠的「输入用量核对（参考）」,只在页面里计算,不改接口,不多发调用。每题取本轮所选协议下有效调用的输入 token 数中位数(来自 usage 的 `input_tokens` 或 `prompt_tokens`),出两条参考发现。逻辑在 `src/web/prompt-usage.ts`。
+结果区末尾有一个默认折叠的「输入用量核对（参考）」,只在页面里计算,不改接口,不多发调用。每题取本轮所选协议下有效调用的输入 token 数中位数(来自 usage 的 `input_tokens` 或 `prompt_tokens`;Anthropic 协议另加两项缓存 token),出两条参考发现。逻辑在 `src/web/prompt-usage.ts`。
 
 - 全局注入:thibault 的中位数大于 `OVERHEAD_LIMIT_TOKENS = 50` 就报。题面是 79 个英文字符,原装接口算上消息格式约 20 到 35 个 token。它短、是英文、各代分词器的结果都稳定,所以是最准的量具。站点给每次调用都加了内容,这里会看到。
 - 定向注入:`candy` 与 `candy-var` 同一模板,原装接口上每字 token 数应接近。`candy` 的每字 token 数比 `candy-var` 多出 `TARGETED_RATIO = 0.25` 以上就报。`candy-var` 的字数按本轮 seed 生成的题面计算。只报这一个方向。站点只在公开原题上加内容,这里会看到。
@@ -402,7 +410,7 @@ GET /api/questions
 
 POST /api/probe
 { "site": "https://example.com", "key": "sk-...",
-  "protocol": "responses" | "chat", "model": "gpt-6-astra",
+  "protocol": "responses" | "chat" | "anthropic", "model": "gpt-6-astra",
   "question": "<题库 id>", "effort": "low" | "medium" | "high" | "xhigh",   // effort 可省
   "runId": "<uuid>", "stage": 2, "seq": 3,      // 三项可省,带 runId 才持久化
   "seed": 12345,                                 // 可省,默认 0;只对生成器题生效,固定题忽略
@@ -609,6 +617,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 自定义 HTML 题 | 2026-10-27 维护者授权。「HTML 生成」页签可写自己的题面,经 `custom: { prompt, html: true }` 发出,不评分。页签对鹈鹕题也不再显示对错,由用户播放后自己判断。播放的例外从 `svg_animation` 题扩大到全部 HTML 题,沙箱规则不变 |
 | HTML 页面检查 | 2026-10-27 维护者批准。Worker 只看回答,不看题面,只在回答里找到 HTML 页面时才返回 `artifact`,并去掉代码块与说明文字。这只决定能不能播放,不判对错。非 HTML 回答因此也只回前 70 字。取回答里的最后一份页面;页面没写到 `</html>` 时页面提示,并区分本站读取上限截断与站点自己结束 |
 | 鸟骑自行车 | 2026-10-27 维护者决定,收回同日的「自定义 HTML 题」:「HTML 生成」页签不再接受自己写的题面,接口不再接受 `custom: { prompt, html: true }`。鹈鹕题改为 50 种鸟乘 50 个场景,交通工具固定为自行车,`version` 由 1 改为 2。播放的例外收回到只有 `pelican-svg`,页签仍不判对错 |
+| Anthropic 协议 | 2026-10-27 维护者授权。协议加 `anthropic`,探针可访问 `/v1/messages`。按模型名给表单默认值,实时测试按模型名决定竞速的两路,不加第三路,第 1 关最多仍是 6 次调用。不按模型列表判断协议,因为列表看不出站点支持哪种协议,要确认只能发调用,而调用花用户的额度。回滚风险:已存为 `anthropic` 的监测在旧代码里每轮都失败 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。

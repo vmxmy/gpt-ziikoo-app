@@ -8,7 +8,18 @@ const LEGACY_KEY = "gpt.monitors.v1";
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 const BOARD_RE = /^[A-Za-z0-9_-]{22}$/;
 
-export const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
+export const PROTOCOLS: readonly Protocol[] = ["responses", "chat", "anthropic"];
+
+const isClaude = (model: string) => /claude/i.test(model);
+
+// The first protocol wins when both answer the stage-1 race.
+export const raceProtocols = (model: string): readonly [Protocol, Protocol] => (isClaude(model) ? ["anthropic", "chat"] : ["responses", "chat"]);
+
+// Follows the model as the user types; a protocol picked by hand stays until the model next changes.
+export function protocolForModel(model: string, current: Protocol): Protocol {
+	if (isClaude(model)) return "anthropic";
+	return current === "anthropic" ? "responses" : current;
+}
 
 export type ParsedSite = { ok: true; site: string; host: string } | { ok: false; message: string };
 

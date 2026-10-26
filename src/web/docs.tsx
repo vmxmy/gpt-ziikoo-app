@@ -44,7 +44,7 @@ export function ApiDocs() {
 				</li>
 				<li>每关内同时发 {CONCURRENCY} 个调用。某关已不可能通过时，立即停止该关剩余调用。</li>
 				<li>单次调用最多尝试 {MAX_ATTEMPTS} 次，连续 {MAX_ATTEMPTS} 次没有有效响应判「无法测试」。</li>
-				<li>协议是站点接口的格式，有 responses 与 chat 两种。第 1 关两种协议各调用一次，用返回有效答案的那种；都有效时用 responses。</li>
+				<li>协议是站点接口的格式，有 responses、chat 与 anthropic 三种。第 1 关两种协议各调用一次，用返回有效答案的那种；都有效时用第一种。模型名含 claude 时比 anthropic 与 chat，否则比 responses 与 chat。</li>
 				<li>分关的循环由调用方负责，脚本按上述规则自己驱动。</li>
 			</ul>
 			<h3>curl 示例</h3>

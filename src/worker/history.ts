@@ -83,19 +83,24 @@ export function questionMetrics(calls: CallRecord[]): QuestionMetrics {
 	};
 }
 
-// When both protocols answer the stage-1 race the page continues with responses (design.md), so the chat answer is not counted.
+// The page races responses against chat, or anthropic against chat for a Claude model, and continues with the
+// first of the two when both answer or neither does (design.md). This order puts that first protocol ahead in both races.
+const RACE_ORDER: readonly Protocol[] = ["responses", "anthropic", "chat"];
+
+// When both protocols answer the stage-1 race only the one the page continued with is counted.
 function raceCounted(calls: CallRecord[]): CallRecord[] {
-	const answered = (protocol: Protocol) => calls.some((c) => c.stage === 1 && c.ok && c.protocol === protocol);
-	if (!answered("responses") || !answered("chat")) return calls;
-	return calls.filter((c) => c.stage !== 1 || c.protocol === "responses");
+	const answered = RACE_ORDER.filter((protocol) => calls.some((c) => c.stage === 1 && c.ok && c.protocol === protocol));
+	if (answered.length < 2) return calls;
+	return calls.filter((c) => c.stage !== 1 || c.protocol === answered[0]);
 }
 
 // The two race calls share stage 1 and seq 1 and are stored in arbitrary order, so the latest call cannot name the protocol the page continued with.
 function runProtocol(calls: CallRecord[]): Protocol {
 	const protocols = new Set(calls.map((c) => c.protocol));
 	if (protocols.size === 1) return calls[0].protocol;
-	const answered = calls.filter((c) => c.stage === 1 && c.seq === 1 && c.ok);
-	return answered.length > 0 && !answered.some((c) => c.protocol === "responses") ? "chat" : "responses";
+	const answered = new Set(calls.filter((c) => c.stage === 1 && c.seq === 1 && c.ok).map((c) => c.protocol));
+	const pool = answered.size > 0 ? answered : protocols;
+	return RACE_ORDER.find((protocol) => pool.has(protocol)) ?? calls[0].protocol;
 }
 
 function runView(runId: string, calls: CallRecord[], kindOf: (id: string) => QuestionKind | undefined): RunView {

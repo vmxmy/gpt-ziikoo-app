@@ -85,13 +85,18 @@ function fullText(d: unknown): string {
 				.filter((c) => get(c, "type") === "output_text")
 				.map((c) => str(get(c, "text")) ?? "")
 		: [];
-	return parts.join("") || (str(get(d, "choices", 0, "message", "content")) ?? "");
+	const blocks = get(d, "content");
+	const anthropicText = Array.isArray(blocks) ? blocks.filter((b) => get(b, "type") === "text").map((b) => str(get(b, "text")) ?? "") : [];
+	return parts.join("") || (str(get(d, "choices", 0, "message", "content")) ?? anthropicText.join(""));
 }
 
 function deltaText(p: unknown): string {
 	if (get(p, "type") === "response.output_text.delta") return str(get(p, "delta")) ?? "";
+	if (get(p, "type") === "content_block_delta") return get(p, "delta", "type") === "text_delta" ? (str(get(p, "delta", "text")) ?? "") : "";
 	return str(get(p, "choices", 0, "delta", "content")) ?? "";
 }
+
+const eventUsage = (p: unknown): object | null => obj(get(p, "response", "usage")) ?? obj(get(p, "message", "usage")) ?? obj(get(p, "usage"));
 
 function isError(p: unknown): boolean {
 	const type = get(p, "type");
@@ -99,10 +104,15 @@ function isError(p: unknown): boolean {
 }
 
 export function readUsage(usage: unknown): Usage {
+	const input = num(get(usage, "input_tokens"));
+	const cacheRead = num(get(usage, "cache_read_input_tokens"));
+	const cacheWrite = num(get(usage, "cache_creation_input_tokens"));
+	// Anthropic's input_tokens leaves out the cached and cache-written part of the prompt; OpenAI's includes it.
+	const anthropicPrompt = input !== null && (cacheRead !== null || cacheWrite !== null) ? input + (cacheRead ?? 0) + (cacheWrite ?? 0) : null;
 	return {
-		promptTokens: num(get(usage, "input_tokens")) ?? num(get(usage, "prompt_tokens")),
+		promptTokens: anthropicPrompt ?? input ?? num(get(usage, "prompt_tokens")),
 		cachedTokens:
-			num(get(usage, "input_tokens_details", "cached_tokens")) ?? num(get(usage, "prompt_tokens_details", "cached_tokens")),
+			cacheRead ?? num(get(usage, "input_tokens_details", "cached_tokens")) ?? num(get(usage, "prompt_tokens_details", "cached_tokens")),
 		reasoningTokens:
 			num(get(usage, "output_tokens_details", "reasoning_tokens")) ??
 			num(get(usage, "completion_tokens_details", "reasoning_tokens")),
@@ -156,8 +166,10 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 			text += delta;
 			ttftMs ??= event.t;
 		}
-		id ??= str(get(p, "response", "id")) ?? str(get(p, "id"));
-		usage = obj(get(p, "response", "usage")) ?? obj(get(p, "usage")) ?? usage;
+		id ??= str(get(p, "response", "id")) ?? str(get(p, "message", "id")) ?? str(get(p, "id"));
+		// Anthropic reports input usage in message_start and output usage in message_delta, so later fields join earlier ones.
+		const found = eventUsage(p);
+		if (found) usage = { ...(usage ?? {}), ...found };
 		error ||= isError(p);
 		if (get(p, "type") === "response.completed") completedText = fullText(get(p, "response"));
 	}

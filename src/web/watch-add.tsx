@@ -5,7 +5,7 @@ import { WATCH_IDLE_DAYS, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchIntervalMi
 import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
-import { PROTOCOLS, type FieldError, type WatchInput } from "./watch.ts";
+import { protocolForModel, PROTOCOLS, type FieldError, type WatchInput } from "./watch.ts";
 
 const ERROR_ID = "watch-add-error";
 
@@ -86,6 +86,11 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 
 	useEffect(() => siteInput.current?.focus(), []);
 
+	const chooseModel = (next: string) => {
+		setModel(next);
+		setProtocol((current) => protocolForModel(next, current));
+	};
+
 	const submit = async () => {
 		setBusy(true);
 		setError(null);
@@ -134,7 +139,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			</label>
 			<ModelField
 				value={model}
-				onInput={setModel}
+				onInput={chooseModel}
 				target={{ site: site.trim(), key }}
 				testId="watch-add-model"
 				class="col-12 col-md-6 col-lg-4"

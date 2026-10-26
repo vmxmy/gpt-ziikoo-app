@@ -1,6 +1,6 @@
 import { solveBag } from "../../src/shared/candy-gen.ts";
 
-type Protocol = "responses" | "chat";
+type Protocol = "responses" | "chat" | "anthropic";
 type IdKind = "hex" | "ft" | "b64";
 type Topic = "thibault" | "candy" | "candy-var" | "ciallo" | "pelican-svg";
 type Answering = {
@@ -74,6 +74,8 @@ function streamFailure(): Response {
 
 const MODELS = new Map<string, Behavior>([
 	["mock-good", ANSWER],
+	// The page defaults a model whose name holds "claude" to the anthropic protocol.
+	["mock-claude", ANSWER],
 	["mock-wrong", { ...ANSWER, correct: false }],
 	["mock-partial", { ...ANSWER, wrongFor: new Set<Topic>(["candy"]) }],
 	["mock-nostream", { ...ANSWER, honorStream: false }],
@@ -100,9 +102,15 @@ const MODELS = new Map<string, Behavior>([
 const PATHS = new Map<string, Protocol>([
 	["/v1/responses", "responses"],
 	["/v1/chat/completions", "chat"],
+	["/v1/messages", "anthropic"],
 ]);
 
 const VALID_AUTH = /^Bearer sk-\S{5,}$/;
+
+// The Messages API takes the key in x-api-key, so it is read back into the bearer form the other endpoints check.
+function authOf(request: Request, protocol: Protocol): string {
+	return protocol === "anthropic" ? `Bearer ${request.headers.get("x-api-key") ?? ""}` : (request.headers.get("Authorization") ?? "");
+}
 
 const CANDY_VAR_MARKER = "最后一行严格按此格式写：答案：";
 
@@ -195,6 +203,7 @@ function base64url(bytes: number): string {
 function responseId(protocol: Protocol, kind: IdKind): string {
 	if (kind === "ft") return `resp_ft_${hex(20)}`;
 	if (kind === "b64") return `resp_Z${base64url(36)}`;
+	if (protocol === "anthropic") return `msg_01${base64url(18)}`;
 	return protocol === "responses" ? `resp_68${hex(23)}` : `chatcmpl-${hex(15)}`;
 }
 
@@ -212,6 +221,13 @@ function usageOf(protocol: Protocol, prompt: string, text: string, b: Answering)
 	const cached = b.cached ? 1024 : 0;
 	const reasoning = b.correct ? 192 : 0;
 	const output = reasoning + Math.ceil(text.length / 2);
+	// Anthropic leaves the cached part out of input_tokens and has no reasoning count.
+	if (protocol === "anthropic") {
+		return {
+			usage: { input_tokens: input - cached, cache_creation_input_tokens: 0, cache_read_input_tokens: cached, output_tokens: output },
+			reasoning: 0,
+		};
+	}
 	const usage =
 		protocol === "responses"
 			? {
@@ -287,6 +303,32 @@ function chatObject(c: Completion) {
 	};
 }
 
+function anthropicObject(c: Completion) {
+	return {
+		id: c.id,
+		type: "message",
+		role: "assistant",
+		model: c.model,
+		content: [{ type: "text", text: c.text }],
+		stop_reason: "end_turn",
+		stop_sequence: null,
+		usage: c.usage,
+	};
+}
+
+function anthropicFrames(c: Completion, deltas: string[]): Frame[] {
+	const output = field(c.usage, "output_tokens");
+	const events: [string, object, number?][] = [
+		["message_start", { message: { ...anthropicObject(c), content: [], stop_reason: null, usage: { ...c.usage, output_tokens: 1 } } }],
+		["content_block_start", { index: 0, content_block: { type: "text", text: "" } }],
+		...deltas.map((text, i): [string, object, number] => ["content_block_delta", { index: 0, delta: { type: "text_delta", text } }, deltaDelay(i, c.gapMs)]),
+		["content_block_stop", { index: 0 }],
+		["message_delta", { delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: output } }],
+		["message_stop", {}],
+	];
+	return events.map(([type, fields, delayMs = 0]) => ({ delayMs, text: `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n` }));
+}
+
 function responsesFrames(c: Completion, deltas: string[]): Frame[] {
 	const index = c.reasoningId ? 1 : 0;
 	const at = { item_id: c.messageId, output_index: index, content_index: 0 };
@@ -339,6 +381,9 @@ function chatFrames(c: Completion, deltas: string[]): Frame[] {
 	];
 }
 
+const OBJECTS: Record<Protocol, (c: Completion) => object> = { responses: (c) => responseObject(c, true), chat: chatObject, anthropic: anthropicObject };
+const FRAMES: Record<Protocol, (c: Completion, deltas: string[]) => Frame[]> = { responses: responsesFrames, chat: chatFrames, anthropic: anthropicFrames };
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function streamOf(frames: Frame[]): ReadableStream<Uint8Array> {
@@ -376,10 +421,10 @@ function answer(protocol: Protocol, body: unknown, model: string, b: Answering):
 		includeUsage: field(field(body, "stream_options"), "include_usage") === true,
 	};
 	if (field(body, "stream") !== true || !b.honorStream) {
-		return json(protocol === "responses" ? responseObject(c, true) : chatObject(c));
+		return json(OBJECTS[protocol](c));
 	}
 	const deltas = split(text, b.big ? BIG_DELTA_CHARS : DELTA_CHARS);
-	const frames = protocol === "responses" ? responsesFrames(c, deltas) : chatFrames(c, deltas);
+	const frames = FRAMES[protocol](c, deltas);
 	return new Response(streamOf(frames), {
 		headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" },
 	});
@@ -413,7 +458,7 @@ export default {
 		const protocol = PATHS.get(pathname);
 		if (!protocol) return openAiError(404, "Unknown URL.", "invalid_request_error", "unknown_url");
 		if (request.method !== "POST") return openAiError(405, "Method not allowed.", "invalid_request_error", null);
-		const auth = request.headers.get("Authorization") ?? "";
+		const auth = authOf(request, protocol);
 		if (!VALID_AUTH.test(auth)) return failure({ kind: "fail", status: 401, echo: false }, auth);
 		const body = await readBody(request);
 		if (body === undefined) {

@@ -139,6 +139,13 @@ test("站点回显密钥时,原始数据已脱敏", async ({ request, site, key 
 	expect(stored).not.toContain(key);
 });
 
+// The mock accepts /v1/messages only with the key in x-api-key, and reports cached input outside input_tokens.
+test("anthropic 协议调 /v1/messages,解析流式回答并把缓存计入提示 token", async ({ request, site, key }) => {
+	const probe = async (model: string) => (await request.post("/api/probe", { data: { site, key, protocol: "anthropic", model, question: "thibault" } })).json();
+	expect(await probe("mock-claude")).toMatchObject({ ok: true, correct: true, idShape: "other", reasoningTokens: null, streamed: true, cachedTokens: 0 });
+	expect(await probe("mock-cached")).toMatchObject({ ok: true, promptTokens: 1280, cachedTokens: 1024 });
+});
+
 // seed 12345 is 24 total, 11 and 13; mock-wrong answers one too many for the total and the first count.
 test("candy-var 按 seed 出题,mock 解出后答对,seed 随调用落库", async ({ request, site, key }) => {
 	const runId = crypto.randomUUID();

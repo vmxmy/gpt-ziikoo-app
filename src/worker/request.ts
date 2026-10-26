@@ -1,7 +1,7 @@
 import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
 import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
-import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
+import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
 
 export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
@@ -23,7 +23,7 @@ export type ProbeCommand = {
 
 export type HistoryCommand = { origin: string; key: string };
 
-const PROTOCOLS: readonly Protocol[] = ["responses", "chat"];
+const PROTOCOLS: readonly Protocol[] = ["responses", "chat", "anthropic"];
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // No character JSON or HTML encoders escape: redact() matches the key literally, so an escaped echo would slip through.
@@ -110,7 +110,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	const target = parseTarget(f);
 	if (!target.ok) return target;
 	const { protocol, model, effort, seed, custom } = f;
-	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
+	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
 	}
@@ -150,7 +150,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 			protocol,
 			model,
 			question: instantiate(question, effectiveSeed),
-			effort: effort ?? question.defaultEffort ?? null,
+			effort: effort ?? defaultEffort(question, protocol),
 			seed: question.generator ? effectiveSeed : null,
 			run: run.value,
 			limits: run.value === null && question.html ? LONG_ANSWER_LIMITS : DEFAULT_LIMITS,
@@ -193,7 +193,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
 	}
-	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses 或 chat");
+	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
 	if (!isWatchInterval(intervalMin)) return bad("intervalMin 必须是 5 或 15");
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
 	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");

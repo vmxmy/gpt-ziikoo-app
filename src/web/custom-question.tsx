@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { Protocol } from "../shared/types.ts";
 import {
 	checkCustom,
@@ -13,7 +13,7 @@ import {
 	type Target,
 } from "./api.ts";
 import { ms } from "./results.ts";
-import { PROTOCOLS } from "./watch.ts";
+import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "done"; result: CustomResult; protocol: Protocol };
 
@@ -102,6 +102,8 @@ export function CustomQuestionForm({ target, model }: { target: Target; model: s
 	const [draft, setDraft] = useState(EMPTY);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
+	// The model field belongs to the live form above, so the protocol follows it from here.
+	useEffect(() => setProtocol((current) => protocolForModel(model, current)), [model]);
 	const [formError, setFormError] = useState("");
 	const check = checkCustom(draft);
 	const fieldError = (field: "prompt" | "expected") => (!check.ok && check.error?.field === field ? check.error.message : "");
@@ -144,7 +146,7 @@ export function CustomQuestionForm({ target, model }: { target: Target; model: s
 			<ScorerFields draft={draft} error={fieldError("expected")} onEdit={edit} />
 			<label class="field">
 				<span class="field-label">协议</span>
-				<select value={protocol} onChange={(e) => setProtocol(e.currentTarget.value === "chat" ? "chat" : "responses")} data-testid="custom-q-protocol">
+				<select value={protocol} onChange={(e) => setProtocol(PROTOCOLS.find((p) => p === e.currentTarget.value) ?? "responses")} data-testid="custom-q-protocol">
 					{PROTOCOLS.map((p) => (
 						<option value={p} key={p}>
 							{p}
