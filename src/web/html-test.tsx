@@ -22,7 +22,7 @@ type CopyStatus = "copied" | "failed";
 
 const ENDING_WARNING: Record<Exclude<PageEnding, "closed">, string> = {
 	unclosed: "回答在页面写到 </html> 之前就结束了，页面不完整，可能是站点限制了输出长度。",
-	truncated: "站点响应超过 2MB 读取上限，回答被截断，页面可能不完整。",
+	truncated: "站点响应超过 8MB 读取上限，回答被截断，页面可能不完整。",
 };
 
 // The frame has an opaque origin, so "*" is the only target that reaches it; the answer is the user's own and holds no key.

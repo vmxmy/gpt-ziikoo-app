@@ -461,8 +461,8 @@ describe("probe", () => {
 		expect(reports).toEqual([0, 12]);
 	});
 
-	it("reads an HTML answer past the default cap under the long-answer limits", async () => {
-		const body = `<svg>${"<g/>".repeat(25 * 1024)}<animate/></svg>`;
+	it("reads a 3MB HTML answer, past the default cap and the former 2MB one, under the long-answer limits", async () => {
+		const body = `<svg>${"<g/>".repeat(256 * 1024)}<animate/></svg>`;
 		const parts = ["<!doctype html><html><body>", body, body, body, "</body></html>"];
 		const { deps } = fakeUpstream({
 			status: 200,
