@@ -76,3 +76,7 @@ export function getQuestion(id: string): Question | undefined {
 export function activeQuestions(): Question[] {
 	return QUESTIONS.filter((q) => q.status === "active");
 }
+
+export function watchQuestions(): Question[] {
+	return activeQuestions().filter((q) => q.inWatchRotation !== false);
+}

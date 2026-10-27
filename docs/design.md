@@ -386,7 +386,8 @@ usage 原文
 
 | 项 | 内容 |
 | --- | --- |
-| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在评分题之间轮换(`inWatchRotation: false` 的题除外),间隔 5 或 15 分钟,默认 5 分钟 |
+| 谁来探测 | 服务端。每个监测是一个 `Watch` Durable Object,闹钟按间隔触发,题按序号在这个监测选中的题之间轮换,间隔 5 或 15 分钟,默认 5 分钟 |
+| 题目 | 添加时选,可选的是 `inWatchRotation` 不为 `false` 的题,默认全选,至少选一道。按题库顺序轮换,与勾选顺序无关。建好后不能改,和别名、间隔、模型一样。卡片的元信息列出选中的题 id。早于选题功能建的监测没有存题目,按全部可选题轮换。选中的题以后下线时,轮换跳过它;全部下线时这个监测不再出样本(2026-10-27 维护者要求) |
 | 密钥 | 提交后用 AES-GCM 加密存进 `Watch` 对象,密钥是 SHA-256(WATCH_ENC_KEY)。WATCH_ENC_KEY 不可轮换。浏览器只存服务器签发的看板码(board,16 字节 base64url,22 字符),存 `localStorage` 键 `gpt.board.v1`;密钥本身从不进浏览器存储、URL、DOM |
 | 看板码 | 一个看板聚合多个 watch 令牌,最多 30 个。看板码由服务端签发并加密存储令牌列表。浏览器迁移旧版 `gpt.watch.v1`(令牌数组)时,调用 `/api/board/adopt` 并删除旧键。看板链接走 URL fragment(`#watch/b=<看板码>`),不发给服务器 |
 | 同意 | 添加表单必须勾选「我同意本站加密保存这把密钥」,否则不提交 |
@@ -458,8 +459,10 @@ POST /api/history          { site, key }            最近 10 轮的汇总与指
 POST /api/history/raw      { site, key, runId }     该轮全部调用的原始数据
 POST /api/history/delete   { site, key }            清空该对象
 
-POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent: true, board? }
+POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent: true, questions?, board? }
                            创建持续监测,返回 { board, token, watch }
+                           questions 可选:非空的题 id 数组,只能含 inWatchRotation 不为 false 的题,
+                           去重并按题库顺序保存;不带时选全部。WatchView 带 questions,列出轮换的题
                            board 参数可选:给了且非空则加入该看板,否则新签发
                            400 bad_request (field: "site"|"key"|"model"),429 watch_limit
 POST /api/watch/view       { token }                读取,返回 WatchView 或 404
@@ -481,7 +484,7 @@ POST /api/board/order      { board, tokens }        按 tokens 的顺序保存�
                            // tokens 与看板现有令牌集合不一致
                            429 本站限流
 
-POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent }   建立持续监测
+POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent, questions? }   建立持续监测
 200 { token, watch }       // token 是 43 字符的随机令牌,只出现这一次,页面存 localStorage
 400 密钥被站点拒绝或参数不合法,带 field 指明字段
 429 { error: "watch_limit", message }   // 全站 200 个已满
@@ -639,6 +642,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | Anthropic 协议 | 2026-10-27 维护者授权。协议加 `anthropic`,探针可访问 `/v1/messages`。按模型名给表单默认值,实时测试按模型名决定竞速的两路,不加第三路,第 1 关最多仍是 6 次调用。不按模型列表判断协议,因为列表看不出站点支持哪种协议,要确认只能发调用,而调用花用户的额度。回滚风险:已存为 `anthropic` 的监测在旧代码里每轮都失败 |
 | 下载 HTML | 2026-10-27 维护者要求。「HTML 生成」页签可把回答里取出的页面存成文件,在浏览器里生成,不经过服务器,不新增接口。下载的文件在本机打开时不受沙箱限制,和「复制 HTML」相同 |
 | 生成进度 | 2026-10-27 维护者要求。HTML 题一次调用最长 300 秒,只有一句静态文案时用户看不出进展。`/api/probe` 加可选的 `progress: true`,按行推送阶段与已收到的回答字符数,最后一行是原响应体;不带这个字段的调用方不受影响。只推字数,不推回答原文,页面仍只在结果里显示回答 |
+| 监测选题 | 2026-10-27 维护者要求。每个持续监测在添加时选题,不再固定为全部可选题。只在添加时选,不加编辑接口。`questions` 可选,不带时选全部,旧页面与脚本不受影响;旧监测缺这个字段,同样按全部可选题轮换,不做数据迁移 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。

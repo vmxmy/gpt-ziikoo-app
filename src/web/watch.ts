@@ -62,7 +62,7 @@ export function sortRows<T>(rows: readonly T[], value: (row: T) => string | numb
 		.map(({ row }) => row);
 }
 
-export type FieldError = { field: "site" | "key" | "model" | "consent" | "form"; message: string };
+export type FieldError = { field: "site" | "key" | "model" | "questions" | "consent" | "form"; message: string };
 
 export type WatchInput = {
 	site: string;
@@ -71,6 +71,7 @@ export type WatchInput = {
 	model: string;
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
+	questions: string[];
 	consent: boolean;
 };
 
@@ -83,6 +84,7 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 	if (key === "") return { ok: false, error: { field: "key", message: "请输入密钥" } };
 	const model = input.model.trim();
 	if (model === "") return { ok: false, error: { field: "model", message: "请输入模型" } };
+	if (input.questions.length === 0) return { ok: false, error: { field: "questions", message: "请至少选一道题" } };
 	if (!input.consent) return { ok: false, error: { field: "consent", message: "请先勾选同意，再添加持续监测" } };
 	return {
 		ok: true,
@@ -92,6 +94,7 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 			model,
 			protocol: input.protocol,
 			intervalMin: input.intervalMin,
+			questions: input.questions,
 			alias: normalizeAlias(input.alias),
 			consent: true,
 			...(board ? { board } : {}),

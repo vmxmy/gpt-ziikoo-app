@@ -9,9 +9,20 @@ const TOKENS_KEY = "gpt.watch.v1";
 const LEGACY_KEY = "gpt.monitors.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
 
-type AddSetup = { site: string; key: string; alias?: string; model?: string; protocol?: "responses" | "chat"; intervalMin?: 5 | 15; consent?: boolean };
+type AddSetup = {
+	site: string;
+	key: string;
+	alias?: string;
+	model?: string;
+	protocol?: "responses" | "chat";
+	intervalMin?: 5 | 15;
+	questions?: string[];
+	consent?: boolean;
+};
 
-async function addWatch(page: Page, { site, key, alias, model = "mock-good", protocol, intervalMin, consent = true }: AddSetup): Promise<void> {
+const QUESTION_PICK = "watch-add-question-";
+
+async function addWatch(page: Page, { site, key, alias, model = "mock-good", protocol, intervalMin, questions, consent = true }: AddSetup): Promise<void> {
 	await page.getByTestId("watch-add-toggle").click();
 	await page.getByTestId("watch-add-site").fill(site);
 	if (alias) await page.getByTestId("watch-add-alias").fill(alias);
@@ -19,6 +30,14 @@ async function addWatch(page: Page, { site, key, alias, model = "mock-good", pro
 	await page.getByTestId("watch-add-model").fill(model);
 	if (protocol) await page.getByTestId("watch-add-protocol").selectOption(protocol);
 	if (intervalMin) await page.getByTestId("watch-add-interval").selectOption(String(intervalMin));
+	if (questions) {
+		const picks = page.locator(`[data-testid^="${QUESTION_PICK}"]`);
+		await expect(picks.first()).toBeVisible();
+		for (const pick of await picks.all()) {
+			const id = (await pick.getAttribute("data-testid"))?.slice(QUESTION_PICK.length) ?? "";
+			await pick.setChecked(questions.includes(id));
+		}
+	}
 	await page.getByTestId("watch-add-consent").setChecked(consent);
 	await page.getByTestId("watch-add-submit").click();
 }
@@ -164,6 +183,20 @@ test("chat 协议与 15 分钟间隔也能添加", async ({ page, site, key }) =
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("协议 chat");
+	}));
+
+test("只选一道题,卡片只列这道题;一道不选时提示且不建卡片", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await openWatchTab(page);
+		await addWatch(page, { site, key, questions: [] });
+		await expect(page.getByTestId("watch-add-error")).toHaveText("请至少选一道题");
+		await expect(page.locator(CARDS)).toHaveCount(0);
+		await page.getByTestId(`${QUESTION_PICK}ciallo`).check();
+		await page.getByTestId("watch-add-submit").click();
+		await expect(page.locator(CARDS)).toHaveCount(1);
+		const id = await lastCardId(page);
+		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
+		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("题目 ciallo · ");
 	}));
 
 test("旧的浏览器监测存储被清除", async ({ page, site, key }) =>

@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
-import { activeQuestions, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
+import { instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
-import type { FailReason, ProbeResponse, Protocol } from "../shared/types.ts";
+import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchIntervalMin, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeResult } from "./probe.ts";
 import type { WatchCreateCommand } from "./request.ts";
@@ -59,6 +59,8 @@ type WatchState = {
 	model: string;
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
+	// Absent on watches made before questions could be picked.
+	questions?: string[];
 	createdAt: number;
 	status: WatchStatus;
 	expiresAt: number;
@@ -82,6 +84,11 @@ export function toSample(ts: number, question: string, r: ProbeResponse): Monito
 
 const isTransient = (r: ProbeResponse) => !r.ok && TRANSIENT.includes(r.reason);
 
+export function watchRotation(picked: readonly string[] | undefined): Question[] {
+	const all = watchQuestions();
+	return picked ? all.filter((q) => picked.includes(q.id)) : all;
+}
+
 function outcome(r: ProbeResponse): string {
 	if (!r.ok) return r.reason;
 	if (r.correct === null) return "unscored";
@@ -96,7 +103,7 @@ function logProbe(host: string, question: string, { response, capture }: ProbeRe
 // Each round counts against the same per-host limit as the live test, so a watch cannot be used to flood a site.
 // Only failures another call can fix are retried; the sample records the site's quality, not a passing hiccup.
 async function probeRound(env: Env, state: WatchState, key: string): Promise<{ question: string; response: ProbeResponse } | null> {
-	const rotation = activeQuestions().filter((q) => q.inWatchRotation !== false);
+	const rotation = watchRotation(state.questions);
 	const question = rotation[state.seq % rotation.length];
 	if (!question) return null;
 	const input = {
@@ -145,7 +152,8 @@ export class Watch extends DurableObject<Env> {
 	private toView(state: WatchState, now: number): WatchView {
 		const { origin, host, alias, model, protocol, intervalMin, createdAt, status, expiresAt } = state;
 		const monitor = buildMonitor(this.samples(now), now, host, intervalMin * 60);
-		return { site: origin, host, alias, model, protocol, intervalMin, createdAt, status, expiresAt, monitor };
+		const questions = watchRotation(state.questions).map((q) => q.id);
+		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor };
 	}
 
 	private async save(state: WatchState, alarmAt: number): Promise<void> {
@@ -163,6 +171,7 @@ export class Watch extends DurableObject<Env> {
 			model: cmd.model,
 			protocol: cmd.protocol,
 			intervalMin: cmd.intervalMin,
+			questions: cmd.questions,
 			createdAt: now,
 			status: { kind: "running" },
 			expiresAt: now + IDLE_MS,

@@ -18,6 +18,7 @@ export type WatchCreateRequest = {
 	model: string;
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
+	questions: string[];
 	alias: string;
 	consent: true;
 	board?: string;
@@ -36,6 +37,7 @@ export type WatchView = {
 	model: string;
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
+	questions: string[];
 	createdAt: number;
 	status: WatchStatus;
 	expiresAt: number;

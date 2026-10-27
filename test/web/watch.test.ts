@@ -11,6 +11,7 @@ const input = (over: Partial<Parameters<typeof parseWatchInput>[0]> = {}) => ({
 	model: "gpt-6-astra",
 	protocol: "responses" as const,
 	intervalMin: 5 as const,
+	questions: ["thibault"],
 	consent: true,
 	...over,
 });
@@ -20,7 +21,7 @@ describe("parseWatchInput", () => {
 		const draft = parseWatchInput(input({ key: ` Bearer ${KEY} `, alias: "  主通道  " }));
 		expect(draft).toEqual({
 			ok: true,
-			request: { site: "https://relay.example", key: KEY, model: "gpt-6-astra", protocol: "responses", intervalMin: 5, alias: "主通道", consent: true },
+			request: { site: "https://relay.example", key: KEY, model: "gpt-6-astra", protocol: "responses", intervalMin: 5, questions: ["thibault"], alias: "主通道", consent: true },
 		});
 	});
 
@@ -29,6 +30,7 @@ describe("parseWatchInput", () => {
 		expect(parseWatchInput(input({ key: "" }))).toMatchObject({ ok: false, error: { field: "key" } });
 		expect(parseWatchInput(input({ model: " " }))).toMatchObject({ ok: false, error: { field: "model" } });
 		expect(parseWatchInput(input({ consent: false }))).toMatchObject({ ok: false, error: { field: "consent" } });
+		expect(parseWatchInput(input({ questions: [] }))).toMatchObject({ ok: false, error: { field: "questions" } });
 	});
 });
 

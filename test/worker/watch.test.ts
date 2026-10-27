@@ -2,9 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 
-const { planWatch } = await import("../../src/worker/watch.ts");
+const { planWatch, watchRotation } = await import("../../src/worker/watch.ts");
 
 const NOW = 1_000_000_000_000;
+
+describe("watchRotation", () => {
+	it("rotates through every watch question on a watch made before questions could be picked", () => {
+		expect(watchRotation(undefined).map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo"]);
+	});
+
+	it("rotates through the picked questions in bank order", () => {
+		expect(watchRotation(["ciallo", "thibault"]).map((q) => q.id)).toEqual(["thibault", "ciallo"]);
+	});
+});
 
 describe("planWatch", () => {
 	it("purges once the idle date passes", () => {
