@@ -16,7 +16,7 @@ const effortText = (e: EffortChoice) => e || "不指定";
 
 type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; prompt: string; fileName: string };
 // timeoutMs arrives with the first progress line; chars stays null until the site answers.
-type Sending = { kind: "sending"; startedAt: number; timeoutMs: number | null; chars: number | null };
+type Sending = { kind: "sending"; prompt: string; startedAt: number; timeoutMs: number | null; chars: number | null };
 type Status = { kind: "idle" } | Sending | { kind: "cancelled" } | ({ kind: "done" } & Done);
 type CopyStatus = "copied" | "failed";
 
@@ -150,6 +150,35 @@ function ArtifactActions({ html, fileName }: { html: string; fileName: string })
 	);
 }
 
+function PromptBlock({ prompt }: { prompt: string }) {
+	const [copy, setCopy] = useState<CopyStatus | null>(null);
+	const doCopy = () => {
+		const write = navigator.clipboard?.writeText(prompt) ?? Promise.reject(new Error("clipboard unavailable"));
+		write.then(
+			() => setCopy("copied"),
+			() => setCopy("failed"),
+		);
+	};
+	return (
+		<div class="html-prompt-block">
+			<div class="html-prompt-head">
+				<span class="field-label">本次题面</span>
+				<button type="button" class="icon-btn" aria-label="复制题面" title="复制题面" onClick={doCopy} data-testid="html-prompt-copy">
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path class="icon-stroke" d="M6 5.5h6.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1zM2.5 10.5v-7a1 1 0 0 1 1-1h7" />
+					</svg>
+				</button>
+				<span class="muted small" role="status" data-testid="html-prompt-copy-status">
+					{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请在下面手动选中" : ""}
+				</span>
+			</div>
+			<pre class="prompt" data-testid="html-shown-prompt">
+				{prompt}
+			</pre>
+		</div>
+	);
+}
+
 // The output count includes reasoning, so without a reasoning count only the total is known. A relay that
 // reports less output than reasoning breaks that rule, and the difference would mean nothing.
 function tokenFields(reasoning: number | null, output: number | null): [string, number | null][] {
@@ -161,7 +190,7 @@ function tokenFields(reasoning: number | null, output: number | null): [string, 
 }
 
 // No verdict: the user judges the page by playing it, so only a failed call gets a state badge.
-function HtmlResult({ result, protocol, effort, prompt, fileName }: Done) {
+function HtmlResult({ result, protocol, effort, fileName }: Done) {
 	return (
 		<div class="html-result" data-testid="html-result">
 			<p class="muted small">
@@ -187,8 +216,6 @@ function HtmlResult({ result, protocol, effort, prompt, fileName }: Done) {
 								<dd class="num">{value ?? "—"}</dd>
 							</Fragment>
 						))}
-						<dt>题面</dt>
-						<dd data-testid="html-shown-prompt">{prompt}</dd>
 						{!result.response.artifact && (
 							<>
 								<dt>回答片段</dt>
@@ -239,14 +266,15 @@ export function HtmlTest() {
 		const controller = new AbortController();
 		ctrl.current = controller;
 		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-		setStatus({ kind: "sending", startedAt: Date.now(), timeoutMs: null, chars: null });
+		const prompt = generatePelican(seed);
+		setStatus({ kind: "sending", prompt, startedAt: Date.now(), timeoutMs: null, chars: null });
 		const onProgress = (line: ProbeProgress) =>
 			setStatus((current) =>
 				current.kind !== "sending" ? current : line.type === "start" ? { ...current, timeoutMs: line.timeoutMs } : { ...current, chars: line.chars },
 			);
 		try {
 			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal, onProgress);
-			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt: generatePelican(seed), fileName: htmlFileName(model.trim(), new Date()) });
+			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt, fileName: htmlFileName(model.trim(), new Date()) });
 		} catch (err) {
 			if (!controller.signal.aborted) throw err;
 			setStatus({ kind: "cancelled" });
@@ -304,6 +332,7 @@ export function HtmlTest() {
 					</p>
 				)}
 			</form>
+			{(status.kind === "sending" || status.kind === "done") && <PromptBlock key={status.prompt} prompt={status.prompt} />}
 			{status.kind === "sending" && <HtmlProgress {...status} />}
 			<div aria-live="polite">
 				{status.kind === "cancelled" && <p class="warn">已取消。</p>}
