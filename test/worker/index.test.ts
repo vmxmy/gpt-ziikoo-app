@@ -87,7 +87,7 @@ describe("probe progress", () => {
 		expect(lines.pop()).toBe("");
 		expect(lines.map((line) => JSON.parse(line))).toEqual([
 			{ type: "start", timeoutMs: 900_000 },
-			{ type: "progress", chars: 0 },
+			{ type: "progress", chars: 0, reasoning: false },
 			{ type: "result", response: expect.objectContaining({ ok: true, artifact: { html: page, ending: "closed" } }) },
 		]);
 	});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getQuestion } from "../../questions/index.ts";
-import type { Question } from "../../src/shared/types.ts";
+import type { Question, StreamProgress } from "../../src/shared/types.ts";
 import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, MAX_BODY_BYTES, probe, type ProbeInput, UA } from "../../src/worker/probe.ts";
 
 const KEY = "sk-test-12345678";
@@ -444,7 +444,7 @@ describe("probe", () => {
 		expect(result.capture.rawEvents).toHaveLength(3);
 	});
 
-	it("reports answer characters once the site answers, at most once per half second", async () => {
+	it("reports progress once the site answers, then on any arrival at most once per half second", async () => {
 		const { deps } = fakeUpstream({
 			status: 200,
 			ttfb: 100,
@@ -456,9 +456,46 @@ describe("probe", () => {
 				{ at: 800, text: sse({ type: "response.output_text.delta", delta: "</body></html>" }) },
 			],
 		});
-		const reports: number[] = [];
-		await probe(input({ question: question("pelican-svg"), onProgress: (chars) => reports.push(chars) }), deps);
-		expect(reports).toEqual([0, 12]);
+		const reports: StreamProgress[] = [];
+		await probe(input({ question: question("pelican-svg"), onProgress: (p) => reports.push(p) }), deps);
+		expect(reports).toEqual([
+			{ chars: 0, reasoning: false },
+			{ chars: 12, reasoning: false },
+		]);
+	});
+
+	it("reports the switch into reasoning at once and each keep-alive ping while the model reasons", async () => {
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 100,
+			chunks: [
+				{ at: 150, text: sse({ type: "message_start", message: { id: "msg_1" } }) + sse({ type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } }) },
+				{ at: 700, text: sse({ type: "ping" }) },
+				{ at: 900, text: sse({ type: "ping" }) },
+				{ at: 1500, text: sse({ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "plan" } }) + sse({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "<html>" } }) },
+			],
+		});
+		const reports: StreamProgress[] = [];
+		await probe(input({ protocol: "anthropic", question: question("pelican-svg"), onProgress: (p) => reports.push(p) }), deps);
+		expect(reports).toEqual([
+			{ chars: 0, reasoning: false },
+			{ chars: 0, reasoning: true },
+			{ chars: 0, reasoning: true },
+			{ chars: 6, reasoning: true },
+		]);
+	});
+
+	it.each([
+		["responses", { type: "response.output_item.added", output_index: 0, item: { type: "reasoning", id: "rs_1", summary: [] } }],
+		["chat", { choices: [{ index: 0, delta: { reasoning_content: "Let me" } }] }],
+	] as const)("reports reasoning from the %s protocol's reasoning signal", async (protocol, event) => {
+		const { deps } = fakeUpstream({ status: 200, ttfb: 100, chunks: [{ at: 150, text: sse(event) }] });
+		const reports: StreamProgress[] = [];
+		await probe(input({ protocol, question: question("pelican-svg"), onProgress: (p) => reports.push(p) }), deps);
+		expect(reports).toEqual([
+			{ chars: 0, reasoning: false },
+			{ chars: 0, reasoning: true },
+		]);
 	});
 
 	it("reads a 3MB HTML answer, past the default cap and the former 2MB one, under the long-answer limits", async () => {

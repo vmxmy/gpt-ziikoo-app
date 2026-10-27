@@ -100,6 +100,7 @@ test("HTML 生成页签按所选推理强度调用一次,生成中显示完整�
 		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
 		await expect(page.getByTestId("html-countdown")).toHaveText(/^1[45]:\d{2}$/);
 		await expect(page.getByTestId("html-received")).toContainText("个字符");
+		await expect(page.getByTestId("html-heartbeat")).toContainText("最近一次收到站点数据");
 		await page.getByTestId("tab-live").click();
 		await page.getByTestId("tab-html").click();
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });

@@ -132,7 +132,7 @@ function progressStream(cmd: ProbeCommand, settle: (result: ProbeResult) => Prob
 		async start(controller) {
 			const send = (line: ProbeLine) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
 			send({ type: "start", timeoutMs: cmd.limits.timeoutMs });
-			const result = await probe({ ...cmd, onProgress: (chars) => send({ type: "progress", chars }) });
+			const result = await probe({ ...cmd, onProgress: (progress) => send({ type: "progress", ...progress }) });
 			send({ type: "result", response: settle(result) });
 			controller.close();
 		},

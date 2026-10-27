@@ -1,4 +1,4 @@
-import type { IdShape } from "../shared/types.ts";
+import type { IdShape, StreamProgress } from "../shared/types.ts";
 import { redact } from "./redact.ts";
 
 export type TimedText = { t: number; text: string };
@@ -152,18 +152,25 @@ function eventPayload(block: string): unknown {
 	return data === "" || data === "[DONE]" ? undefined : lenientJson(data);
 }
 
-// Counts answer characters chunk by chunk while the body is still arriving; parseBody reads the whole body again at the end.
-export function answerCounter(): (text: string) => number {
+// A site that withholds the reasoning text still opens the reasoning block or item before the model starts on it.
+function startsReasoning(p: unknown): boolean {
+	if (get(p, "type") === "content_block_start") return ["thinking", "redacted_thinking"].includes(str(get(p, "content_block", "type")) ?? "");
+	if (get(p, "type") === "response.output_item.added") return get(p, "item", "type") === "reasoning";
+	return Boolean(str(get(p, "choices", 0, "delta", "reasoning_content")) || str(get(p, "choices", 0, "delta", "reasoning")));
+}
+
+// Reads progress chunk by chunk while the body is still arriving; parseBody reads the whole body again at the end.
+export function progressReader(): (text: string) => StreamProgress {
 	let buffer = "";
-	let chars = 0;
+	let progress: StreamProgress = { chars: 0, reasoning: false };
 	return (text) => {
 		buffer = (buffer + text).replace(/\r\n/g, "\n");
 		for (let end = buffer.indexOf("\n\n"); end !== -1; end = buffer.indexOf("\n\n")) {
 			const p = eventPayload(buffer.slice(0, end));
-			chars += p === undefined ? 0 : deltaText(p).length;
+			if (p !== undefined) progress = { chars: progress.chars + deltaText(p).length, reasoning: progress.reasoning || startsReasoning(p) };
 			buffer = buffer.slice(end + 2);
 		}
-		return chars;
+		return progress;
 	};
 }
 
