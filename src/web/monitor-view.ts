@@ -28,10 +28,11 @@ export function agoText(ts: number, now: number): string {
 	return minutes < 60 ? `${minutes} 分钟前` : `${Math.floor(minutes / 60)} 小时前`;
 }
 
-export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol): string {
+export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[]): string {
 	const every = data.intervalSec >= 120 ? `${data.intervalSec / 60} 分钟` : `${data.intervalSec} 秒`;
 	const parts = [`站点 ${data.target}`, `每 ${every}一次`];
 	if (protocol) parts.push(`协议 ${protocol}`);
+	if (questions?.length) parts.push(`题目 ${questions.join("、")}`);
 	if (data.last) parts.push(`最近一次调用 ${agoText(data.last.ts, now)}`);
 	return parts.join(" · ");
 }

@@ -28,6 +28,7 @@ export type CardProps = {
 	host: string;
 	alias?: string;
 	protocol?: Protocol;
+	questions?: readonly string[];
 	view: MonitorView;
 	now: number;
 	actions?: ComponentChildren;
@@ -52,7 +53,7 @@ export function MonitorCard(props: CardProps) {
 				<p class="status-badge" data-testid={`${t}-badge`} data-state={data.state}>
 					{badgeLabel(view)}
 				</p>
-				<p class="meta">{metaLine(data, props.now, props.protocol)}</p>
+				<p class="meta">{metaLine(data, props.now, props.protocol, props.questions)}</p>
 			</div>
 			{props.children}
 			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />

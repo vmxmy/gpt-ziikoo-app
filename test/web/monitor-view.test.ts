@@ -60,6 +60,9 @@ describe("monitor text", () => {
 
 	it("names the channel of a custom card", () => {
 		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 60 秒一次 · 协议 chat");
+		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat", ["thibault", "ciallo"])).toBe(
+			"站点 relay.example · 每 60 秒一次 · 协议 chat · 题目 thibault、ciallo",
+		);
 	});
 
 	it("takes the median of the bucket medians", () => {

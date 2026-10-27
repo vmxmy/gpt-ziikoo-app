@@ -1,4 +1,4 @@
-import { getQuestion, instantiate, SAMPLE_SEED } from "../../questions/index.ts";
+import { getQuestion, instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
@@ -176,6 +176,7 @@ export type WatchCreateCommand = HistoryCommand & {
 	model: string;
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
+	questions: string[];
 	alias: string;
 	board?: string;
 };
@@ -183,6 +184,16 @@ export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: 
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const BOARD = /^[A-Za-z0-9_-]{22}$/;
+
+// Kept in bank order whatever order they were picked in. A caller that sends none gets every watch question.
+function parseWatchQuestions(value: unknown): Result<string[]> {
+	const ids = watchQuestions().map((q) => q.id);
+	if (value === undefined) return { ok: true, value: ids };
+	if (!Array.isArray(value) || value.length === 0 || !value.every((id) => ids.includes(id))) {
+		return bad(`questions 必须是非空数组，只能含 ${ids.join("、")}`);
+	}
+	return { ok: true, value: ids.filter((id) => value.includes(id)) };
+}
 
 export function parseWatchCreate(body: unknown): WatchCreateResult {
 	const f = fields(body);
@@ -199,6 +210,8 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	}
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
 	if (!isWatchInterval(intervalMin)) return bad("intervalMin 必须是 5 或 15");
+	const questions = parseWatchQuestions(f.questions);
+	if (!questions.ok) return questions;
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
 	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");
 	return {
@@ -210,6 +223,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 			model,
 			protocol,
 			intervalMin,
+			questions: questions.value,
 			alias: (alias ?? "").trim().slice(0, WATCH_MAX_ALIAS),
 			board: board ?? undefined,
 		},

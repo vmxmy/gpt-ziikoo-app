@@ -175,6 +175,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 			host={card.view.host}
 			alias={card.view.alias || undefined}
 			protocol={card.view.protocol}
+			questions={card.view.questions}
 			view={monitorView(card.view.monitor)}
 			now={now}
 			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} />}

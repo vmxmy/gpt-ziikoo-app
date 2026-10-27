@@ -3,9 +3,22 @@ import type { Scorer } from "../../src/shared/types.ts";
 import { objectId } from "../../src/worker/identity.ts";
 import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS } from "../../src/worker/probe.ts";
 import { redact } from "../../src/worker/redact.ts";
-import { parseHistoryRequest, parseProbeRequest } from "../../src/worker/request.ts";
+import { parseHistoryRequest, parseProbeRequest, parseWatchCreate } from "../../src/worker/request.ts";
 import { score } from "../../src/worker/scorers.ts";
 import { parseSite } from "../../src/worker/target-url.ts";
+
+describe("parseWatchCreate questions", () => {
+	const body = { site: "https://api.example.com", key: "sk-test-12345678", model: "gpt-6-astra", protocol: "responses", intervalMin: 5, consent: true };
+
+	it("keeps the picked questions in bank order, and takes every watch question when none are given", () => {
+		expect(parseWatchCreate({ ...body, questions: ["ciallo", "thibault", "ciallo"] })).toMatchObject({ ok: true, value: { questions: ["thibault", "ciallo"] } });
+		expect(parseWatchCreate(body)).toMatchObject({ ok: true, value: { questions: ["thibault", "candy", "candy-var", "ciallo"] } });
+	});
+
+	it.each([[[]], [["pelican-svg"]], [["nope"]], ["thibault"]])("rejects questions %j", (questions) => {
+		expect(parseWatchCreate({ ...body, questions })).toEqual({ ok: false, message: "questions 必须是非空数组，只能含 thibault、candy、candy-var、ciallo" });
+	});
+});
 
 describe("score", () => {
 	it("yes_no reads the leading word case-insensitively", () => {
