@@ -15,8 +15,17 @@ const EFFORTS: readonly EffortChoice[] = ["", "low", "medium", "high", "xhigh"];
 const effortText = (e: EffortChoice) => e || "不指定";
 
 type Done = { result: CustomResult; protocol: Protocol; effort: EffortChoice; prompt: string; fileName: string };
-// timeoutMs arrives with the first progress line; chars stays null until the site answers.
-type Sending = { kind: "sending"; prompt: string; startedAt: number; timeoutMs: number | null; chars: number | null };
+// timeoutMs arrives with the start line; chars and heardAt stay null until the site answers. heardAt is the page's
+// clock when the latest progress line arrived, so it moves on every keep-alive ping too.
+type Sending = {
+	kind: "sending";
+	prompt: string;
+	startedAt: number;
+	timeoutMs: number | null;
+	chars: number | null;
+	reasoning: boolean;
+	heardAt: number | null;
+};
 type Status = { kind: "idle" } | Sending | { kind: "cancelled" } | ({ kind: "done" } & Done);
 type CopyStatus = "copied" | "failed";
 
@@ -46,14 +55,19 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${pad(sec % 60)}`;
 
-function stageText(chars: number | null): string {
+function stageText(chars: number | null, reasoning: boolean): string {
 	if (chars === null) return "已发出调用，等站点响应";
-	if (chars === 0) return "站点已响应，等首字。推理强度高时可能要几分钟";
-	return "正在接收回答";
+	if (chars > 0) return "正在接收回答";
+	return reasoning ? "模型正在推理，推理完才开始写回答，可能要几分钟" : "站点已响应，等首字。推理强度高时可能要几分钟";
+}
+
+function heardText(heardAt: number, now: number): string {
+	const sec = Math.max(0, Math.floor((now - heardAt) / 1000));
+	return `最近一次收到站点数据 ${sec === 0 ? "不到 1 秒前" : `${sec} 秒前`}`;
 }
 
 // The countdown runs on the page's clock from the click, so it reaches 0 a little before the worker gives up.
-function HtmlProgress({ startedAt, timeoutMs, chars }: Sending) {
+function HtmlProgress({ startedAt, timeoutMs, chars, reasoning, heardAt }: Sending) {
 	const [now, setNow] = useState(() => Date.now());
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -83,12 +97,17 @@ function HtmlProgress({ startedAt, timeoutMs, chars }: Sending) {
 			</div>
 			<div class="html-progress-text">
 				<p role="status" data-testid="html-stage">
-					{stageText(chars)}
+					{stageText(chars, reasoning)}
 				</p>
 				<p class="muted small num" data-testid="html-received">
 					已用 {clock(Math.floor(elapsed / 1000))}
 					{chars ? ` · 已收到 ${chars.toLocaleString("zh-CN")} 个字符` : ""}
 				</p>
+				{heardAt !== null && (
+					<p class="muted small num" data-testid="html-heartbeat">
+						{heardText(heardAt, now)}
+					</p>
+				)}
 				<p class="muted small">倒计时到 0 时还没写完，本次按超时算失败。</p>
 			</div>
 		</div>
@@ -267,11 +286,14 @@ export function HtmlTest() {
 		ctrl.current = controller;
 		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
 		const prompt = generatePelican(seed);
-		setStatus({ kind: "sending", prompt, startedAt: Date.now(), timeoutMs: null, chars: null });
-		const onProgress = (line: ProbeProgress) =>
-			setStatus((current) =>
-				current.kind !== "sending" ? current : line.type === "start" ? { ...current, timeoutMs: line.timeoutMs } : { ...current, chars: line.chars },
-			);
+		setStatus({ kind: "sending", prompt, startedAt: Date.now(), timeoutMs: null, chars: null, reasoning: false, heardAt: null });
+		const onProgress = (line: ProbeProgress) => {
+			const at = Date.now();
+			setStatus((current) => {
+				if (current.kind !== "sending") return current;
+				return line.type === "start" ? { ...current, timeoutMs: line.timeoutMs } : { ...current, chars: line.chars, reasoning: line.reasoning, heardAt: at };
+			});
+		};
 		try {
 			const outcome = await probeHtml(target, model.trim(), protocol, effort || null, seed, controller.signal, onProgress);
 			setStatus({ kind: "done", result: customResult(outcome), protocol, effort, prompt, fileName: htmlFileName(model.trim(), new Date()) });

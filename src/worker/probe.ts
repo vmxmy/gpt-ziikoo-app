@@ -1,5 +1,5 @@
-import type { Effort, FailReason, PlayablePage, ProbeResponse, Protocol, Question, RawCall } from "../shared/types.ts";
-import { answerCounter, idShape, parseBody, readUsage, type TimedText } from "./parse.ts";
+import type { Effort, FailReason, PlayablePage, ProbeResponse, Protocol, Question, RawCall, StreamProgress } from "../shared/types.ts";
+import { idShape, parseBody, progressReader, readUsage, type TimedText } from "./parse.ts";
 import { redact } from "./redact.ts";
 import { score } from "./scorers.ts";
 
@@ -26,7 +26,7 @@ export type ProbeInput = {
 	question: Question;
 	effort: Effort | null;
 	limits: ProbeLimits;
-	onProgress?: (chars: number) => void;
+	onProgress?: (progress: StreamProgress) => void;
 };
 
 // An HTML page streams thousands of events; two lines a second keep a progress readout current.
@@ -151,16 +151,18 @@ async function readCapped(
 	return { chunks: [...chunks, { t: since(), text: decoder.decode() }], truncated: false };
 }
 
-function reportAnswer(onProgress: (chars: number) => void, since: () => number): (text: string) => void {
-	const count = answerCounter();
-	let reported = { at: since(), chars: 0 };
-	onProgress(0);
+// Any arrival is reported, not only new answer text, so a site that sends nothing but keep-alive pings while the model
+// reasons still shows as connected. The switch into reasoning goes out at once rather than waiting for the next ping.
+function reportProgress(onProgress: (progress: StreamProgress) => void, since: () => number): (text: string) => void {
+	const read = progressReader();
+	let reported = { at: since(), reasoning: false };
+	onProgress({ chars: 0, reasoning: false });
 	return (text) => {
-		const chars = count(text);
+		const progress = read(text);
 		const at = since();
-		if (chars === reported.chars || at - reported.at < PROGRESS_INTERVAL_MS) return;
-		reported = { at, chars };
-		onProgress(chars);
+		if (progress.reasoning === reported.reasoning && at - reported.at < PROGRESS_INTERVAL_MS) return;
+		reported = { at, reasoning: progress.reasoning };
+		onProgress(progress);
 	};
 }
 
@@ -268,7 +270,7 @@ export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): 
 		await response.body?.cancel();
 		return failed("upstream_error", { ...base, totalMs: since() });
 	}
-	const onText = input.onProgress && reportAnswer(input.onProgress, since);
+	const onText = input.onProgress && reportProgress(input.onProgress, since);
 	const read = await readCapped(response.body, since, input.limits.maxBodyBytes, onText).catch(thrownReason);
 	if (typeof read === "string") return failed(read, { ...base, totalMs: since() });
 	return finish(input, { ...base, truncated: read.truncated }, read.chunks, {

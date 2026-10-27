@@ -94,9 +94,13 @@ export type ProbeFail = {
 
 export type ProbeResponse = ProbeOk | ProbeFail;
 
+// chars counts the answer text received so far. reasoning stays true once the site has opened a reasoning block or item;
+// chars tells whether the answer has started since.
+export type StreamProgress = { chars: number; reasoning: boolean };
+
 // With progress: true, /api/probe answers one of these per line. The first progress line means the site has answered;
-// chars counts the answer text received so far.
-export type ProbeProgress = { type: "start"; timeoutMs: number } | { type: "progress"; chars: number };
+// later ones mean the site sent more data, even a keep-alive ping.
+export type ProbeProgress = { type: "start"; timeoutMs: number } | ({ type: "progress" } & StreamProgress);
 export type ProbeLine = ProbeProgress | { type: "result"; response: ProbeResponse };
 
 export type ApiError = {

@@ -28,8 +28,8 @@ export function ApiDocs() {
 				</li>
 				<li>站点自身的失败返回 200 加 <code>ok:false</code> 与 <code>reason</code>；参数不合法返回 400；本站限流或超出每轮调用上限返回 429。</li>
 				<li>
-					请求体加 <code>progress: true</code> 时，200 响应改为每行一个 JSON：先是 <code>{"{ type: \"start\", timeoutMs }"}</code>，站点响应后每半秒最多一行{" "}
-					<code>{"{ type: \"progress\", chars }"}</code>（已收到的回答字符数），最后一行 <code>{"{ type: \"result\", response }"}</code>，<code>response</code>{" "}
+					请求体加 <code>progress: true</code> 时，200 响应改为每行一个 JSON：先是 <code>{"{ type: \"start\", timeoutMs }"}</code>，站点响应时发一行，之后每收到站点数据（包括心跳）每半秒最多一行{" "}
+					<code>{"{ type: \"progress\", chars, reasoning }"}</code>（<code>chars</code> 是已收到的回答字符数，<code>reasoning</code> 表示站点已开始推理），最后一行 <code>{"{ type: \"result\", response }"}</code>，<code>response</code>{" "}
 					与不带这个字段时的响应体相同。
 				</li>
 				<li>
