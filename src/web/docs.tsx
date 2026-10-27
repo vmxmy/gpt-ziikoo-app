@@ -58,7 +58,7 @@ export function ApiDocs() {
 			<ul>
 				<li>每个调用方 IP 每 60 秒 150 次，每个站点每 60 秒 120 次。超出返回 429 并带 Retry-After。</li>
 				<li>每轮最多 200 次调用。回答只返回前 70 字，完整内容在历史原始数据里。</li>
-				<li>每次调用读取站点响应最多 256KB，等待最多 120 秒。不带 <code>runId</code> 的 <code>pelican-svg</code> 调用是 2MB 与 300 秒。</li>
+				<li>每次调用读取站点响应最多 256KB，等待最多 120 秒。不带 <code>runId</code> 的 <code>pelican-svg</code> 调用是 8MB 与 900 秒。</li>
 				<li>每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。</li>
 			</ul>
 		</details>

@@ -10,9 +10,10 @@ const ANSWER_PREVIEW_CHARS = 70;
 export type ProbeLimits = { maxBodyBytes: number; timeoutMs: number };
 
 export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 120_000 };
-// A streamed HTML page costs about 200 bytes of events per token, past the stored-call cap, and a high effort
-// reasons for minutes first. Only unrecorded calls get these limits, so storage keeps its cap.
-export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 2 * 1024 * 1024, timeoutMs: 300_000 };
+// A streamed HTML page costs about 200 bytes of events per token, past the stored-call cap, and an xhigh effort
+// reasons for more than five minutes first. Only unrecorded calls get these limits, so storage keeps its cap.
+// Parsing peaks at about six times the body in memory, so 8MB leaves room in the isolate's 128MB.
+export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 8 * 1024 * 1024, timeoutMs: 900_000 };
 // The Messages API requires max_tokens; 32000 fits every Claude model from Opus 4 on and leaves room for an HTML page.
 const ANTHROPIC_MAX_TOKENS = 32_000;
 const ANTHROPIC_VERSION = "2023-06-01";
