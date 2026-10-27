@@ -87,8 +87,9 @@ test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生�
 		await expect(page.getByTestId("html-result")).toContainText("输出 token 数（含推理）");
 	}));
 
-test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计时与收到的字符数,切走再切回不中断,生成后可下载 HTML 并播放动画", async ({ page, site, key }) =>
+test("HTML 生成页签按所选推理强度调用一次,生成中显示完整题面、倒计时与收到的字符数,切走再切回不中断,题面可复制,生成后可下载 HTML 并播放动画", async ({ page, context, site, key }) =>
 	scrubbed(page, async () => {
+		await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 		await page.goto("/#html");
 		await page.getByTestId("html-site").fill(site);
 		await page.getByTestId("html-key").fill(key);
@@ -96,6 +97,7 @@ test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计�
 		await page.getByTestId("html-effort").selectOption("xhigh");
 		await page.getByTestId("html-run").click();
 		await expect(page.getByTestId("html-cancel")).toBeVisible();
+		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
 		await expect(page.getByTestId("html-countdown")).toHaveText(/^[45]:\d{2}$/);
 		await expect(page.getByTestId("html-received")).toContainText("个字符");
 		await page.getByTestId("tab-live").click();
@@ -103,8 +105,10 @@ test("HTML 生成页签按所选推理强度调用一次,生成中显示倒计�
 		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId("html-result")).toContainText("推理强度 xhigh");
 		await expect(page.getByTestId("html-result")).toContainText(/推理 token 数192回答 token 数\d+/);
-		await expect(page.getByTestId("html-shown-prompt")).toContainText("骑自行车的2D动画，场景是");
 		await expect(page.getByTestId("html-prompt")).toHaveCount(0);
+		await page.getByTestId("html-prompt-copy").click();
+		await expect(page.getByTestId("html-prompt-copy-status")).toHaveText("已复制");
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await page.getByTestId("html-shown-prompt").textContent());
 		const pending = page.waitForEvent("download");
 		await page.getByTestId("html-download").click();
 		const download = await pending;
