@@ -203,7 +203,6 @@ input[type="checkbox"] {
 	}
 }
 
-pre.code,
 pre.prompt {
 	margin: var(--space-3) 0 0;
 	padding: var(--space-3) var(--space-4);
@@ -212,15 +211,6 @@ pre.prompt {
 	background: var(--surface-2);
 	font: var(--fs-13) / 1.6 var(--font-mono);
 	tab-size: 4;
-}
-
-pre.code {
-	white-space: pre;
-	overflow-x: auto;
-	overflow-wrap: normal;
-}
-
-pre.prompt {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }

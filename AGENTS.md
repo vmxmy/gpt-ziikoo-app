@@ -26,7 +26,7 @@
 | --- | --- |
 | 加一道题 | `docs/design.md` 的「题库」一节 |
 | 改自定义题 | `docs/design.md` 的「自定义题」一节 |
-| 改接口 | `docs/design.md` 的「接口」一节 |
+| 改接口 | `docs/design.md` 的「接口」一节,改完同步 `public/api.md` |
 | 改评分或梯度 | `reference/apitest.py` 与「梯度规则」一节 |
 | 改存储或保留策略 | `docs/design.md` 的「持久化」一节与 `docs/architecture.md` 的「存储」 |
 | 改限速、部署、日志 | `docs/architecture.md` |

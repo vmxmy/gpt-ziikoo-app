@@ -95,6 +95,7 @@ src/shared/                类型、一轮结论的共享计算函数
 src/worker/                路由、probe、评分器表、目标地址校验、脱敏、Target(DO)
 src/web/                   页面、梯度引擎(纯函数)
 public/_headers
+public/api.md              对外的 API 说明,线上地址 /api.md
 test/
 .cloudflare/               构建输出与生成的类型,不入库
 ```
