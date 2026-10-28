@@ -1,5 +1,5 @@
 import type { Protocol } from "../shared/types.ts";
-import { WATCH_MAX_ALIAS, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
+import { isWatchInterval, WATCH_MAX_ALIAS, type WatchChange, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
 import { normalizeKey } from "./results.ts";
 
 export const BOARD_KEY = "gpt.board.v1";
@@ -100,6 +100,14 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 			...(board ? { board } : {}),
 		},
 	};
+}
+
+export type WatchEditDraft = { ok: true; change: WatchChange } | { ok: false; error: FieldError };
+
+// The interval goes out only when it changed, so a watch on a retired interval keeps it through a question edit.
+export function parseWatchEdit({ questions, intervalMin }: { questions: string[]; intervalMin: number }, current: number): WatchEditDraft {
+	if (questions.length === 0) return { ok: false, error: { field: "questions", message: "请至少选一道题" } };
+	return { ok: true, change: intervalMin !== current && isWatchInterval(intervalMin) ? { questions, intervalMin } : { questions } };
 }
 
 export function statusNotice(status: WatchStatus): string | null {

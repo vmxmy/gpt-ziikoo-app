@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
-import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchIntervalMin, type WatchStatus, type WatchView } from "../shared/watch.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeResult } from "./probe.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
@@ -58,7 +58,8 @@ type WatchState = {
 	alias: string;
 	model: string;
 	protocol: Protocol;
-	intervalMin: WatchIntervalMin;
+	// A watch made before the interval list changed may still hold 15.
+	intervalMin: number;
 	// Absent on watches made before questions could be picked.
 	questions?: string[];
 	createdAt: number;
@@ -75,6 +76,12 @@ export function planWatch(state: Pick<WatchState, "status" | "expiresAt" | "inte
 	if (now >= state.expiresAt) return { kind: "purge" };
 	if (state.status.kind !== "running") return { kind: "sleep", until: state.expiresAt };
 	return { kind: "probe", nextAt: Math.min(now + state.intervalMin * MINUTE_MS, state.expiresAt) };
+}
+
+// A shorter interval pulls the queued round in; a longer one takes over after it.
+export function alarmAfterUpdate(state: Pick<WatchState, "status" | "expiresAt" | "intervalMin">, queued: number | null, now: number): number {
+	if (state.status.kind !== "running") return state.expiresAt;
+	return Math.min(queued ?? Infinity, now + state.intervalMin * MINUTE_MS);
 }
 
 export function toSample(ts: number, question: string, r: ProbeResponse): MonitorSample {
@@ -206,6 +213,14 @@ export class Watch extends DurableObject<Env> {
 				? { ...state, expiresAt, status: { kind: "paused" } }
 				: { ...state, expiresAt, status: { kind: "running" }, unauthorized: 0 };
 		await this.save(next, action === "pause" ? expiresAt : now);
+		return this.toView(next, now);
+	}
+
+	async update(change: WatchChange, now: number): Promise<WatchView | null> {
+		const state = await this.state();
+		if (!state) return null;
+		const next: WatchState = { ...state, ...change, expiresAt: now + IDLE_MS };
+		await this.save(next, alarmAfterUpdate(next, await this.ctx.storage.getAlarm(), now));
 		return this.toView(next, now);
 	}
 

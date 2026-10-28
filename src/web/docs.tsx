@@ -36,7 +36,7 @@ export function ApiDocs() {
 					<code>POST /api/history</code>、<code>/api/history/raw</code>、<code>/api/history/delete</code>：请求体带同一站点与密钥。密钥只放请求体，不放请求头和 URL。
 				</li>
 				<li>
-					<code>POST /api/watch</code>、<code>/api/watch/view</code>、<code>/api/watch/state</code>、<code>/api/watch/delete</code>：持续监测的建立、读取、暂停与删除，凭建立时签发的随机令牌，供页面使用。
+					<code>POST /api/watch</code>、<code>/api/watch/view</code>、<code>/api/watch/state</code>、<code>/api/watch/update</code>、<code>/api/watch/delete</code>：持续监测的建立、读取、暂停、修改与删除，凭建立时签发的随机令牌，供页面使用。
 					<code>POST /api/board/view</code>、<code>/api/board/adopt</code>、<code>/api/board/move</code>：看板的批量读取、旧令牌迁移与合并，凭看板码。
 				</li>
 				<li>不提供跨域头，第三方网页不能调用，脚本与命令行不受影响。</li>

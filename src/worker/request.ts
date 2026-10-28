@@ -1,6 +1,6 @@
 import { getQuestion, instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
-import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
+import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchChange, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
 
@@ -183,6 +183,7 @@ export type WatchCreateCommand = HistoryCommand & {
 export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: false; message: string; field?: WatchField };
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const INTERVAL_MESSAGE = `intervalMin 必须是 ${WATCH_INTERVALS.join("、")} 之一`;
 const BOARD = /^[A-Za-z0-9_-]{22}$/;
 
 // Kept in bank order whatever order they were picked in. A caller that sends none gets every watch question.
@@ -209,7 +210,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
 	}
 	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
-	if (!isWatchInterval(intervalMin)) return bad("intervalMin 必须是 5 或 15");
+	if (!isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
 	const questions = parseWatchQuestions(f.questions);
 	if (!questions.ok) return questions;
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
@@ -242,6 +243,18 @@ export function parseWatchState(body: unknown): Result<{ token: string; action: 
 	const action = fields(body)?.action;
 	if (action !== "pause" && action !== "resume") return bad("action 必须是 pause 或 resume");
 	return { ok: true, value: { token: token.value, action } };
+}
+
+// Only the fields sent change; a field left out keeps its current value.
+export function parseWatchUpdate(body: unknown): Result<{ token: string; change: WatchChange }> {
+	const token = parseWatchToken(body);
+	if (!token.ok) return token;
+	const { questions, intervalMin } = fields(body) ?? {};
+	if (intervalMin !== undefined && !isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
+	const picked = questions === undefined ? null : parseWatchQuestions(questions);
+	if (picked && !picked.ok) return picked;
+	const change: WatchChange = { ...(picked && { questions: picked.value }), ...(intervalMin !== undefined && { intervalMin }) };
+	return { ok: true, value: { token: token.value, change } };
 }
 
 export function parseHistoryRawRequest(body: unknown): Result<HistoryCommand & { runId: string }> {

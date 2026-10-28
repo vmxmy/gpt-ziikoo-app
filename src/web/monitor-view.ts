@@ -29,8 +29,7 @@ export function agoText(ts: number, now: number): string {
 }
 
 export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[]): string {
-	const every = data.intervalSec >= 120 ? `${data.intervalSec / 60} 分钟` : `${data.intervalSec} 秒`;
-	const parts = [`站点 ${data.target}`, `每 ${every}一次`];
+	const parts = [`站点 ${data.target}`, `每 ${data.intervalSec / 60} 分钟一次`];
 	if (protocol) parts.push(`协议 ${protocol}`);
 	if (questions?.length) parts.push(`题目 ${questions.join("、")}`);
 	if (data.last) parts.push(`最近一次调用 ${agoText(data.last.ts, now)}`);

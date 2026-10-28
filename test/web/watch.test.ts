@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardId, cardLabel, nextSort, normalizeAlias, parseSite, parseTokens, parseWatchInput, protocolForModel, sortRows, statusNotice } from "../../src/web/watch.ts";
+import { cardId, cardLabel, nextSort, normalizeAlias, parseSite, parseTokens, parseWatchEdit, parseWatchInput, protocolForModel, sortRows, statusNotice } from "../../src/web/watch.ts";
 
 const KEY = "sk-live-known-secret-0042";
 const TOKEN = "A".repeat(43);
@@ -31,6 +31,17 @@ describe("parseWatchInput", () => {
 		expect(parseWatchInput(input({ model: " " }))).toMatchObject({ ok: false, error: { field: "model" } });
 		expect(parseWatchInput(input({ consent: false }))).toMatchObject({ ok: false, error: { field: "consent" } });
 		expect(parseWatchInput(input({ questions: [] }))).toMatchObject({ ok: false, error: { field: "questions" } });
+	});
+});
+
+describe("parseWatchEdit", () => {
+	it("sends the interval only when it changed, so a retired interval survives a question edit", () => {
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 15 }, 15)).toEqual({ ok: true, change: { questions: ["ciallo"] } });
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 1 }, 15)).toEqual({ ok: true, change: { questions: ["ciallo"], intervalMin: 1 } });
+	});
+
+	it("asks for at least one question", () => {
+		expect(parseWatchEdit({ questions: [], intervalMin: 5 }, 5)).toEqual({ ok: false, error: { field: "questions", message: "请至少选一道题" } });
 	});
 });
 

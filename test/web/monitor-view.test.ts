@@ -47,9 +47,9 @@ describe("monitor text", () => {
 	});
 
 	it("omits the last probe when there is none", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW)).toBe("站点 relay.example · 每 60 秒一次");
+		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW)).toBe("站点 relay.example · 每 1 分钟一次");
 		expect(metaLine(buildMonitor([sample(2, 900)], NOW, "relay.example", 60), NOW)).toBe(
-			"站点 relay.example · 每 60 秒一次 · 最近一次调用 2 分钟前",
+			"站点 relay.example · 每 1 分钟一次 · 最近一次调用 2 分钟前",
 		);
 	});
 
@@ -59,9 +59,9 @@ describe("monitor text", () => {
 	});
 
 	it("names the channel of a custom card", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 60 秒一次 · 协议 chat");
+		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 1 分钟一次 · 协议 chat");
 		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat", ["thibault", "ciallo"])).toBe(
-			"站点 relay.example · 每 60 秒一次 · 协议 chat · 题目 thibault、ciallo",
+			"站点 relay.example · 每 1 分钟一次 · 协议 chat · 题目 thibault、ciallo",
 		);
 	});
 

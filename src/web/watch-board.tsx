@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorState } from "../shared/monitor.ts";
-import { WATCH_IDLE_DAYS, type WatchStatus, type WatchView } from "../shared/watch.ts";
-import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState } from "./api.ts";
+import { WATCH_IDLE_DAYS, type WatchChange, type WatchStatus, type WatchView } from "../shared/watch.ts";
+import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState, updateWatch } from "./api.ts";
 import { BAR_HINT, LEGEND, MonitorCard } from "./monitor-card.tsx";
 import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
 import { ms, pct } from "./results.ts";
 import { WatchAddForm } from "./watch-add.tsx";
+import { WatchEditForm } from "./watch-edit.tsx";
 import { WatchShare } from "./watch-share.tsx";
 import {
 	BOARD_KEY,
@@ -41,6 +42,9 @@ type CardProps = {
 	onRemove: (card: WatchCard) => void;
 	onRetry: (token: string) => void;
 	onMove: (token: string, to: "top" | "up" | "down") => void;
+	editing: boolean;
+	onEdit: (token: string | null) => void;
+	onSave: (token: string, change: WatchChange) => Promise<string | null>;
 };
 
 const cardName = (card: WatchCard): string => (card.kind === "live" ? cardLabel(card.view) : `令牌 ${cardId(card.token)}`);
@@ -80,14 +84,30 @@ const SORT_VALUE: Record<SortKey, (view: WatchView) => string | number | null> =
 	p50: (view) => latencyP50(bucketsOf(view)),
 };
 
-type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove">;
+type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove" | "onEdit" | "onSave">;
 // Without onMove the row has no 置顶/上移/下移: a sorted list would not show the move.
-type RowActionProps = { card: WatchCard; index: number; count: number } & Pick<BoardActions, "onToggle" | "onRemove"> & Partial<Pick<BoardActions, "onMove">>;
+type RowActionProps = { card: WatchCard; index: number; count: number; editing: boolean } & Pick<BoardActions, "onToggle" | "onRemove" | "onEdit"> &
+	Partial<Pick<BoardActions, "onMove">>;
 
-function RowActions({ card, onToggle, onRemove, index, count, onMove }: RowActionProps) {
+function RowActions({ card, onToggle, onRemove, index, count, onMove, editing, onEdit }: RowActionProps) {
 	const t = `custom-${cardId(card.token)}`;
 	return (
 		<>
+			{card.kind === "live" && (
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label="修改题目与间隔"
+					title="修改题目与间隔"
+					aria-expanded={editing}
+					onClick={() => onEdit(editing ? null : card.token)}
+					data-testid={`${t}-edit`}
+				>
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path class="icon-stroke" d="M10.8 2.7l2.5 2.5-7.8 7.8H3v-2.5zM9.3 4.2l2.5 2.5" />
+					</svg>
+				</button>
+			)}
 			{card.kind === "live" && card.view.status.kind === "running" && (
 				<button type="button" class="icon-btn" aria-label="暂停" title="暂停" onClick={() => onToggle(card.token, "pause")} data-testid={`${t}-pause`}>
 					<svg viewBox="0 0 16 16" aria-hidden="true">
@@ -162,7 +182,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 					<button type="button" class="btn-text" onClick={() => props.onRetry(card.token)} data-testid={`${t}-retry`}>
 						重试
 					</button>
-					<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} />
+					<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} editing={props.editing} onEdit={props.onEdit} />
 				</div>
 			</section>
 		);
@@ -178,7 +198,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 			questions={card.view.questions}
 			view={monitorView(card.view.monitor)}
 			now={now}
-			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} />}
+			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} editing={props.editing} onEdit={props.onEdit} />}
 		>
 			{notice && (
 				<p class="card-notice" data-kind={card.view.status.kind} role="status" data-testid={`${t}-notice`}>
@@ -190,11 +210,12 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 					{card.actionError}
 				</p>
 			)}
+			{props.editing && <WatchEditForm testPrefix={t} view={card.view} onSave={(change) => props.onSave(card.token, change)} onClose={() => props.onEdit(null)} />}
 		</MonitorCard>
 	);
 }
 
-function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove }: RowActionProps & Pick<BoardActions, "onRetry">) {
+function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove, editing, onEdit, onSave }: RowActionProps & Pick<BoardActions, "onRetry" | "onSave">) {
 	const t = `custom-${cardId(card.token)}`;
 	if (card.kind !== "live") {
 		return (
@@ -216,7 +237,7 @@ function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove
 				</td>
 				<td>
 					<div class="row-actions">
-						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} />
+						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} editing={editing} onEdit={onEdit} />
 					</div>
 				</td>
 			</tr>
@@ -224,34 +245,43 @@ function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove
 	}
 	const cells = rowCells(card);
 	return (
-		<tr data-testid={`${t}-row`} data-paused={cells.status === "paused" ? true : undefined}>
-			<td>
-				<span class="row-site">
-					{cells.alias && <span class="card-alias">{cells.alias}</span>}
-					<span class={cells.alias ? "mono muted" : "mono"}>{cells.host}</span>
-				</span>
-			</td>
-			<td data-state={cells.state}>
-				<span class="row-state">{cells.label}</span>
-			</td>
-			<td class="num">{cells.uptime}</td>
-			<td class="num">{cells.correct}</td>
-			<td class="num" data-col="p50">
-				{cells.p50}
-			</td>
-			<td data-col="bar">
-				<div class="mini-bar" aria-hidden="true">
-					{cells.states.map((state, i) => (
-						<span class="segment" data-state={state} key={i} />
-					))}
-				</div>
-			</td>
-			<td>
-				<div class="row-actions">
-					<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} />
-				</div>
-			</td>
-		</tr>
+		<>
+			<tr data-testid={`${t}-row`} data-paused={cells.status === "paused" ? true : undefined}>
+				<td>
+					<span class="row-site">
+						{cells.alias && <span class="card-alias">{cells.alias}</span>}
+						<span class={cells.alias ? "mono muted" : "mono"}>{cells.host}</span>
+					</span>
+				</td>
+				<td data-state={cells.state}>
+					<span class="row-state">{cells.label}</span>
+				</td>
+				<td class="num">{cells.uptime}</td>
+				<td class="num">{cells.correct}</td>
+				<td class="num" data-col="p50">
+					{cells.p50}
+				</td>
+				<td data-col="bar">
+					<div class="mini-bar" aria-hidden="true">
+						{cells.states.map((state, i) => (
+							<span class="segment" data-state={state} key={i} />
+						))}
+					</div>
+				</td>
+				<td>
+					<div class="row-actions">
+						<RowActions card={card} onToggle={onToggle} onRemove={onRemove} index={index} count={count} onMove={onMove} editing={editing} onEdit={onEdit} />
+					</div>
+				</td>
+			</tr>
+			{editing && (
+				<tr data-testid={`${t}-edit-row`}>
+					<td colspan={7}>
+						<WatchEditForm testPrefix={t} view={card.view} onSave={(change) => onSave(card.token, change)} onClose={() => onEdit(null)} />
+					</td>
+				</tr>
+			)}
+		</>
 	);
 }
 
@@ -266,8 +296,8 @@ function SortHeader({ label, sortKey, sort, onSort, num, col }: { label: string;
 	);
 }
 
-function WatchTable(props: { cards: WatchCard[] } & BoardActions) {
-	const { cards, onMove, ...rest } = props;
+function WatchTable(props: { cards: WatchCard[]; editing: string | null } & BoardActions) {
+	const { cards, editing, onMove, ...rest } = props;
 	const [sort, setSort] = useState<TableSort>(null);
 	const rows = sort ? sortRows(cards, (card) => (card.kind === "live" ? SORT_VALUE[sort.key](card.view) : null), sort.dir) : cards;
 	const header = { sort, onSort: (key: SortKey) => setSort(nextSort(sort, key)) };
@@ -287,7 +317,7 @@ function WatchTable(props: { cards: WatchCard[] } & BoardActions) {
 				</thead>
 				<tbody>
 					{rows.map((card, i) => (
-						<WatchTableRow key={card.token} card={card} index={i} count={rows.length} onMove={sort ? undefined : onMove} {...rest} />
+						<WatchTableRow key={card.token} card={card} index={i} count={rows.length} onMove={sort ? undefined : onMove} editing={editing === card.token} {...rest} />
 					))}
 				</tbody>
 			</table>
@@ -301,6 +331,7 @@ export function WatchBoard() {
 	const [boardNotice, setBoardNotice] = useState<string | null>(null);
 	const [now, setNow] = useState(() => Date.now());
 	const [adding, setAdding] = useState(false);
+	const [editing, setEditing] = useState<string | null>(null);
 	const [layout, setLayout] = useState<"cards" | "list">("cards");
 	const latest = useRef(cards);
 	latest.current = cards;
@@ -414,6 +445,18 @@ export function WatchBoard() {
 		}
 	};
 
+	const save = async (token: string, change: WatchChange): Promise<string | null> => {
+		try {
+			const view = await updateWatch(token, change);
+			if (!view) return "监测不存在或已过期";
+			setCards((prev) => prev.map((c) => (c.token === token ? { kind: "live", token, view, actionError: null } : c)));
+			setEditing(null);
+			return null;
+		} catch (err) {
+			return err instanceof Error ? err.message : "保存失败，请重试";
+		}
+	};
+
 	const remove = async (card: WatchCard): Promise<void> => {
 		try {
 			await deleteWatch(card.token);
@@ -518,6 +561,9 @@ export function WatchBoard() {
 							onRemove={(c) => void remove(c)}
 							onRetry={(token) => void refreshOne(token)}
 							onMove={(token, to) => void move(token, to)}
+							editing={editing === card.token}
+							onEdit={setEditing}
+							onSave={save}
 						/>
 					))}
 					{cards.length === 0 && (
@@ -528,7 +574,16 @@ export function WatchBoard() {
 					)}
 				</div>
 			) : (
-				<WatchTable cards={cards} onToggle={(token, action) => void toggle(token, action)} onRemove={(c) => void remove(c)} onRetry={(token) => void refreshOne(token)} onMove={(token, to) => void move(token, to)} />
+				<WatchTable
+					cards={cards}
+					editing={editing}
+					onToggle={(token, action) => void toggle(token, action)}
+					onRemove={(c) => void remove(c)}
+					onRetry={(token) => void refreshOne(token)}
+					onMove={(token, to) => void move(token, to)}
+					onEdit={setEditing}
+					onSave={save}
+				/>
 			)}
 		</section>
 	);
