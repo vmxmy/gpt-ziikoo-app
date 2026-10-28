@@ -244,6 +244,8 @@ test("重置后旧链接失效", async ({ page, site, key, context }) =>
 		await page.getByTestId("watch-share-toggle").click();
 		const oldLink = await page.getByTestId("watch-share-link").inputValue();
 		await page.getByTestId("watch-share-reset").click();
+		// The old board empties only when /api/board/move returns, and the link changes at that moment.
+		await expect(page.getByTestId("watch-share-link")).not.toHaveValue(oldLink);
 		const newPage = await context.newPage();
 		await newPage.goto(oldLink);
 		await expect(newPage.getByTestId("watch-board-notice")).toContainText("看板不存在或已过期");
