@@ -1,7 +1,7 @@
 import type { MonitorResponse } from "./monitor.ts";
 import type { Protocol } from "./types.ts";
 
-export const WATCH_INTERVALS = [5, 15] as const;
+export const WATCH_INTERVALS = [1, 5, 10, 30] as const;
 export type WatchIntervalMin = (typeof WATCH_INTERVALS)[number];
 export const WATCH_MAX_TOTAL = 200;
 export const WATCH_IDLE_DAYS = 7;
@@ -25,6 +25,8 @@ export type WatchCreateRequest = {
 };
 export type WatchTokenRequest = { token: string };
 export type WatchStateRequest = { token: string; action: "pause" | "resume" };
+export type WatchChange = { questions?: string[]; intervalMin?: WatchIntervalMin };
+export type WatchUpdateRequest = { token: string } & WatchChange;
 export type BoardViewRequest = { board: string };
 export type BoardAdoptRequest = { board?: string; tokens: string[] };
 export type BoardMoveRequest = { from: string; into?: string };
@@ -36,7 +38,8 @@ export type WatchView = {
 	alias: string;
 	model: string;
 	protocol: Protocol;
-	intervalMin: WatchIntervalMin;
+	// A watch made before the interval list changed may still run every 15 minutes.
+	intervalMin: number;
 	questions: string[];
 	createdAt: number;
 	status: WatchStatus;

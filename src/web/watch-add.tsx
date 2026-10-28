@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { RefObject } from "preact";
+import type { ComponentChildren, RefObject } from "preact";
 import type { Protocol, QuestionListItem } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
 import { fetchQuestions } from "./api.ts";
@@ -69,16 +69,17 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 	);
 }
 
-function useWatchQuestions() {
+// A new watch starts with every question picked; an edit starts from the watch's own picks.
+export function useWatchQuestions(initial?: readonly string[]) {
 	const [questions, setQuestions] = useState<QuestionListItem[] | null>(null);
 	const [loadError, setLoadError] = useState("");
-	const [picked, setPicked] = useState<string[]>([]);
+	const [picked, setPicked] = useState<string[]>(() => [...(initial ?? [])]);
 	useEffect(() => {
 		fetchQuestions().then(
 			(list) => {
 				const rotation = list.filter((q) => q.inWatchRotation !== false);
 				setQuestions(rotation);
-				setPicked(rotation.map((q) => q.id));
+				if (!initial) setPicked(rotation.map((q) => q.id));
 			},
 			(err: unknown) => setLoadError(err instanceof Error ? err.message : "题目加载失败"),
 		);
@@ -87,7 +88,7 @@ function useWatchQuestions() {
 	return { questions, loadError, picked, toggle };
 }
 
-function QuestionPicks(props: ReturnType<typeof useWatchQuestions> & { error: FieldError | null }) {
+export function QuestionPicks(props: ReturnType<typeof useWatchQuestions> & { testPrefix: string; children?: ComponentChildren }) {
 	return (
 		<fieldset class="field col-12 question-picks">
 			<legend class="field-label">题目</legend>
@@ -96,7 +97,7 @@ function QuestionPicks(props: ReturnType<typeof useWatchQuestions> & { error: Fi
 			<div class="question-pick-list">
 				{(props.questions ?? []).map((q) => (
 					<label class="consent-row" key={q.id}>
-						<input type="checkbox" checked={props.picked.includes(q.id)} onChange={() => props.toggle(q.id)} data-testid={`watch-add-question-${q.id}`} />
+						<input type="checkbox" checked={props.picked.includes(q.id)} onChange={() => props.toggle(q.id)} data-testid={`${props.testPrefix}-question-${q.id}`} />
 						<span>
 							{q.title} <span class="mono muted">{q.id}</span>
 						</span>
@@ -104,7 +105,7 @@ function QuestionPicks(props: ReturnType<typeof useWatchQuestions> & { error: Fi
 				))}
 			</div>
 			<p class="muted small">每次调用按顺序换下一道选中的题。</p>
-			<FieldMessage error={props.error} field="questions" />
+			{props.children}
 		</fieldset>
 	);
 }
@@ -192,7 +193,9 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			<FieldMessage error={error} field="model" />
 			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
 			<ChoiceField label="间隔" testId="watch-add-interval" value={intervalMin} options={WATCH_INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
-			<QuestionPicks {...watchQuestions} error={error} />
+			<QuestionPicks {...watchQuestions} testPrefix="watch-add">
+				<FieldMessage error={error} field="questions" />
+			</QuestionPicks>
 			<div class="field col-12">
 				<label class="consent-row">
 					<input type="checkbox" checked={consent} onChange={(e) => setConsent(e.currentTarget.checked)} data-testid="watch-add-consent" />

@@ -13,7 +13,7 @@ import type {
 	Protocol,
 	QuestionListItem,
 } from "../shared/types.ts";
-import type { BoardAdoptResponse, BoardMoveResponse, BoardOrderResponse, BoardViewResponse, WatchCreateRequest, WatchCreateResponse, WatchView } from "../shared/watch.ts";
+import type { BoardAdoptResponse, BoardMoveResponse, BoardOrderResponse, BoardViewResponse, WatchChange, WatchCreateRequest, WatchCreateResponse, WatchUpdateRequest, WatchView } from "../shared/watch.ts";
 import { FAILURE_ADVICE, failureAdvice } from "./results.ts";
 import type { Probe, ProbeOutcome } from "./runner.ts";
 
@@ -188,6 +188,13 @@ export async function fetchWatch(token: string): Promise<WatchView | null> {
 
 export async function setWatchState(token: string, action: "pause" | "resume"): Promise<WatchView | null> {
 	const res = await post("/api/watch/state", { token, action });
+	if (res.status === 404) return null;
+	if (!res.ok) throw await failure(res);
+	return res.json();
+}
+
+export async function updateWatch(token: string, change: WatchChange): Promise<WatchView | null> {
+	const res = await post("/api/watch/update", { token, ...change } satisfies WatchUpdateRequest);
 	if (res.status === 404) return null;
 	if (!res.ok) throw await failure(res);
 	return res.json();

@@ -15,7 +15,7 @@ type AddSetup = {
 	alias?: string;
 	model?: string;
 	protocol?: "responses" | "chat";
-	intervalMin?: 5 | 15;
+	intervalMin?: 1 | 5 | 10 | 30;
 	questions?: string[];
 	consent?: boolean;
 };
@@ -175,10 +175,10 @@ test("站点必须是 https,显示字段级错误", async ({ page, key }) =>
 		await expect(page.locator(CARDS)).toHaveCount(0);
 	}));
 
-test("chat 协议与 15 分钟间隔也能添加", async ({ page, site, key }) =>
+test("chat 协议与 30 分钟间隔也能添加", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		await openWatchTab(page);
-		await addWatch(page, { site, key, protocol: "chat", intervalMin: 15 });
+		await addWatch(page, { site, key, protocol: "chat", intervalMin: 30 });
 		await expect(page.locator(CARDS)).toHaveCount(1);
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
@@ -197,6 +197,26 @@ test("只选一道题,卡片只列这道题;一道不选时提示且不建卡片
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-badge`)).toHaveAttribute("data-state", "insufficient", { timeout: 30_000 });
 		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("题目 ciallo · ");
+	}));
+
+test("修改题目与间隔,刷新后保持;一道不选时提示且不保存", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		const id = await addOneGood(page, site, key);
+		const card = page.getByTestId(`custom-${id}-card`);
+		await expect(card).toContainText("每 5 分钟一次");
+		await page.getByTestId(`custom-${id}-edit`).click();
+		const picks = page.locator(`[data-testid^="custom-${id}-question-"]`);
+		await expect(picks.first()).toBeChecked();
+		for (const pick of await picks.all()) await pick.uncheck();
+		await page.getByTestId(`custom-${id}-edit-save`).click();
+		await expect(page.getByTestId(`custom-${id}-edit-error`)).toHaveText("请至少选一道题");
+		await page.getByTestId(`custom-${id}-question-ciallo`).check();
+		await page.getByTestId(`custom-${id}-interval`).selectOption("1");
+		await page.getByTestId(`custom-${id}-edit-save`).click();
+		await expect(page.getByTestId(`custom-${id}-edit-form`)).toHaveCount(0);
+		await expect(card).toContainText("每 1 分钟一次 · 协议 responses · 题目 ciallo · ");
+		await page.reload();
+		await expect(card).toContainText("每 1 分钟一次 · 协议 responses · 题目 ciallo · ", { timeout: 30_000 });
 	}));
 
 test("旧的浏览器监测存储被清除", async ({ page, site, key }) =>

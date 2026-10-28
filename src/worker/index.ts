@@ -29,6 +29,7 @@ import {
 	type RunRef,
 	parseWatchCreate,
 	parseWatchState,
+	parseWatchUpdate,
 	parseWatchToken,
 } from "./request.ts";
 import type { Target } from "./target.ts";
@@ -262,6 +263,17 @@ const handleWatchState: Handler = async (request, env, ctx) => {
 	return json(watch);
 };
 
+const handleWatchUpdate: Handler = async (request, env, ctx) => {
+	const parsed = parseWatchUpdate(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const { id, stub } = await watchStub(ctx, env, parsed.value.token);
+	const watch = await stub.update(parsed.value.change, Date.now());
+	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
+	await registryStub(ctx).touch(id, watch.expiresAt);
+	return json(watch);
+};
+
 const handleWatchDelete: Handler = async (request, env, ctx) => {
 	const parsed = parseWatchToken(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
@@ -393,6 +405,7 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/watch": { POST: handleWatchCreate },
 	"/api/watch/view": { POST: handleWatchView },
 	"/api/watch/state": { POST: handleWatchState },
+	"/api/watch/update": { POST: handleWatchUpdate },
 	"/api/watch/delete": { POST: handleWatchDelete },
 	"/api/board/view": { POST: handleBoardView },
 	"/api/board/adopt": { POST: handleBoardAdopt },

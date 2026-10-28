@@ -3,7 +3,7 @@ import type { Scorer } from "../../src/shared/types.ts";
 import { objectId } from "../../src/worker/identity.ts";
 import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS } from "../../src/worker/probe.ts";
 import { redact } from "../../src/worker/redact.ts";
-import { parseHistoryRequest, parseProbeRequest, parseWatchCreate } from "../../src/worker/request.ts";
+import { parseHistoryRequest, parseProbeRequest, parseWatchCreate, parseWatchUpdate } from "../../src/worker/request.ts";
 import { score } from "../../src/worker/scorers.ts";
 import { parseSite } from "../../src/worker/target-url.ts";
 
@@ -17,6 +17,22 @@ describe("parseWatchCreate questions", () => {
 
 	it.each([[[]], [["pelican-svg"]], [["nope"]], ["thibault"]])("rejects questions %j", (questions) => {
 		expect(parseWatchCreate({ ...body, questions })).toEqual({ ok: false, message: "questions 必须是非空数组，只能含 thibault、candy、candy-var、ciallo" });
+	});
+});
+
+describe("parseWatchUpdate", () => {
+	const token = "A".repeat(43);
+
+	it("keeps only the fields sent, with questions in bank order", () => {
+		expect(parseWatchUpdate({ token, questions: ["ciallo", "thibault"], intervalMin: 1 })).toEqual({
+			ok: true,
+			value: { token, change: { questions: ["thibault", "ciallo"], intervalMin: 1 } },
+		});
+		expect(parseWatchUpdate({ token, intervalMin: 30 })).toEqual({ ok: true, value: { token, change: { intervalMin: 30 } } });
+	});
+
+	it("rejects an interval that is no longer offered", () => {
+		expect(parseWatchUpdate({ token, intervalMin: 15 })).toEqual({ ok: false, message: "intervalMin 必须是 1、5、10、30 之一" });
 	});
 });
 
