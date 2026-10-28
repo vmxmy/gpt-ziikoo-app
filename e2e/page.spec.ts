@@ -127,6 +127,8 @@ test("页面加载,题目清单,题面展开与复制和接口逐字节一致", 
 		await expect(page.getByTestId(id)).toBeVisible();
 	}
 	await expect(page.getByTestId("api-docs")).toBeAttached();
+	const apiDoc = await page.request.get("/api.md");
+	expect(apiDoc.headers()["content-type"]).toBe("text/markdown; charset=utf-8");
 	expect(questions.length).toBeGreaterThan(0);
 	for (const q of questions) {
 		await expect(page.getByTestId(`question-${q.id}`)).toBeVisible();

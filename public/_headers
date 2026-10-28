@@ -3,3 +3,6 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/api.md
+  Content-Type: text/markdown; charset=utf-8
