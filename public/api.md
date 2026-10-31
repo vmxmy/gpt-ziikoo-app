@@ -242,8 +242,11 @@ curl -s https://gpt.ziikoo.app/api/probe \
 { site, host, alias, model, protocol, intervalMin, questions, createdAt, expiresAt,
   status: { kind: "running" | "paused" | "bad_key" },
   monitor: { target, intervalSec, bucketMin, generatedAt, state, uptimePct, correctPct,
-             last, buckets: [48 个 30 分钟格] } }
+             last, buckets: [48 个 30 分钟格] },
+  usage: { since, calls, unmetered, promptTokens, cachedTokens, outputTokens, reasoningTokens } | null }
 ```
+
+- `usage` 是累计用量。`since` 是开始计数的时间。`calls` 是发出的调用次数，含重试。`unmetered` 是可能已扣额度但没有返回可用用量的调用次数。`outputTokens` 含 `reasoningTokens`，`promptTokens` 含 `cachedTokens`。这项上线前建的监测在跑完下一轮之前是 `null`。
 
 `state` 是 `operational`、`fair`、`quality`、`degraded`、`down`、`insufficient` 或 `no_data`。
 

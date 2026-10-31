@@ -2,8 +2,9 @@ import { DurableObject } from "cloudflare:workers";
 import { instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
-import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchView } from "../shared/watch.ts";
-import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeResult } from "./probe.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
+import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeResult } from "./probe.ts";
+import { readUsage } from "./parse.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
 const MINUTE_MS = 60_000;
@@ -12,6 +13,7 @@ export const IDLE_MS = WATCH_IDLE_DAYS * DAY_MS;
 const MAX_SAMPLES = 1440;
 const RETRIES = 3;
 const UNAUTHORIZED_LIMIT = 5;
+const MAX_CALL_TOKENS = 10_000_000;
 const TRANSIENT: readonly FailReason[] = ["timeout", "upstream_error", "bad_response"];
 
 const encoder = new TextEncoder();
@@ -68,6 +70,8 @@ type WatchState = {
 	seq: number;
 	unauthorized: number;
 	sealedKey: Sealed;
+	// Absent on watches made before usage was counted, until their next round.
+	usage?: WatchUsage;
 };
 
 export type WatchPlan = { kind: "purge" } | { kind: "sleep"; until: number } | { kind: "probe"; nextAt: number };
@@ -91,6 +95,33 @@ export function toSample(ts: number, question: string, r: ProbeResponse): Monito
 
 const isTransient = (r: ProbeResponse) => !r.ok && TRANSIENT.includes(r.reason);
 
+// One absurd number from a site would stay in the total for the life of the watch.
+const validCount = (n: number | null) => (n !== null && Number.isSafeInteger(n) && n >= 0 && n <= MAX_CALL_TOKENS ? n : null);
+
+function addAttempt(usage: WatchUsage, { usage: raw, httpStatus }: ProbeCapture): WatchUsage {
+	const read = readUsage(raw);
+	const promptTokens = validCount(read.promptTokens);
+	const outputTokens = validCount(read.outputTokens);
+	const calls = usage.calls + 1;
+	if (promptTokens === null && outputTokens === null) {
+		const mayBeBilled = httpStatus === null || httpStatus < 300;
+		return { ...usage, calls, unmetered: usage.unmetered + (mayBeBilled ? 1 : 0) };
+	}
+	return {
+		...usage,
+		calls,
+		promptTokens: usage.promptTokens + (promptTokens ?? 0),
+		cachedTokens: usage.cachedTokens + (validCount(read.cachedTokens) ?? 0),
+		outputTokens: usage.outputTokens + (outputTokens ?? 0),
+		reasoningTokens: usage.reasoningTokens + (validCount(read.reasoningTokens) ?? 0),
+	};
+}
+
+export function addUsage(usage: WatchUsage | undefined, attempts: readonly ProbeCapture[], now: number): WatchUsage {
+	const start = usage ?? { since: now, calls: 0, unmetered: 0, promptTokens: 0, cachedTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+	return attempts.reduce(addAttempt, start);
+}
+
 export function watchRotation(picked: readonly string[] | undefined): Question[] {
 	const all = watchQuestions();
 	return picked ? all.filter((q) => picked.includes(q.id)) : all;
@@ -109,7 +140,7 @@ function logProbe(host: string, question: string, { response, capture }: ProbeRe
 
 // Each round counts against the same per-host limit as the live test, so a watch cannot be used to flood a site.
 // Only failures another call can fix are retried; the sample records the site's quality, not a passing hiccup.
-async function probeRound(env: Env, state: WatchState, key: string): Promise<{ question: string; response: ProbeResponse } | null> {
+async function probeRound(env: Env, state: WatchState, key: string): Promise<{ question: string; response: ProbeResponse; attempts: ProbeCapture[] } | null> {
 	const rotation = watchRotation(state.questions);
 	const question = rotation[state.seq % rotation.length];
 	if (!question) return null;
@@ -123,13 +154,15 @@ async function probeRound(env: Env, state: WatchState, key: string): Promise<{ q
 		limits: DEFAULT_LIMITS,
 	};
 	let response: ProbeResponse | null = null;
+	let attempts: ProbeCapture[] = [];
 	for (let n = 0; n <= RETRIES && (response === null || isTransient(response)); n++) {
 		if (!(await env.HOST_LIMITER.limit({ key: state.host })).success) break;
 		const result = await probe(input);
 		logProbe(state.host, question.id, result);
 		response = result.response;
+		attempts = [...attempts, result.capture];
 	}
-	return response && { question: question.id, response };
+	return response && { question: question.id, response, attempts };
 }
 const STATE_KEY = "state";
 
@@ -160,7 +193,7 @@ export class Watch extends DurableObject<Env> {
 		const { origin, host, alias, model, protocol, intervalMin, createdAt, status, expiresAt } = state;
 		const monitor = buildMonitor(this.samples(now), now, host, intervalMin * 60);
 		const questions = watchRotation(state.questions).map((q) => q.id);
-		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor };
+		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null };
 	}
 
 	private async save(state: WatchState, alarmAt: number): Promise<void> {
@@ -190,8 +223,9 @@ export class Watch extends DurableObject<Env> {
 		if (round && !round.response.ok && round.response.reason === "unauthorized") return { kind: "unauthorized" };
 		this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS samples (ts INTEGER NOT NULL, sample TEXT NOT NULL)");
 		if (round) this.addSample(toSample(now, round.question, round.response));
-		await this.save(state, now + cmd.intervalMin * MINUTE_MS);
-		return { kind: "created", watch: this.toView(state, now) };
+		const stored: WatchState = round ? { ...state, usage: addUsage(undefined, round.attempts, now) } : state;
+		await this.save(stored, now + cmd.intervalMin * MINUTE_MS);
+		return { kind: "created", watch: this.toView(stored, now) };
 	}
 
 	// Every look pushes the purge date out; a paused watch sleeps until that date, so its alarm moves too.
@@ -248,7 +282,7 @@ export class Watch extends DurableObject<Env> {
 		const status: WatchStatus =
 			latest.status.kind === "running" && unauthorized >= UNAUTHORIZED_LIMIT ? { kind: "bad_key" } : latest.status;
 		this.addSample(toSample(now, round.question, round.response));
-		await this.ctx.storage.put(STATE_KEY, { ...latest, seq: latest.seq + 1, unauthorized, status });
+		await this.ctx.storage.put(STATE_KEY, { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) });
 	}
 }
 
