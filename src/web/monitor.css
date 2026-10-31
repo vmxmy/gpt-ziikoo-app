@@ -146,6 +146,10 @@
 	border-block: var(--border-width) solid var(--border);
 }
 
+.metrics + .metrics {
+	border-top: 0;
+}
+
 .metrics > div {
 	padding: 0 var(--space-4);
 	border-left: var(--border-width) solid var(--border);
@@ -169,7 +173,11 @@
 }
 
 @media (max-width: 419px) {
+	/* A label that wraps must not push its number out of line with the others in the row. */
 	.metrics > div {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
 		padding: 0 var(--space-2);
 	}
 	.metrics dd {

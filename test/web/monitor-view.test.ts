@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMonitor, type MonitorSample } from "../../src/shared/monitor.ts";
-import { agoText, badgeLabel, latencyP50, metaLine, monitorView, tableRows } from "../../src/web/monitor-view.ts";
+import { agoText, badgeLabel, latencyP50, metaLine, monitorView, stamp, tableRows, tokenAmount, usageNote } from "../../src/web/monitor-view.ts";
 
 const NOW = 1_800_000_000_000;
 const sample = (minutesAgo: number, totalMs: number): MonitorSample => ({
@@ -71,5 +71,25 @@ describe("monitor text", () => {
 		expect(latencyP50(odd.buckets)).toBe(900);
 		const even = buildMonitor([sample(1, 900), sample(31, 300)], NOW, "t", 60);
 		expect(latencyP50(even.buckets)).toBe(600);
+	});
+});
+
+describe("tokenAmount", () => {
+	it("groups small counts and shortens large ones to 万 and 亿", () => {
+		expect(tokenAmount(8420)).toBe("8,420");
+		expect(tokenAmount(123456)).toBe("12.3 万");
+		expect(tokenAmount(123456789)).toBe("1.23 亿");
+	});
+});
+
+describe("usageNote", () => {
+	const usage = { since: NOW, calls: 12, unmetered: 0, promptTokens: 0, cachedTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+
+	it("states the start and the number of calls", () => {
+		expect(usageNote(usage)).toBe(`自 ${stamp(NOW)} 起，调用 12 次。`);
+	});
+
+	it("adds how many calls gave no usage", () => {
+		expect(usageNote({ ...usage, unmetered: 2 })).toBe(`自 ${stamp(NOW)} 起，调用 12 次，其中 2 次没有返回用量。`);
 	});
 });

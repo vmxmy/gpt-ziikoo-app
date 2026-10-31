@@ -32,6 +32,16 @@ export type BoardAdoptRequest = { board?: string; tokens: string[] };
 export type BoardMoveRequest = { from: string; into?: string };
 export type BoardOrderRequest = { board: string; tokens: string[] };
 
+export type WatchUsage = {
+	since: number;
+	calls: number;
+	unmetered: number;
+	promptTokens: number;
+	cachedTokens: number;
+	outputTokens: number;
+	reasoningTokens: number;
+};
+
 export type WatchView = {
 	site: string;
 	host: string;
@@ -45,6 +55,8 @@ export type WatchView = {
 	status: WatchStatus;
 	expiresAt: number;
 	monitor: MonitorResponse;
+	// Null on a watch made before usage was counted that has not finished a round since.
+	usage: WatchUsage | null;
 };
 export type WatchCreateResponse = { board: string; token: string; watch: WatchView };
 export type WatchDeleteResponse = { deleted: true };

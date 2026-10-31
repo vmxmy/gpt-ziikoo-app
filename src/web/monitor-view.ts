@@ -1,5 +1,6 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
+import type { WatchUsage } from "../shared/watch.ts";
 
 export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };
 
@@ -57,6 +58,18 @@ export function segmentLabel(b: MonitorBucket): string {
 	if (b.start === 0) return STATE_LABEL.no_data;
 	const end = b.start + MONITOR.bucketMin * 60_000;
 	return `${clock(b.start)}–${clock(end)} · ${STATE_LABEL[b.state]} · 调用 ${b.total} · 失败 ${b.failed} · 答错 ${b.wrong} · 统计范围 ${b.windowTotal} 次调用`;
+}
+
+export const exactCount = (n: number): string => n.toLocaleString("zh-CN");
+
+export function tokenAmount(n: number): string {
+	if (n < 10_000) return exactCount(n);
+	return n < 100_000_000 ? `${(n / 10_000).toFixed(1)} 万` : `${(n / 100_000_000).toFixed(2)} 亿`;
+}
+
+export function usageNote({ since, calls, unmetered }: WatchUsage): string {
+	const start = `自 ${stamp(since)} 起，调用 ${calls} 次`;
+	return unmetered > 0 ? `${start}，其中 ${unmetered} 次没有返回用量。` : `${start}。`;
 }
 
 export const emptyBuckets = (): MonitorBucket[] =>

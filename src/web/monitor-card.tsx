@@ -2,16 +2,20 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorBucket, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
+import type { WatchUsage } from "../shared/watch.ts";
 import { CHART, chartModel, xOf, xTickIndexes, type Point } from "./chart.ts";
 import {
 	badgeLabel,
 	clock,
 	emptyBuckets,
+	exactCount,
 	latencyP50,
 	metaLine,
 	segmentLabel,
 	stamp,
 	tableRows,
+	tokenAmount,
+	usageNote,
 	type MonitorView,
 	WAITING_NOTICE,
 	SPARSE_NOTICE,
@@ -30,6 +34,7 @@ export type CardProps = {
 	protocol?: Protocol;
 	questions?: readonly string[];
 	view: MonitorView;
+	usage?: WatchUsage | null;
 	now: number;
 	actions?: ComponentChildren;
 	children?: ComponentChildren;
@@ -57,6 +62,7 @@ export function MonitorCard(props: CardProps) {
 			</div>
 			{props.children}
 			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />
+			{props.usage && <UsageMetrics t={t} usage={props.usage} />}
 			<StatusBar t={t} buckets={buckets} />
 			{buckets.filter((b) => b.totalMs !== null).length >= 2 ? (
 				<Chart t={t} buckets={buckets} />
@@ -93,6 +99,38 @@ function Metrics(props: { t: string; uptime: number | null; correct: number | nu
 				<dd class="num">{ms(props.p50)}</dd>
 			</div>
 		</dl>
+	);
+}
+
+function UsageMetrics({ t, usage }: { t: string; usage: WatchUsage }) {
+	const { promptTokens, cachedTokens, outputTokens, reasoningTokens } = usage;
+	const total = promptTokens + outputTokens;
+	return (
+		<>
+			<dl class="metrics">
+				<div>
+					<dt>累计 token 数</dt>
+					<dd class="num" title={exactCount(total)} data-testid={`${t}-usage-total`}>
+						{tokenAmount(total)}
+					</dd>
+				</div>
+				<div>
+					<dt>累计输入 token 数</dt>
+					<dd class="num" title={`${exactCount(promptTokens)}，其中缓存 ${exactCount(cachedTokens)}`} data-testid={`${t}-usage-prompt`}>
+						{tokenAmount(promptTokens)}
+					</dd>
+				</div>
+				<div>
+					<dt>累计输出 token 数</dt>
+					<dd class="num" title={`${exactCount(outputTokens)}，其中推理 ${exactCount(reasoningTokens)}`} data-testid={`${t}-usage-output`}>
+						{tokenAmount(outputTokens)}
+					</dd>
+				</div>
+			</dl>
+			<p class="meta" data-testid={`${t}-usage-note`}>
+				{usageNote(usage)}
+			</p>
+		</>
 	);
 }
 
