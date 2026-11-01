@@ -49,6 +49,12 @@ describe("bucketState", () => {
 });
 
 describe("buildMonitor", () => {
+	it("keeps the state through a full hung round on a one-minute watch, then reports no_data after 10 minutes", () => {
+		const samples = (newest: number) => Array.from({ length: 12 }, (_, i) => sample(newest + i));
+		expect(buildMonitor(samples(8), NOW, "t", 60).state).toBe("operational");
+		expect(buildMonitor(samples(11), NOW, "t", 60).state).toBe("no_data");
+	});
+
 	it("always returns 48 half-hour buckets aligned to the clock", () => {
 		const m = buildMonitor([sample(1)], NOW, "relay.example", 60);
 		expect(m.buckets).toHaveLength(MONITOR.buckets);

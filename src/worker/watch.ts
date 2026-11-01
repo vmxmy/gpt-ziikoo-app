@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
+import { instantiate, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
@@ -93,6 +93,8 @@ export function toSample(ts: number, question: string, r: ProbeResponse): Monito
 	return { ts, question, ok: true, correct: r.correct, reason: null, httpStatus: null, totalMs: r.totalMs, ttfbMs: r.ttfbMs, ttftMs: r.ttftMs };
 }
 
+const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
+
 const isTransient = (r: ProbeResponse) => !r.ok && TRANSIENT.includes(r.reason);
 
 // One absurd number from a site would stay in the total for the life of the watch.
@@ -140,7 +142,12 @@ function logProbe(host: string, question: string, { response, capture }: ProbeRe
 
 // Each round counts against the same per-host limit as the live test, so a watch cannot be used to flood a site.
 // Only failures another call can fix are retried; the sample records the site's quality, not a passing hiccup.
-async function probeRound(env: Env, state: WatchState, key: string): Promise<{ question: string; response: ProbeResponse; attempts: ProbeCapture[] } | null> {
+// A generated question is drawn anew each round: the seed 0 instance is public, so a site could prepare its answer.
+export async function probeRound(
+	env: Pick<Env, "HOST_LIMITER">,
+	state: Pick<WatchState, "origin" | "host" | "protocol" | "model" | "questions" | "seq">,
+	key: string,
+): Promise<{ question: string; response: ProbeResponse; attempts: ProbeCapture[] } | null> {
 	const rotation = watchRotation(state.questions);
 	const question = rotation[state.seq % rotation.length];
 	if (!question) return null;
@@ -149,7 +156,7 @@ async function probeRound(env: Env, state: WatchState, key: string): Promise<{ q
 		key,
 		protocol: state.protocol,
 		model: state.model,
-		question: instantiate(question, SAMPLE_SEED),
+		question: instantiate(question, randomSeed()),
 		effort: defaultEffort(question, state.protocol),
 		limits: DEFAULT_LIMITS,
 	};
@@ -281,7 +288,8 @@ export class Watch extends DurableObject<Env> {
 		const unauthorized = rejected ? latest.unauthorized + 1 : 0;
 		const status: WatchStatus =
 			latest.status.kind === "running" && unauthorized >= UNAUTHORIZED_LIMIT ? { kind: "bad_key" } : latest.status;
-		this.addSample(toSample(now, round.question, round.response));
+		// Stamped at the end of the round: a hung site holds a round for minutes, and a start time would read as stale.
+		this.addSample(toSample(Date.now(), round.question, round.response));
 		await this.ctx.storage.put(STATE_KEY, { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) });
 	}
 }
