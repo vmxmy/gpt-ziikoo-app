@@ -10,6 +10,26 @@ export const BOARD_MAX_WATCHES = 30;
 
 export const isWatchInterval = (v: unknown): v is WatchIntervalMin => WATCH_INTERVALS.some((i) => i === v);
 
+export type WatchStrategy = {
+	id: "authenticity" | "saver" | "line";
+	label: string;
+	answers: string;
+	note?: string;
+	intervalMin: WatchIntervalMin;
+	questions: readonly string[];
+};
+// Form presets, never stored: a watch keeps the interval and questions they filled in, so a later change here cannot raise what an existing watch spends.
+export const WATCH_STRATEGIES: readonly WatchStrategy[] = [
+	{ id: "authenticity", label: "真伪核查", answers: "模型是不是一直是原装？", intervalMin: 5, questions: ["thibault", "candy", "candy-var", "ciallo"] },
+	{ id: "saver", label: "省额度值守", answers: "密钥还正常吗，模型有没有变笨？", intervalMin: 30, questions: ["thibault", "candy-var"] },
+	{ id: "line", label: "线路值守", answers: "站点断了没有？", note: "不推送告警，要打开看板查看。", intervalMin: 1, questions: ["thibault"] },
+];
+
+export const matchStrategy = ({ intervalMin, questions }: { intervalMin: number; questions: readonly string[] }): WatchStrategy | undefined =>
+	WATCH_STRATEGIES.find((s) => s.intervalMin === intervalMin && s.questions.length === questions.length && s.questions.every((q) => questions.includes(q)));
+
+export const dailyCalls = (intervalMin: number): number => (24 * 60) / intervalMin;
+
 export type WatchStatus = { kind: "running" } | { kind: "paused" } | { kind: "bad_key" };
 
 export type WatchCreateRequest = {

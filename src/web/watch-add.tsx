@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ComponentChildren, RefObject } from "preact";
-import type { Protocol, QuestionListItem } from "../shared/types.ts";
-import { WATCH_IDLE_DAYS, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchIntervalMin } from "../shared/watch.ts";
-import { fetchQuestions } from "./api.ts";
+import type { RefObject } from "preact";
+import type { Protocol } from "../shared/types.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS } from "../shared/watch.ts";
 import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
+import { ChoiceField, DEFAULT_STRATEGY, useWatchStrategy, WatchStrategyFields } from "./watch-strategy.tsx";
 import { protocolForModel, PROTOCOLS, type FieldError, type WatchInput } from "./watch.ts";
 
 const ERROR_ID = "watch-add-error";
@@ -21,33 +21,6 @@ function FieldMessage({ error, field }: { error: FieldError | null; field: Field
 
 const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 	error?.field === field ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
-
-export function ChoiceField<T extends string | number>(props: {
-	label: string;
-	testId: string;
-	value: T;
-	options: readonly T[];
-	text: (v: T) => string;
-	onChange: (v: T) => void;
-	class?: string;
-}) {
-	return (
-		<label class={`field ${props.class ?? "col-12 col-md-6 col-lg-4"}`}>
-			<span class="field-label">{props.label}</span>
-			<select
-				value={String(props.value)}
-				onChange={(e) => props.onChange(props.options.find((o) => String(o) === e.currentTarget.value) ?? props.options[0]!)}
-				data-testid={props.testId}
-			>
-				{props.options.map((o) => (
-					<option value={String(o)} key={String(o)}>
-						{props.text(o)}
-					</option>
-				))}
-			</select>
-		</label>
-	);
-}
 
 function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value: string; onInput: (v: string) => void; error: FieldError | null }) {
 	return (
@@ -69,47 +42,6 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 	);
 }
 
-// A new watch starts with every question picked; an edit starts from the watch's own picks.
-export function useWatchQuestions(initial?: readonly string[]) {
-	const [questions, setQuestions] = useState<QuestionListItem[] | null>(null);
-	const [loadError, setLoadError] = useState("");
-	const [picked, setPicked] = useState<string[]>(() => [...(initial ?? [])]);
-	useEffect(() => {
-		fetchQuestions().then(
-			(list) => {
-				const rotation = list.filter((q) => q.inWatchRotation !== false);
-				setQuestions(rotation);
-				if (!initial) setPicked(rotation.map((q) => q.id));
-			},
-			(err: unknown) => setLoadError(err instanceof Error ? err.message : "题目加载失败"),
-		);
-	}, []);
-	const toggle = (id: string) => setPicked((current) => (current.includes(id) ? current.filter((p) => p !== id) : [...current, id]));
-	return { questions, loadError, picked, toggle };
-}
-
-export function QuestionPicks(props: ReturnType<typeof useWatchQuestions> & { testPrefix: string; children?: ComponentChildren }) {
-	return (
-		<fieldset class="field col-12 question-picks">
-			<legend class="field-label">题目</legend>
-			{props.loadError && <p class="warn">{props.loadError}</p>}
-			{props.questions === null && !props.loadError && <p class="muted small">题目加载中…</p>}
-			<div class="question-pick-list">
-				{(props.questions ?? []).map((q) => (
-					<label class="consent-row" key={q.id}>
-						<input type="checkbox" checked={props.picked.includes(q.id)} onChange={() => props.toggle(q.id)} data-testid={`${props.testPrefix}-question-${q.id}`} />
-						<span>
-							{q.title} <span class="mono muted">{q.id}</span>
-						</span>
-					</label>
-				))}
-			</div>
-			<p class="muted small">每次调用按顺序换下一道选中的题。</p>
-			{props.children}
-		</fieldset>
-	);
-}
-
 const CONSENT_TEXT = "我同意本站加密保存这把密钥，并由本站服务器按所选间隔持续调用该站点。";
 
 export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) => Promise<FieldError | null>; onClose: () => void }) {
@@ -118,9 +50,8 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 	const [key, setKey] = useState("");
 	const [alias, setAlias] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
-	const [intervalMin, setIntervalMin] = useState<WatchIntervalMin>(5);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
-	const watchQuestions = useWatchQuestions();
+	const strategy = useWatchStrategy(DEFAULT_STRATEGY);
 	const [consent, setConsent] = useState(false);
 	const [error, setError] = useState<FieldError | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -143,8 +74,8 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			key: keyInput.current?.value ?? "",
 			model,
 			protocol,
-			intervalMin,
-			questions: watchQuestions.picked,
+			intervalMin: strategy.intervalMin,
+			questions: strategy.questions.picked,
 			consent,
 		});
 		setBusy(false);
@@ -192,10 +123,9 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			/>
 			<FieldMessage error={error} field="model" />
 			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
-			<ChoiceField label="间隔" testId="watch-add-interval" value={intervalMin} options={WATCH_INTERVALS} text={(i) => `每 ${i} 分钟`} onChange={setIntervalMin} />
-			<QuestionPicks {...watchQuestions} testPrefix="watch-add">
+			<WatchStrategyFields testPrefix="watch-add" strategy={strategy}>
 				<FieldMessage error={error} field="questions" />
-			</QuestionPicks>
+			</WatchStrategyFields>
 			<div class="field col-12">
 				<label class="consent-row">
 					<input type="checkbox" checked={consent} onChange={(e) => setConsent(e.currentTarget.checked)} data-testid="watch-add-consent" />
@@ -209,7 +139,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 					<button type="button" class="btn btn-secondary" onClick={onClose}>
 						取消
 					</button>
-					<button type="submit" class="btn btn-primary" disabled={busy || watchQuestions.questions === null} data-testid="watch-add-submit">
+					<button type="submit" class="btn btn-primary" disabled={busy || strategy.questions.questions === null} data-testid="watch-add-submit">
 						{busy ? "正在验证…" : "添加持续监测"}
 					</button>
 				</div>

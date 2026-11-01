@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 import { expect, it } from "vitest";
-import { activeQuestions, getQuestion, instantiate, QUESTIONS } from "../../questions/index.ts";
+import { activeQuestions, getQuestion, instantiate, QUESTIONS, watchQuestions } from "../../questions/index.ts";
 import { BIRDS, SCENES } from "../../src/shared/pelican-gen.ts";
+import { WATCH_STRATEGIES } from "../../src/shared/watch.ts";
 
 it("registers exactly the directories under questions/", () => {
 	const files = Object.keys(import.meta.glob("../../questions/*/*"));
@@ -20,6 +21,13 @@ it("keeps prompt text byte-for-byte", () => {
 		"don't search the internet, do you know Thibault Sottiaux on X. answer yes or no",
 	);
 	expect(getQuestion("candy")?.prompt).toContain("形状\t苹果味\t桃子味\t西瓜味\n圆形\t7\t9\t8\n");
+});
+
+it("builds every watch strategy from questions a watch can rotate through", () => {
+	const ids = watchQuestions().map((q) => q.id);
+	expect(WATCH_STRATEGIES.map((s) => s.id)).toEqual(["authenticity", "saver", "line"]);
+	expect(WATCH_STRATEGIES.flatMap((s) => s.questions).filter((id) => !ids.includes(id))).toEqual([]);
+	expect(WATCH_STRATEGIES.find((s) => s.id === "authenticity")?.questions).toEqual(ids);
 });
 
 it("lists only active questions", () => {

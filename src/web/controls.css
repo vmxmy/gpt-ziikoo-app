@@ -143,7 +143,7 @@
 	font-size: var(--fs-13);
 }
 
-input:not([type="checkbox"]),
+input:not([type="checkbox"], [type="radio"]),
 select,
 .affix {
 	width: 100%;
@@ -156,12 +156,12 @@ select,
 	font: var(--fs-16) / 1 var(--font-sans);
 }
 
-input:not([type="checkbox"]),
+input:not([type="checkbox"], [type="radio"]),
 select {
 	padding: 0 var(--space-3);
 }
 
-input:not([type="checkbox"]):focus,
+input:not([type="checkbox"], [type="radio"]):focus,
 select:focus,
 .affix:focus-within {
 	outline: 2px solid var(--focus);
@@ -181,14 +181,15 @@ input[aria-invalid="true"],
 	padding-right: var(--space-3);
 }
 
-.affix input:not([type="checkbox"]) {
+.affix input:not([type="checkbox"], [type="radio"]) {
 	height: 100%;
 	border: 0;
 	background: transparent;
 	outline: none;
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
 	width: 16px;
 	height: 16px;
 	margin: 0;
@@ -196,7 +197,7 @@ input[type="checkbox"] {
 }
 
 @media (min-width: 720px) {
-	input:not([type="checkbox"]),
+	input:not([type="checkbox"], [type="radio"]),
 	select,
 	.affix {
 		font-size: var(--fs-14);

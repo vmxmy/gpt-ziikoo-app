@@ -1,6 +1,6 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
-import type { WatchUsage } from "../shared/watch.ts";
+import { matchStrategy, type WatchUsage } from "../shared/watch.ts";
 
 export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };
 
@@ -30,7 +30,9 @@ export function agoText(ts: number, now: number): string {
 }
 
 export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[]): string {
-	const parts = [`站点 ${data.target}`, `每 ${data.intervalSec / 60} 分钟一次`];
+	const intervalMin = data.intervalSec / 60;
+	const strategy = questions && matchStrategy({ intervalMin, questions });
+	const parts = [`站点 ${data.target}`, ...(strategy ? [strategy.label] : []), `每 ${intervalMin} 分钟一次`];
 	if (protocol) parts.push(`协议 ${protocol}`);
 	if (questions?.length) parts.push(`题目 ${questions.join("、")}`);
 	if (data.last) parts.push(`最近一次调用 ${agoText(data.last.ts, now)}`);

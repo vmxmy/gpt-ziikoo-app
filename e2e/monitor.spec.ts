@@ -29,6 +29,7 @@ async function addWatch(page: Page, { site, key, alias, model = "mock-good", pro
 	await page.getByTestId("watch-add-key").fill(key);
 	await page.getByTestId("watch-add-model").fill(model);
 	if (protocol) await page.getByTestId("watch-add-protocol").selectOption(protocol);
+	if (intervalMin || questions) await page.getByTestId("watch-add-strategy-custom").check();
 	if (intervalMin) await page.getByTestId("watch-add-interval").selectOption(String(intervalMin));
 	if (questions) {
 		const picks = page.locator(`[data-testid^="${QUESTION_PICK}"]`);
@@ -200,12 +201,33 @@ test("只选一道题,卡片只列这道题;一道不选时提示且不建卡片
 		await expect(page.getByTestId(`custom-${id}-card`)).toContainText("题目 ciallo · ");
 	}));
 
+test("选监测策略后卡片用策略的间隔与题目,修改时选中这个策略", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		await openWatchTab(page);
+		await page.getByTestId("watch-add-toggle").click();
+		await page.getByTestId("watch-add-site").fill(site);
+		await page.getByTestId("watch-add-key").fill(key);
+		await page.getByTestId("watch-add-model").fill("mock-good");
+		await page.getByTestId("watch-add-strategy-saver").check();
+		await expect(page.getByTestId("watch-add-interval")).toHaveCount(0);
+		await page.getByTestId("watch-add-consent").check();
+		await page.getByTestId("watch-add-submit").click();
+		await expect(page.locator(CARDS)).toHaveCount(1);
+		const id = await lastCardId(page);
+		const card = page.getByTestId(`custom-${id}-card`);
+		await expect(card).toContainText("省额度值守 · 每 30 分钟一次 · 协议 responses · 题目 thibault、candy-var");
+		await page.getByTestId(`custom-${id}-edit`).click();
+		await expect(page.getByTestId(`custom-${id}-strategy-saver`)).toBeChecked();
+	}));
+
 test("修改题目与间隔,刷新后保持;一道不选时提示且不保存", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);
 		const card = page.getByTestId(`custom-${id}-card`);
 		await expect(card).toContainText("每 5 分钟一次");
 		await page.getByTestId(`custom-${id}-edit`).click();
+		await expect(page.getByTestId(`custom-${id}-strategy-authenticity`)).toBeChecked();
+		await page.getByTestId(`custom-${id}-strategy-custom`).check();
 		const picks = page.locator(`[data-testid^="custom-${id}-question-"]`);
 		await expect(picks.first()).toBeChecked();
 		for (const pick of await picks.all()) await pick.uncheck();
