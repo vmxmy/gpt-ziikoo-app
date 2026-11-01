@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getQuestion, instantiate } from "../../questions/index.ts";
 import type { ProbeCapture } from "../../src/worker/probe.ts";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 
-const { addUsage, alarmAfterUpdate, planWatch, watchRotation } = await import("../../src/worker/watch.ts");
+const { addUsage, alarmAfterUpdate, planWatch, probeRound, watchRotation } = await import("../../src/worker/watch.ts");
 
 const NOW = 1_000_000_000_000;
 
@@ -56,6 +57,33 @@ describe("addUsage", () => {
 			outputTokens: 0,
 			reasoningTokens: 0,
 		});
+	});
+});
+
+describe("probeRound", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it("draws a new candy-var from a fresh seed each round and keeps it through the retries", async () => {
+		const prompts: unknown[] = [];
+		vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+			prompts.push(JSON.parse(String(init.body)).input);
+			return new Response("busy", { status: 500 });
+		});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(crypto, "getRandomValues").mockReturnValueOnce(new Uint32Array([7])).mockReturnValueOnce(new Uint32Array([8]));
+		const env = { HOST_LIMITER: { limit: async () => ({ success: true }) } };
+		const state = { origin: "https://relay.example", host: "relay.example", protocol: "responses" as const, model: "m", questions: ["candy-var"], seq: 0 };
+		const question = getQuestion("candy-var")!;
+
+		await probeRound(env, state, "sk-test-12345678");
+		expect(prompts).toEqual(Array(4).fill(instantiate(question, 7).prompt));
+
+		prompts.length = 0;
+		await probeRound(env, state, "sk-test-12345678");
+		expect(prompts).toEqual(Array(4).fill(instantiate(question, 8).prompt));
 	});
 });
 

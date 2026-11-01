@@ -50,6 +50,8 @@ export const MONITOR = {
 
 const BUCKET_MS = MONITOR.bucketMin * 60_000;
 const WINDOW_MS = MONITOR.windowMin * 60_000;
+// A hung site holds one round for 4 × 120 seconds, so a short interval alone would read as no data.
+const FRESH_MS = 10 * 60_000;
 
 type Counts = { total: number; failed: number; wrong: number };
 
@@ -113,7 +115,7 @@ export function buildMonitor(samples: MonitorSample[], now: number, target: stri
 		);
 	});
 	const last = inWindow.reduce<MonitorSample | null>((a, s) => (a === null || s.ts > a.ts ? s : a), null);
-	const fresh = last !== null && now - last.ts <= 2 * intervalSec * 1000;
+	const fresh = last !== null && now - last.ts <= Math.max(FRESH_MS, 2 * intervalSec * 1000);
 	const valid = inWindow.filter((s) => s.ok);
 	const judged = valid.filter((s) => s.correct !== null);
 	return {
