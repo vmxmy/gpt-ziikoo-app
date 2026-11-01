@@ -74,6 +74,16 @@ describe("monitor text", () => {
 	});
 });
 
+describe("metaLine strategy", () => {
+	it("names the strategy a watch's interval and questions match, and no name otherwise", () => {
+		const fiveMinutes = buildMonitor([], NOW, "relay.example", 300);
+		expect(metaLine(fiveMinutes, NOW, "chat", ["ciallo", "candy-var", "candy", "thibault"])).toBe(
+			"站点 relay.example · 真伪核查 · 每 5 分钟一次 · 协议 chat · 题目 ciallo、candy-var、candy、thibault",
+		);
+		expect(metaLine(fiveMinutes, NOW, "chat", ["ciallo"])).toBe("站点 relay.example · 每 5 分钟一次 · 协议 chat · 题目 ciallo");
+	});
+});
+
 describe("tokenAmount", () => {
 	it("groups small counts and shortens large ones to 万 and 亿", () => {
 		expect(tokenAmount(8420)).toBe("8,420");

@@ -7,7 +7,7 @@ import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
-import { ChoiceField } from "./watch-add.tsx";
+import { ChoiceField } from "./watch-strategy.tsx";
 import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
 type EffortChoice = Effort | "";

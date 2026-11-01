@@ -25,18 +25,22 @@
 	cursor: pointer;
 }
 
-.consent-row input[type="checkbox"] {
+.consent-row input[type="checkbox"],
+.consent-row input[type="radio"] {
+	flex: none;
 	margin-top: 3px;
 }
 
-.question-picks {
+.question-picks,
+.strategy-picks {
 	min-width: 0;
 	margin: 0;
 	padding: 0;
 	border: 0;
 }
 
-.question-picks legend {
+.question-picks legend,
+.strategy-picks legend {
 	margin-bottom: var(--space-2);
 	padding: 0;
 }
@@ -45,6 +49,26 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-2) var(--space-5);
+}
+
+.strategy-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+.strategy-name {
+	font-weight: 600;
+}
+
+.strategy-detail {
+	display: block;
+}
+
+.strategy-custom {
+	gap: var(--space-4);
+	margin-top: var(--space-3);
 }
 
 .watch-edit {
