@@ -87,6 +87,8 @@ const REQUEST_BUILDERS: Record<Protocol, (input: ProbeInput) => { path: string; 
 			max_tokens: ANTHROPIC_MAX_TOKENS,
 			messages: [{ role: "user", content: question.prompt }],
 			stream: true,
+			// Unlike the other protocols, the Messages API caches only on request.
+			...(question.kind === "metrics" && { cache_control: { type: "ephemeral" } }),
 			...(effort && { thinking: { type: "adaptive" }, output_config: { effort } }),
 		},
 	}),

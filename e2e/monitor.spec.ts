@@ -220,6 +220,32 @@ test("选监测策略后卡片用策略的间隔与题目,修改时选中这个�
 		await expect(page.getByTestId(`custom-${id}-strategy-saver`)).toBeChecked();
 	}));
 
+test("开启测量后下一轮显示缓存命中率与输出速度", async ({ page, site, key }) => {
+	test.setTimeout(240_000);
+	await cleaned(page, async () => {
+		await openWatchTab(page);
+		await page.getByTestId("watch-add-toggle").click();
+		await page.getByTestId("watch-add-site").fill(site);
+		await page.getByTestId("watch-add-key").fill(key);
+		await page.getByTestId("watch-add-model").fill("mock-measure");
+		await page.getByTestId("watch-add-strategy-custom").check();
+		await page.getByTestId("watch-add-interval").selectOption("1");
+		await page.getByTestId("watch-add-measure").check();
+		await page.getByTestId("watch-add-consent").check();
+		await page.getByTestId("watch-add-submit").click();
+		await expect(page.locator(CARDS)).toHaveCount(1);
+		const id = await lastCardId(page);
+		await expect(page.getByTestId(`custom-${id}-perf-note`)).toContainText("下一轮开始首次测量");
+		await expect(page.getByTestId(`custom-${id}-checks`)).toHaveText("1", { timeout: 150_000 });
+		await expect(page.getByTestId(`custom-${id}-cache-hit`)).toHaveText("90.0%");
+		await expect(page.getByTestId(`custom-${id}-speed`)).toHaveText(/\d+ token\/秒/);
+		await page.getByTestId(`custom-${id}-edit`).click();
+		await page.getByTestId(`custom-${id}-measure`).uncheck();
+		await page.getByTestId(`custom-${id}-edit-save`).click();
+		await expect(page.getByTestId(`custom-${id}-checks`)).toHaveCount(0);
+	});
+});
+
 test("修改题目与间隔,刷新后保持;一道不选时提示且不保存", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		const id = await addOneGood(page, site, key);

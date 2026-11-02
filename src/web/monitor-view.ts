@@ -1,6 +1,6 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
-import { matchStrategy, type WatchUsage } from "../shared/watch.ts";
+import { matchStrategy, type WatchPerf, type WatchUsage } from "../shared/watch.ts";
 
 export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };
 
@@ -29,9 +29,9 @@ export function agoText(ts: number, now: number): string {
 	return minutes < 60 ? `${minutes} 分钟前` : `${Math.floor(minutes / 60)} 小时前`;
 }
 
-export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[]): string {
+export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[], measure = false): string {
 	const intervalMin = data.intervalSec / 60;
-	const strategy = questions && matchStrategy({ intervalMin, questions });
+	const strategy = questions && matchStrategy({ intervalMin, questions, measure });
 	const parts = [`站点 ${data.target}`, ...(strategy ? [strategy.label] : []), `每 ${intervalMin} 分钟一次`];
 	if (protocol) parts.push(`协议 ${protocol}`);
 	if (questions?.length) parts.push(`题目 ${questions.join("、")}`);
@@ -61,6 +61,19 @@ export function segmentLabel(b: MonitorBucket): string {
 	const end = b.start + MONITOR.bucketMin * 60_000;
 	return `${clock(b.start)}–${clock(end)} · ${STATE_LABEL[b.state]} · 调用 ${b.total} · 失败 ${b.failed} · 答错 ${b.wrong} · 统计范围 ${b.windowTotal} 次调用`;
 }
+
+const PERF_CAVEAT = "参考值，不参与状态判定；命中率 0% 不一定是站点的问题。";
+
+export function perfNote(perf: WatchPerf, intervalMin: number): string {
+	if (perf.lastAt === null) return `下一轮开始首次测量。${PERF_CAVEAT}`;
+	const next = perf.nextInRounds === 0 ? "下一轮再测" : `约 ${perf.nextInRounds * intervalMin} 分钟后再测`;
+	const noCache = perf.cacheChecks === 0 ? "站点没有返回可用的缓存数据。" : "";
+	const noSpeed = perf.speedSamples === 0 ? "站点没有流式返回足够长的回答，算不出输出速度。" : "";
+	return `最近测量 ${stamp(perf.lastAt)}，${next}。${noCache}${noSpeed}${PERF_CAVEAT}`;
+}
+
+export const speedText = (tokensPerSec: number | null): string => (tokensPerSec === null ? "—" : `${Math.round(tokensPerSec)} token/秒`);
+
 
 export const exactCount = (n: number): string => n.toLocaleString("zh-CN");
 

@@ -10,25 +10,38 @@ export const BOARD_MAX_WATCHES = 30;
 
 export const isWatchInterval = (v: unknown): v is WatchIntervalMin => WATCH_INTERVALS.some((i) => i === v);
 
+const MEASURE_TARGET_MIN = 180;
+const MEASURE_CALLS = 2;
+
+// The interval is the only clock: a measurement falls on every Nth round, so changing it needs no second schedule.
+export const measureEveryRounds = (intervalMin: number): number => Math.ceil(MEASURE_TARGET_MIN / intervalMin);
+
 export type WatchStrategy = {
-	id: "authenticity" | "saver" | "line";
+	id: "authenticity" | "saver" | "line" | "compare";
 	label: string;
 	answers: string;
 	note?: string;
 	intervalMin: WatchIntervalMin;
 	questions: readonly string[];
+	measure: boolean;
 };
 // Form presets, never stored: a watch keeps the interval and questions they filled in, so a later change here cannot raise what an existing watch spends.
 export const WATCH_STRATEGIES: readonly WatchStrategy[] = [
-	{ id: "authenticity", label: "真伪核查", answers: "模型是不是一直是原装？", intervalMin: 5, questions: ["thibault", "candy", "candy-var", "ciallo"] },
-	{ id: "saver", label: "省额度值守", answers: "密钥还正常吗，模型有没有变笨？", intervalMin: 30, questions: ["thibault", "candy-var"] },
-	{ id: "line", label: "线路值守", answers: "站点断了没有？", note: "不推送告警，要打开看板查看。", intervalMin: 1, questions: ["thibault"] },
+	{ id: "authenticity", label: "真伪核查", answers: "模型是不是一直是原装？", intervalMin: 5, questions: ["thibault", "candy", "candy-var", "ciallo"], measure: false },
+	{ id: "saver", label: "省额度值守", answers: "密钥还正常吗，模型有没有变笨？", intervalMin: 30, questions: ["thibault", "candy-var"], measure: false },
+	{ id: "line", label: "线路值守", answers: "站点断了没有？", note: "不推送告警，要打开看板查看。", intervalMin: 1, questions: ["thibault"], measure: false },
+	{ id: "compare", label: "选型对比", answers: "这个站点能不能用，多快？", note: "含缓存与速度测量，约多用 8 万 token。", intervalMin: 5, questions: ["thibault", "candy-var"], measure: true },
 ];
 
-export const matchStrategy = ({ intervalMin, questions }: { intervalMin: number; questions: readonly string[] }): WatchStrategy | undefined =>
-	WATCH_STRATEGIES.find((s) => s.intervalMin === intervalMin && s.questions.length === questions.length && s.questions.every((q) => questions.includes(q)));
+export const matchStrategy = ({ intervalMin, questions, measure }: { intervalMin: number; questions: readonly string[]; measure: boolean }): WatchStrategy | undefined =>
+	WATCH_STRATEGIES.find(
+		(s) => s.intervalMin === intervalMin && s.measure === measure && s.questions.length === questions.length && s.questions.every((q) => questions.includes(q)),
+	);
 
-export const dailyCalls = (intervalMin: number): number => (24 * 60) / intervalMin;
+export const measureDailyCalls = (intervalMin: number): number => (MEASURE_CALLS * (24 * 60)) / intervalMin / measureEveryRounds(intervalMin);
+
+export const dailyCalls = ({ intervalMin, measure }: { intervalMin: number; measure: boolean }): number =>
+	(24 * 60) / intervalMin + (measure ? measureDailyCalls(intervalMin) : 0);
 
 export type WatchStatus = { kind: "running" } | { kind: "paused" } | { kind: "bad_key" };
 
@@ -42,10 +55,11 @@ export type WatchCreateRequest = {
 	alias: string;
 	consent: true;
 	board?: string;
+	measure?: boolean;
 };
 export type WatchTokenRequest = { token: string };
 export type WatchStateRequest = { token: string; action: "pause" | "resume" };
-export type WatchChange = { questions?: string[]; intervalMin?: WatchIntervalMin };
+export type WatchChange = { questions?: string[]; intervalMin?: WatchIntervalMin; measure?: boolean };
 export type WatchUpdateRequest = { token: string } & WatchChange;
 export type BoardViewRequest = { board: string };
 export type BoardAdoptRequest = { board?: string; tokens: string[] };
@@ -60,6 +74,16 @@ export type WatchUsage = {
 	cachedTokens: number;
 	outputTokens: number;
 	reasoningTokens: number;
+};
+
+export type WatchPerf = {
+	checks: number;
+	cacheChecks: number;
+	cacheHitPct: number | null;
+	tokensPerSec: number | null;
+	speedSamples: number;
+	lastAt: number | null;
+	nextInRounds: number;
 };
 
 export type WatchView = {
@@ -77,6 +101,8 @@ export type WatchView = {
 	monitor: MonitorResponse;
 	// Null on a watch made before usage was counted that has not finished a round since.
 	usage: WatchUsage | null;
+	// Null while measurement is off.
+	perf: WatchPerf | null;
 };
 export type WatchCreateResponse = { board: string; token: string; watch: WatchView };
 export type WatchDeleteResponse = { deleted: true };

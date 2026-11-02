@@ -15,6 +15,16 @@ describe("parseWatchCreate questions", () => {
 		expect(parseWatchCreate(body)).toMatchObject({ ok: true, value: { questions: ["thibault", "candy", "candy-var", "ciallo"] } });
 	});
 
+	it("leaves measurement off unless asked", () => {
+		expect(parseWatchCreate(body)).toMatchObject({ ok: true, value: { measure: false } });
+		expect(parseWatchCreate({ ...body, measure: true })).toMatchObject({ ok: true, value: { measure: true } });
+		expect(parseWatchCreate({ ...body, measure: "on" })).toEqual({ ok: false, message: "measure 必须是 true 或 false" });
+	});
+
+	it("keeps the measurement question out of a watch's own questions", () => {
+		expect(parseWatchCreate({ ...body, questions: ["long-prefix"] })).toMatchObject({ ok: false });
+	});
+
 	it.each([[[]], [["pelican-svg"]], [["nope"]], ["thibault"]])("rejects questions %j", (questions) => {
 		expect(parseWatchCreate({ ...body, questions })).toEqual({ ok: false, message: "questions 必须是非空数组，只能含 thibault、candy、candy-var、ciallo" });
 	});
@@ -29,6 +39,11 @@ describe("parseWatchUpdate", () => {
 			value: { token, change: { questions: ["thibault", "ciallo"], intervalMin: 1 } },
 		});
 		expect(parseWatchUpdate({ token, intervalMin: 30 })).toEqual({ ok: true, value: { token, change: { intervalMin: 30 } } });
+	});
+
+	it("carries the measurement switch and rejects anything but a boolean", () => {
+		expect(parseWatchUpdate({ token, measure: false })).toEqual({ ok: true, value: { token, change: { measure: false } } });
+		expect(parseWatchUpdate({ token, measure: "on" })).toEqual({ ok: false, message: "measure 必须是 true 或 false" });
 	});
 
 	it("rejects an interval that is no longer offered", () => {

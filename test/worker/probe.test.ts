@@ -176,6 +176,17 @@ describe("probe", () => {
 		});
 	});
 
+	it("asks anthropic to cache only the measurement question", async () => {
+		const sentBody = async (id: string, protocol: ProbeInput["protocol"]) => {
+			const { deps, requests } = fakeUpstream({ status: 200, ttfb: 1, chunks: [{ at: 2, text: "{}" }] });
+			await probe(input({ protocol, question: question(id) }), deps);
+			return JSON.parse(String(requests[0].init.body));
+		};
+		expect((await sentBody("long-prefix", "anthropic")).cache_control).toEqual({ type: "ephemeral" });
+		expect((await sentBody("thibault", "anthropic")).cache_control).toBeUndefined();
+		expect((await sentBody("long-prefix", "responses")).cache_control).toBeUndefined();
+	});
+
 	it("parses a streamed anthropic call, sending the key as x-api-key and counting cached input as prompt", async () => {
 		const event = (type: string, fields: object = {}) => `event: ${type}\n${sse({ type, ...fields })}`;
 		const { deps, requests } = fakeUpstream({

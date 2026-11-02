@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMonitor, type MonitorSample } from "../../src/shared/monitor.ts";
-import { agoText, badgeLabel, latencyP50, metaLine, monitorView, stamp, tableRows, tokenAmount, usageNote } from "../../src/web/monitor-view.ts";
+import { agoText, badgeLabel, latencyP50, metaLine, monitorView, perfNote, stamp, tableRows, tokenAmount, usageNote } from "../../src/web/monitor-view.ts";
 
 const NOW = 1_800_000_000_000;
 const sample = (minutesAgo: number, totalMs: number): MonitorSample => ({
@@ -81,6 +81,26 @@ describe("metaLine strategy", () => {
 			"站点 relay.example · 真伪核查 · 每 5 分钟一次 · 协议 chat · 题目 ciallo、candy-var、candy、thibault",
 		);
 		expect(metaLine(fiveMinutes, NOW, "chat", ["ciallo"])).toBe("站点 relay.example · 每 5 分钟一次 · 协议 chat · 题目 ciallo");
+		expect(metaLine(fiveMinutes, NOW, "chat", ["thibault", "candy-var"], true)).toBe("站点 relay.example · 选型对比 · 每 5 分钟一次 · 协议 chat · 题目 thibault、candy-var");
+	});
+});
+
+describe("perfNote", () => {
+	const perf = { checks: 0, cacheChecks: 0, cacheHitPct: null, tokensPerSec: null, speedSamples: 0, lastAt: null, nextInRounds: 0 };
+	const CAVEAT = "参考值，不参与状态判定；命中率 0% 不一定是站点的问题。";
+
+	it("says the first measurement is still to come", () => {
+		expect(perfNote(perf, 5)).toBe(`下一轮开始首次测量。${CAVEAT}`);
+	});
+
+	it("gives the last time and the wait until the next measurement", () => {
+		expect(perfNote({ ...perf, checks: 2, cacheChecks: 2, speedSamples: 4, lastAt: NOW, nextInRounds: 12 }, 5)).toBe(`最近测量 ${stamp(NOW)}，约 60 分钟后再测。${CAVEAT}`);
+	});
+
+	it("tells a missing figure apart from a zero", () => {
+		expect(perfNote({ ...perf, checks: 2, lastAt: NOW, nextInRounds: 0 }, 5)).toBe(
+			`最近测量 ${stamp(NOW)}，下一轮再测。站点没有返回可用的缓存数据。站点没有流式返回足够长的回答，算不出输出速度。${CAVEAT}`,
+		);
 	});
 });
 

@@ -41,6 +41,11 @@ function num(value: unknown): number | null {
 	return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+const MAX_CALL_TOKENS = 10_000_000;
+
+// One absurd number from a site would stay in a total for the life of the watch.
+export const validCount = (n: number | null): number | null => (n !== null && Number.isSafeInteger(n) && n >= 0 && n <= MAX_CALL_TOKENS ? n : null);
+
 function obj(value: unknown): object | null {
 	return typeof value === "object" && value !== null ? value : null;
 }

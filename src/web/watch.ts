@@ -72,6 +72,7 @@ export type WatchInput = {
 	protocol: Protocol;
 	intervalMin: WatchIntervalMin;
 	questions: string[];
+	measure: boolean;
 	consent: boolean;
 };
 
@@ -98,6 +99,7 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 			alias: normalizeAlias(input.alias),
 			consent: true,
 			...(board ? { board } : {}),
+			...(input.measure ? { measure: true } : {}),
 		},
 	};
 }
@@ -105,9 +107,19 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 export type WatchEditDraft = { ok: true; change: WatchChange } | { ok: false; error: FieldError };
 
 // The interval goes out only when it changed, so a watch on a retired interval keeps it through a question edit.
-export function parseWatchEdit({ questions, intervalMin }: { questions: string[]; intervalMin: number }, current: number): WatchEditDraft {
+export function parseWatchEdit(
+	{ questions, intervalMin, measure }: { questions: string[]; intervalMin: number; measure: boolean },
+	current: { intervalMin: number; measure: boolean },
+): WatchEditDraft {
 	if (questions.length === 0) return { ok: false, error: { field: "questions", message: "请至少选一道题" } };
-	return { ok: true, change: intervalMin !== current && isWatchInterval(intervalMin) ? { questions, intervalMin } : { questions } };
+	return {
+		ok: true,
+		change: {
+			questions,
+			...(intervalMin !== current.intervalMin && isWatchInterval(intervalMin) && { intervalMin }),
+			...(measure !== current.measure && { measure }),
+		},
+	};
 }
 
 export function statusNotice(status: WatchStatus): string | null {

@@ -4,7 +4,7 @@ import type { ProbeCapture } from "../../src/worker/probe.ts";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 
-const { addUsage, alarmAfterUpdate, planWatch, probeRound, watchRotation } = await import("../../src/worker/watch.ts");
+const { addUsage, alarmAfterUpdate, measureCalls, planWatch, probeRound, watchRotation } = await import("../../src/worker/watch.ts");
 
 const NOW = 1_000_000_000_000;
 
@@ -84,6 +84,49 @@ describe("probeRound", () => {
 		prompts.length = 0;
 		await probeRound(env, state, "sk-test-12345678");
 		expect(prompts).toEqual(Array(4).fill(instantiate(question, 8).prompt));
+	});
+});
+
+describe("measureCalls", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	const target = { origin: "https://relay.example", host: "relay.example", protocol: "responses" as const, model: "m" };
+	const env = (success: boolean) => ({ HOST_LIMITER: { limit: async () => ({ success }) } });
+	const answer = JSON.stringify({ id: "resp_1", output: [{ type: "message", content: [{ type: "output_text", text: "1" }] }], usage: { input_tokens: 5000, output_tokens: 300, input_tokens_details: { cached_tokens: 4000 } } });
+
+	function stubFetch(reply: () => Response): unknown[] {
+		const prompts: unknown[] = [];
+		vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+			prompts.push(JSON.parse(String(init.body)).input);
+			return reply();
+		});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		return prompts;
+	}
+
+	it("sends the long prefix twice, the first call warming the cache", async () => {
+		const prompts = stubFetch(() => new Response(answer));
+		const { row, attempts } = await measureCalls(env(true), target, "sk-test-12345678");
+		expect(prompts).toEqual(Array(2).fill(getQuestion("long-prefix")!.prompt));
+		expect(attempts).toHaveLength(2);
+		expect(row).toMatchObject({ cache: { promptTokens: 5000, cachedTokens: 4000 } });
+	});
+
+	it("skips the second call after a failed first one and still records the attempt", async () => {
+		const prompts = stubFetch(() => new Response("busy", { status: 500 }));
+		const { row, attempts } = await measureCalls(env(true), target, "sk-test-12345678");
+		expect(prompts).toHaveLength(1);
+		expect(attempts).toHaveLength(1);
+		expect(row).toMatchObject({ cache: null, speeds: [] });
+	});
+
+	it("records nothing when the rate limit refuses the first call", async () => {
+		const prompts = stubFetch(() => new Response(answer));
+		expect(await measureCalls(env(false), target, "sk-test-12345678")).toEqual({ row: null, attempts: [] });
+		expect(prompts).toEqual([]);
 	});
 });
 

@@ -6,12 +6,12 @@ import { parseWatchEdit } from "./watch.ts";
 type Props = { testPrefix: string; view: WatchView; onSave: (change: WatchChange) => Promise<string | null>; onClose: () => void };
 
 export function WatchEditForm({ testPrefix: t, view, onSave, onClose }: Props) {
-	const strategy = useWatchStrategy({ intervalMin: view.intervalMin, questions: view.questions });
+	const strategy = useWatchStrategy({ intervalMin: view.intervalMin, questions: view.questions, measure: view.perf !== null });
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 
 	const submit = async () => {
-		const draft = parseWatchEdit({ questions: strategy.questions.picked, intervalMin: strategy.intervalMin }, view.intervalMin);
+		const draft = parseWatchEdit({ questions: strategy.questions.picked, intervalMin: strategy.intervalMin, measure: strategy.measure }, { intervalMin: view.intervalMin, measure: view.perf !== null });
 		if (!draft.ok) return setError(draft.error.message);
 		setBusy(true);
 		setError(null);

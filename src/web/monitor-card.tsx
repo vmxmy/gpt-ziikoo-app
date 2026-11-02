@@ -2,7 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorBucket, type MonitorState } from "../shared/monitor.ts";
 import type { Protocol } from "../shared/types.ts";
-import type { WatchUsage } from "../shared/watch.ts";
+import type { WatchPerf, WatchUsage } from "../shared/watch.ts";
 import { CHART, chartModel, xOf, xTickIndexes, type Point } from "./chart.ts";
 import {
 	badgeLabel,
@@ -11,7 +11,9 @@ import {
 	exactCount,
 	latencyP50,
 	metaLine,
+	perfNote,
 	segmentLabel,
+	speedText,
 	stamp,
 	tableRows,
 	tokenAmount,
@@ -35,6 +37,7 @@ export type CardProps = {
 	questions?: readonly string[];
 	view: MonitorView;
 	usage?: WatchUsage | null;
+	perf?: WatchPerf | null;
 	now: number;
 	actions?: ComponentChildren;
 	children?: ComponentChildren;
@@ -58,11 +61,12 @@ export function MonitorCard(props: CardProps) {
 				<p class="status-badge" data-testid={`${t}-badge`} data-state={data.state}>
 					{badgeLabel(view)}
 				</p>
-				<p class="meta">{metaLine(data, props.now, props.protocol, props.questions)}</p>
+				<p class="meta">{metaLine(data, props.now, props.protocol, props.questions, Boolean(props.perf))}</p>
 			</div>
 			{props.children}
 			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />
 			{props.usage && <UsageMetrics t={t} usage={props.usage} />}
+			{props.perf && <PerfMetrics t={t} perf={props.perf} intervalMin={data.intervalSec / 60} />}
 			<StatusBar t={t} buckets={buckets} />
 			{buckets.filter((b) => b.totalMs !== null).length >= 2 ? (
 				<Chart t={t} buckets={buckets} />
@@ -129,6 +133,36 @@ function UsageMetrics({ t, usage }: { t: string; usage: WatchUsage }) {
 			</dl>
 			<p class="meta" data-testid={`${t}-usage-note`}>
 				{usageNote(usage)}
+			</p>
+		</>
+	);
+}
+
+function PerfMetrics({ t, perf, intervalMin }: { t: string; perf: WatchPerf; intervalMin: number }) {
+	return (
+		<>
+			<dl class="metrics">
+				<div>
+					<dt title="24 小时内，每次测量第 2 次调用的缓存 token 数除以输入 token 数">缓存命中率</dt>
+					<dd class="num" data-testid={`${t}-cache-hit`}>
+						{pct(perf.cacheHitPct)}
+					</dd>
+				</div>
+				<div>
+					<dt title="24 小时内回答 token 数除以首字到结束时长的中位数">输出速度</dt>
+					<dd class="num" data-testid={`${t}-speed`}>
+						{speedText(perf.tokensPerSec)}
+					</dd>
+				</div>
+				<div>
+					<dt>24 小时测量次数</dt>
+					<dd class="num" data-testid={`${t}-checks`}>
+						{perf.checks}
+					</dd>
+				</div>
+			</dl>
+			<p class="meta" data-testid={`${t}-perf-note`}>
+				{perfNote(perf, intervalMin)}
 			</p>
 		</>
 	);

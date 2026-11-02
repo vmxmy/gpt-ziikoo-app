@@ -22,12 +22,12 @@ export const test = base.extend<Fixtures, E2eOptions>({
 		const res = await request.post("/api/history/delete", { data: { site, key } });
 		expect(res.status()).toBe(200);
 	},
-	// The live tab's checklist: the HTML question runs only from its own tab.
+	// The live tab's checklist: the HTML question runs only from its own tab, and a metrics question has no place in it.
 	questions: async ({ request }, use) => {
 		const res = await request.get("/api/questions");
 		expect(res.status()).toBe(200);
 		const list: QuestionListItem[] = await res.json();
-		await use(list.filter((q) => q.id !== "pelican-svg"));
+		await use(list.filter((q) => q.id !== "pelican-svg" && q.kind !== "metrics"));
 	},
 	page: async ({ page }, use) => {
 		page.on("dialog", (dialog) => void dialog.accept());
