@@ -1,10 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
-import { instantiate, watchQuestions } from "../../questions/index.ts";
+import { getQuestion, instantiate, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
-import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeResult } from "./probe.ts";
-import { readUsage } from "./parse.ts";
+import { addRow, applyMeasure, measureDue, measureRow, summarizePerf, type MeasureRow, type MeasureState } from "./measure.ts";
+import { DEFAULT_LIMITS, defaultEffort, MAX_BODY_BYTES, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";
+import { readUsage, validCount } from "./parse.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
 const MINUTE_MS = 60_000;
@@ -13,7 +14,9 @@ export const IDLE_MS = WATCH_IDLE_DAYS * DAY_MS;
 const MAX_SAMPLES = 1440;
 const RETRIES = 3;
 const UNAUTHORIZED_LIMIT = 5;
-const MAX_CALL_TOKENS = 10_000_000;
+const MEASURE_QUESTION = "long-prefix";
+// With a hung round of 8 minutes, two calls at this limit keep a watch's newest sample within the 10 minutes before it reads as no data.
+const MEASURE_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 60_000 };
 const TRANSIENT: readonly FailReason[] = ["timeout", "upstream_error", "bad_response"];
 
 const encoder = new TextEncoder();
@@ -72,6 +75,8 @@ type WatchState = {
 	sealedKey: Sealed;
 	// Absent on watches made before usage was counted, until their next round.
 	usage?: WatchUsage;
+	// Absent while measurement is off.
+	measure?: MeasureState;
 };
 
 export type WatchPlan = { kind: "purge" } | { kind: "sleep"; until: number } | { kind: "probe"; nextAt: number };
@@ -96,9 +101,6 @@ export function toSample(ts: number, question: string, r: ProbeResponse): Monito
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
 const isTransient = (r: ProbeResponse) => !r.ok && TRANSIENT.includes(r.reason);
-
-// One absurd number from a site would stay in the total for the life of the watch.
-const validCount = (n: number | null) => (n !== null && Number.isSafeInteger(n) && n >= 0 && n <= MAX_CALL_TOKENS ? n : null);
 
 function addAttempt(usage: WatchUsage, { usage: raw, httpStatus }: ProbeCapture): WatchUsage {
 	const read = readUsage(raw);
@@ -140,26 +142,30 @@ function logProbe(host: string, question: string, { response, capture }: ProbeRe
 	console.log(JSON.stringify({ event: "watch_probe", host, question, outcome: outcome(response), httpStatus, totalMs }));
 }
 
+type ProbeTarget = Pick<WatchState, "origin" | "host" | "protocol" | "model">;
+
+const probeInput = ({ origin, protocol, model }: ProbeTarget, key: string, question: Question, limits: ProbeLimits): ProbeInput => ({
+	origin,
+	key,
+	protocol,
+	model,
+	question,
+	effort: defaultEffort(question, protocol),
+	limits,
+});
+
 // Each round counts against the same per-host limit as the live test, so a watch cannot be used to flood a site.
 // Only failures another call can fix are retried; the sample records the site's quality, not a passing hiccup.
 // A generated question is drawn anew each round: the seed 0 instance is public, so a site could prepare its answer.
 export async function probeRound(
 	env: Pick<Env, "HOST_LIMITER">,
-	state: Pick<WatchState, "origin" | "host" | "protocol" | "model" | "questions" | "seq">,
+	state: ProbeTarget & Pick<WatchState, "questions" | "seq">,
 	key: string,
 ): Promise<{ question: string; response: ProbeResponse; attempts: ProbeCapture[] } | null> {
 	const rotation = watchRotation(state.questions);
 	const question = rotation[state.seq % rotation.length];
 	if (!question) return null;
-	const input = {
-		origin: state.origin,
-		key,
-		protocol: state.protocol,
-		model: state.model,
-		question: instantiate(question, randomSeed()),
-		effort: defaultEffort(question, state.protocol),
-		limits: DEFAULT_LIMITS,
-	};
+	const input = probeInput(state, key, instantiate(question, randomSeed()), DEFAULT_LIMITS);
 	let response: ProbeResponse | null = null;
 	let attempts: ProbeCapture[] = [];
 	for (let n = 0; n <= RETRIES && (response === null || isTransient(response)); n++) {
@@ -171,6 +177,24 @@ export async function probeRound(
 	}
 	return response && { question: question.id, response, attempts };
 }
+
+// Never retried, so a measurement costs at most two calls. Without a warm cache the second call would prove nothing, so a failed first call ends it.
+export async function measureCalls(env: Pick<Env, "HOST_LIMITER">, state: ProbeTarget, key: string): Promise<{ row: MeasureRow | null; attempts: ProbeCapture[] }> {
+	const question = getQuestion(MEASURE_QUESTION);
+	if (!question) return { row: null, attempts: [] };
+	const input = probeInput(state, key, question, MEASURE_LIMITS);
+	const call = async (): Promise<ProbeResult | null> => {
+		if (!(await env.HOST_LIMITER.limit({ key: state.host })).success) return null;
+		const result = await probe(input);
+		logProbe(state.host, question.id, result);
+		return result;
+	};
+	const warm = await call();
+	if (!warm) return { row: null, attempts: [] };
+	const hit = warm.response.ok ? await call() : null;
+	return { row: measureRow(Date.now(), warm.response, hit?.response ?? null), attempts: [warm.capture, ...(hit ? [hit.capture] : [])] };
+}
+
 const STATE_KEY = "state";
 
 export type WatchCreateOutcome = { kind: "created"; watch: WatchView } | { kind: "unauthorized" };
@@ -200,7 +224,7 @@ export class Watch extends DurableObject<Env> {
 		const { origin, host, alias, model, protocol, intervalMin, createdAt, status, expiresAt } = state;
 		const monitor = buildMonitor(this.samples(now), now, host, intervalMin * 60);
 		const questions = watchRotation(state.questions).map((q) => q.id);
-		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null };
+		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null, perf: state.measure ? summarizePerf(state.measure, state.seq, intervalMin, now) : null };
 	}
 
 	private async save(state: WatchState, alarmAt: number): Promise<void> {
@@ -225,6 +249,7 @@ export class Watch extends DurableObject<Env> {
 			seq: 1,
 			unauthorized: 0,
 			sealedKey: await seal(this.env.WATCH_ENC_KEY, cmd.key),
+			measure: applyMeasure(undefined, cmd.measure),
 		};
 		const round = await probeRound(this.env, { ...state, seq: 0 }, cmd.key);
 		if (round && !round.response.ok && round.response.reason === "unauthorized") return { kind: "unauthorized" };
@@ -260,7 +285,8 @@ export class Watch extends DurableObject<Env> {
 	async update(change: WatchChange, now: number): Promise<WatchView | null> {
 		const state = await this.state();
 		if (!state) return null;
-		const next: WatchState = { ...state, ...change, expiresAt: now + IDLE_MS };
+		const { measure, ...schedule } = change;
+		const next: WatchState = { ...state, ...schedule, measure: applyMeasure(state.measure, measure), expiresAt: now + IDLE_MS };
 		await this.save(next, alarmAfterUpdate(next, await this.ctx.storage.getAlarm(), now));
 		return this.toView(next, now);
 	}
@@ -279,7 +305,8 @@ export class Watch extends DurableObject<Env> {
 		if (plan.kind === "sleep") return this.ctx.storage.setAlarm(plan.until);
 		// Scheduled before the call so a crash mid-round still leaves the next round queued.
 		await this.ctx.storage.setAlarm(plan.nextAt);
-		const round = await probeRound(this.env, state, await unseal(this.env.WATCH_ENC_KEY, state.sealedKey));
+		const key = await unseal(this.env.WATCH_ENC_KEY, state.sealedKey);
+		const round = await probeRound(this.env, state, key);
 		// The call can take minutes; a pause, resume or delete made meanwhile wins over its result.
 		const latest = await this.state();
 		if (!latest) return;
@@ -290,7 +317,22 @@ export class Watch extends DurableObject<Env> {
 			latest.status.kind === "running" && unauthorized >= UNAUTHORIZED_LIMIT ? { kind: "bad_key" } : latest.status;
 		// Stamped at the end of the round: a hung site holds a round for minutes, and a start time would read as stale.
 		this.addSample(toSample(Date.now(), round.question, round.response));
-		await this.ctx.storage.put(STATE_KEY, { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) });
+		const next: WatchState = { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) };
+		await this.ctx.storage.put(STATE_KEY, next);
+		await this.runMeasure(next, key);
+	}
+
+	private async runMeasure(state: WatchState, key: string): Promise<void> {
+		if (!state.measure || !measureDue(state.measure, state)) return;
+		// Written before the calls, so a crash midway cannot spend them a second time.
+		await this.ctx.storage.put(STATE_KEY, { ...state, measure: { ...state.measure, measuredSeq: state.seq } });
+		const { row, attempts } = await measureCalls(this.env, state, key);
+		// As with a round, a pause, edit or delete made during the calls wins; turned off meanwhile, the result is dropped but the spend still counts.
+		const latest = await this.state();
+		if (!latest) return;
+		const now = Date.now();
+		const measure = latest.measure && row ? addRow(latest.measure, row, now) : latest.measure;
+		await this.ctx.storage.put(STATE_KEY, { ...latest, measure, usage: addUsage(latest.usage, attempts, now) });
 	}
 }
 

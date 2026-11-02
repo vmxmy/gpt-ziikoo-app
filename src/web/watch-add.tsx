@@ -76,6 +76,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			protocol,
 			intervalMin: strategy.intervalMin,
 			questions: strategy.questions.picked,
+			measure: strategy.measure,
 			consent,
 		});
 		setBusy(false);

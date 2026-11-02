@@ -5,6 +5,8 @@ import candyPrompt from "./candy/prompt.txt?raw";
 import candyVarMeta from "./candy-var/meta.json";
 import cialloMeta from "./ciallo/meta.json";
 import cialloPrompt from "./ciallo/prompt.txt?raw";
+import longPrefixMeta from "./long-prefix/meta.json";
+import longPrefixPrompt from "./long-prefix/prompt.txt?raw";
 import pelicanMeta from "./pelican-svg/meta.json";
 import thibaultMeta from "./thibault/meta.json";
 import thibaultPrompt from "./thibault/prompt.txt?raw";
@@ -63,6 +65,7 @@ export const QUESTIONS: readonly Question[] = [
 	defineQuestion(candyVarMeta),
 	defineQuestion(cialloMeta, cialloPrompt),
 	defineQuestion(pelicanMeta),
+	defineQuestion(longPrefixMeta, longPrefixPrompt),
 ];
 
 export function instantiate(question: Question, seed: number): Question {

@@ -198,6 +198,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 			questions={card.view.questions}
 			view={monitorView(card.view.monitor)}
 			usage={card.view.usage}
+			perf={card.view.perf}
 			now={now}
 			actions={<RowActions card={card} onToggle={props.onToggle} onRemove={props.onRemove} index={index} count={count} onMove={onMove} editing={props.editing} onEdit={props.onEdit} />}
 		>

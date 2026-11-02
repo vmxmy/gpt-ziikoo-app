@@ -60,7 +60,7 @@
 | `version` | 题面或评分一变就加 1 |
 | `status` | 固定是 `active` |
 | `title`、`measures`、`failureHint` | 标题、测什么、答错说明什么 |
-| `kind` | `knowledge` 或 `reasoning` |
+| `kind` | `knowledge`、`reasoning` 或 `metrics`。`metrics` 题只用于测量，不评分，`correct` 是 `null` |
 | `prompt` | 题面。生成题的题面是 seed 0 的示例 |
 | `expectedLabel` | 期望答案的说明 |
 | `calibratedModels` | 校准过的模型 |
@@ -218,10 +218,10 @@ curl -s https://gpt.ziikoo.app/api/probe \
 
 | 接口 | 请求体 | 返回 |
 | --- | --- | --- |
-| `/api/watch` | `{ "site", "key", "model", "protocol", "intervalMin", "alias", "consent": true, "questions"?, "board"? }` | `{ "board", "token", "watch": WatchView }` |
+| `/api/watch` | `{ "site", "key", "model", "protocol", "intervalMin", "alias", "consent": true, "questions"?, "board"?, "measure"? }` | `{ "board", "token", "watch": WatchView }` |
 | `/api/watch/view` | `{ "token" }` | `WatchView` |
 | `/api/watch/state` | `{ "token", "action": "pause" \| "resume" }` | `WatchView` |
-| `/api/watch/update` | `{ "token", "questions"?, "intervalMin"? }` | `WatchView`。只改给出的字段 |
+| `/api/watch/update` | `{ "token", "questions"?, "intervalMin"?, "measure"? }` | `WatchView`。只改给出的字段 |
 | `/api/watch/delete` | `{ "token" }` | `{ "deleted": true }`。立即清除密钥与样本 |
 | `/api/board/view` | `{ "board" }` | `{ "watches": [{ "token", "watch": WatchView \| null }] }`。`null` 表示这次读取失败 |
 | `/api/board/adopt` | `{ "board"?, "tokens" }` | `{ "board" }`。`tokens` 最多 30 个。全部令牌无效时 `board` 是 `null` |
@@ -243,10 +243,13 @@ curl -s https://gpt.ziikoo.app/api/probe \
   status: { kind: "running" | "paused" | "bad_key" },
   monitor: { target, intervalSec, bucketMin, generatedAt, state, uptimePct, correctPct,
              last, buckets: [48 个 30 分钟格] },
-  usage: { since, calls, unmetered, promptTokens, cachedTokens, outputTokens, reasoningTokens } | null }
+  usage: { since, calls, unmetered, promptTokens, cachedTokens, outputTokens, reasoningTokens } | null,
+  perf: { checks, cacheChecks, cacheHitPct, tokensPerSec, speedSamples, lastAt, nextInRounds } | null }
 ```
 
 - `usage` 是累计用量。`since` 是开始计数的时间。`calls` 是发出的调用次数，含重试。`unmetered` 是可能已扣额度但没有返回可用用量的调用次数。`outputTokens` 含 `reasoningTokens`，`promptTokens` 含 `cachedTokens`。这项上线前建的监测在跑完下一轮之前是 `null`。
+- `measure` 为 `true` 时开启缓存与速度测量，默认关闭，传 `false` 时关闭并清除结果。测量约每 3 小时一次，次数由间隔算出，每次多发 2 次长调用，消耗这把密钥的额度。
+- `perf` 是 24 小时内的测量结果，未开启时是 `null`。`cacheHitPct` 只看每次测量的第 2 次调用。`tokensPerSec` 是回答 token 数除以首字到结束时长的中位数。`nextInRounds` 是距下次测量的轮数。这些是参考值，不参与 `state` 的判定。站点没有返回可用数据时，`cacheHitPct`、`tokensPerSec` 是 `null`。
 
 `state` 是 `operational`、`fair`、`quality`、`degraded`、`down`、`insufficient` 或 `no_data`。
 

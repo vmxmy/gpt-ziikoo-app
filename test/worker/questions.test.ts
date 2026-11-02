@@ -25,13 +25,21 @@ it("keeps prompt text byte-for-byte", () => {
 
 it("builds every watch strategy from questions a watch can rotate through", () => {
 	const ids = watchQuestions().map((q) => q.id);
-	expect(WATCH_STRATEGIES.map((s) => s.id)).toEqual(["authenticity", "saver", "line"]);
+	expect(WATCH_STRATEGIES.map((s) => s.id)).toEqual(["authenticity", "saver", "line", "compare"]);
 	expect(WATCH_STRATEGIES.flatMap((s) => s.questions).filter((id) => !ids.includes(id))).toEqual([]);
 	expect(WATCH_STRATEGIES.find((s) => s.id === "authenticity")?.questions).toEqual(ids);
 });
 
+it("keeps the measurement question out of rotation and long enough to reach every caching threshold", () => {
+	const q = getQuestion("long-prefix")!;
+	expect(q).toMatchObject({ kind: "metrics", inWatchRotation: false, defaultEffort: "low" });
+	expect(q.scorer).toBeUndefined();
+	expect(q.prompt.length).toBeGreaterThanOrEqual(18_000);
+	expect(watchQuestions().map((w) => w.id)).not.toContain("long-prefix");
+});
+
 it("lists only active questions", () => {
-	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo", "pelican-svg"]);
+	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo", "pelican-svg", "long-prefix"]);
 });
 
 it("keeps the ciallo prompt byte-for-byte", () => {

@@ -179,10 +179,12 @@ export type WatchCreateCommand = HistoryCommand & {
 	questions: string[];
 	alias: string;
 	board?: string;
+	measure: boolean;
 };
 export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: false; message: string; field?: WatchField };
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const MEASURE_MESSAGE = "measure 必须是 true 或 false";
 const INTERVAL_MESSAGE = `intervalMin 必须是 ${WATCH_INTERVALS.join("、")} 之一`;
 const BOARD = /^[A-Za-z0-9_-]{22}$/;
 
@@ -213,6 +215,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (!isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
 	const questions = parseWatchQuestions(f.questions);
 	if (!questions.ok) return questions;
+	if (f.measure !== undefined && typeof f.measure !== "boolean") return bad(MEASURE_MESSAGE);
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
 	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");
 	return {
@@ -227,6 +230,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 			questions: questions.value,
 			alias: (alias ?? "").trim().slice(0, WATCH_MAX_ALIAS),
 			board: board ?? undefined,
+			measure: f.measure === true,
 		},
 	};
 }
@@ -249,11 +253,12 @@ export function parseWatchState(body: unknown): Result<{ token: string; action: 
 export function parseWatchUpdate(body: unknown): Result<{ token: string; change: WatchChange }> {
 	const token = parseWatchToken(body);
 	if (!token.ok) return token;
-	const { questions, intervalMin } = fields(body) ?? {};
+	const { questions, intervalMin, measure } = fields(body) ?? {};
+	if (measure !== undefined && typeof measure !== "boolean") return bad(MEASURE_MESSAGE);
 	if (intervalMin !== undefined && !isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
 	const picked = questions === undefined ? null : parseWatchQuestions(questions);
 	if (picked && !picked.ok) return picked;
-	const change: WatchChange = { ...(picked && { questions: picked.value }), ...(intervalMin !== undefined && { intervalMin }) };
+	const change: WatchChange = { ...(picked && { questions: picked.value }), ...(intervalMin !== undefined && { intervalMin }), ...(measure !== undefined && { measure }) };
 	return { ok: true, value: { token: token.value, change } };
 }
 

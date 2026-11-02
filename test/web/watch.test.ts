@@ -12,6 +12,7 @@ const input = (over: Partial<Parameters<typeof parseWatchInput>[0]> = {}) => ({
 	protocol: "responses" as const,
 	intervalMin: 5 as const,
 	questions: ["thibault"],
+	measure: false,
 	consent: true,
 	...over,
 });
@@ -36,12 +37,20 @@ describe("parseWatchInput", () => {
 
 describe("parseWatchEdit", () => {
 	it("sends the interval only when it changed, so a retired interval survives a question edit", () => {
-		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 15 }, 15)).toEqual({ ok: true, change: { questions: ["ciallo"] } });
-		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 1 }, 15)).toEqual({ ok: true, change: { questions: ["ciallo"], intervalMin: 1 } });
+		const current = { intervalMin: 15, measure: false };
+		expect(parseWatchEdit({ questions: ["ciallo"], ...current }, current)).toEqual({ ok: true, change: { questions: ["ciallo"] } });
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 1, measure: false }, current)).toEqual({ ok: true, change: { questions: ["ciallo"], intervalMin: 1 } });
+	});
+
+	it("sends the measurement switch only when it changed", () => {
+		const draft = { questions: ["ciallo"], intervalMin: 5 };
+		expect(parseWatchEdit({ ...draft, measure: true }, { intervalMin: 5, measure: false })).toEqual({ ok: true, change: { questions: ["ciallo"], measure: true } });
+		expect(parseWatchEdit({ ...draft, measure: false }, { intervalMin: 5, measure: true })).toEqual({ ok: true, change: { questions: ["ciallo"], measure: false } });
+		expect(parseWatchEdit({ ...draft, measure: true }, { intervalMin: 5, measure: true })).toEqual({ ok: true, change: { questions: ["ciallo"] } });
 	});
 
 	it("asks for at least one question", () => {
-		expect(parseWatchEdit({ questions: [], intervalMin: 5 }, 5)).toEqual({ ok: false, error: { field: "questions", message: "请至少选一道题" } });
+		expect(parseWatchEdit({ questions: [], intervalMin: 5, measure: false }, { intervalMin: 5, measure: false })).toEqual({ ok: false, error: { field: "questions", message: "请至少选一道题" } });
 	});
 });
 

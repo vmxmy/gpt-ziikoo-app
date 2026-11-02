@@ -2,7 +2,7 @@ import { solveBag } from "../../src/shared/candy-gen.ts";
 
 type Protocol = "responses" | "chat" | "anthropic";
 type IdKind = "hex" | "ft" | "b64";
-type Topic = "thibault" | "candy" | "candy-var" | "ciallo" | "pelican-svg";
+type Topic = "thibault" | "candy" | "candy-var" | "ciallo" | "pelican-svg" | "long-prefix";
 type Answering = {
 	kind: "answer";
 	correct: boolean;
@@ -10,6 +10,8 @@ type Answering = {
 	honorStream: boolean;
 	id: IdKind;
 	cached: boolean;
+	// Share of the real prompt reported as cached, for the long prompt behind the watch measurement.
+	cacheShare: number;
 	gapMs: number;
 	big: boolean;
 	empty: boolean;
@@ -47,6 +49,7 @@ const ANSWER: Answering = {
 	honorStream: true,
 	id: "hex",
 	cached: false,
+	cacheShare: 0,
 	gapMs: 0,
 	big: false,
 	empty: false,
@@ -83,6 +86,7 @@ const MODELS = new Map<string, Behavior>([
 	["mock-b64", { ...ANSWER, id: "b64" }],
 	["mock-cached", { ...ANSWER, cached: true }],
 	["mock-slow", { ...ANSWER, gapMs: 400 }],
+	["mock-measure", { ...ANSWER, cacheShare: 0.9, gapMs: 20 }],
 	["mock-big", { ...ANSWER, big: true }],
 	["mock-empty", { ...ANSWER, empty: true }],
 	["mock-inject-candy", { ...ANSWER, correct: false, extraInput: { candy: 300 } }],
@@ -112,6 +116,7 @@ function authOf(request: Request, protocol: Protocol): string {
 	return protocol === "anthropic" ? `Bearer ${request.headers.get("x-api-key") ?? ""}` : (request.headers.get("Authorization") ?? "");
 }
 
+const COUNT_MARKER = "Count from 1 to 200";
 const CANDY_VAR_MARKER = "最后一行严格按此格式写：答案：";
 
 // Reads the bag back out of the generated prompt: the tab-separated table and pairing line 1.
@@ -157,6 +162,10 @@ const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string 
 		wrong: "至少需要摸出 20 颗糖果。",
 	}),
 	"candy-var": solveCandyVar,
+	"long-prefix": () => {
+		const numbers = Array.from({ length: 200 }, (_, i) => i + 1).join("\n");
+		return { right: numbers, wrong: numbers };
+	},
 	// The stock persona's greeting, as the original model replies; a swapped model answers in plain English.
 	ciallo: () => ({
 		right: "Ciallo～(∠・ω< )⌒☆ 今天想一起做点什么？",
@@ -166,6 +175,7 @@ const ANSWERS: Record<Topic, (prompt: string) => { right: string; wrong: string 
 
 // The marker comes first: the generator can also draw 糖果 as its noun.
 function topicOf(prompt: string): Topic | null {
+	if (prompt.includes(COUNT_MARKER)) return "long-prefix";
 	if (prompt.includes(CANDY_VAR_MARKER)) return "candy-var";
 	if (prompt.includes("用SVG绘制")) return "pelican-svg";
 	if (prompt.includes("Thibault")) return "thibault";
@@ -218,7 +228,7 @@ function answerText(prompt: string, b: Answering): string {
 function usageOf(protocol: Protocol, prompt: string, text: string, b: Answering): { usage: object; reasoning: number } {
 	const topic = topicOf(prompt);
 	const input = (b.cached ? 1280 : Math.ceil(prompt.length / 2)) + (topic ? (b.extraInput[topic] ?? 0) : 0);
-	const cached = b.cached ? 1024 : 0;
+	const cached = b.cached ? 1024 : Math.floor(input * b.cacheShare);
 	const reasoning = b.correct ? 192 : 0;
 	const output = reasoning + Math.ceil(text.length / 2);
 	// Anthropic leaves the cached part out of input_tokens and has no reasoning count.
