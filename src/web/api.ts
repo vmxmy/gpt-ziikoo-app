@@ -117,6 +117,13 @@ export function probeHtml(
 	return probeOnce(body, signal, (res) => readProgress(res, onProgress));
 }
 
+export const LOAD_QUESTION = "long-prefix";
+
+// Without runId the call stays out of history; every call of one perf run shares the seed, so the prompt can be cached.
+export function probeLoad(target: Target, model: string, protocol: Protocol, seed: number, signal: AbortSignal): Promise<ProbeOutcome> {
+	return probeOnce({ ...target, model, protocol, question: LOAD_QUESTION, seed }, signal);
+}
+
 export const MAX_CUSTOM_PROMPT = 2000;
 export const MAX_CUSTOM_EXPECTED = 500;
 

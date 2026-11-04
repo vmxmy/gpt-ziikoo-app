@@ -1,0 +1,25 @@
+.perf-form {
+	gap: var(--space-4) var(--space-5);
+	margin-top: var(--space-4);
+}
+
+.perf-counts {
+	margin-top: var(--space-4);
+}
+
+.perf-result {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+	padding-top: var(--space-5);
+	border-top: var(--border-width) solid var(--border);
+}
+
+.perf-title {
+	margin: 0;
+}
+
+.perf-verdict {
+	color: var(--tone-text);
+	font-weight: 600;
+}
