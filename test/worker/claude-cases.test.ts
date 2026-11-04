@@ -7,6 +7,8 @@ import cacheWarmRecording from "./testdata/claude/cache-warm.json";
 import countTokensRecording from "./testdata/claude/count-tokens.json";
 import errorMissingMaxTokensRecording from "./testdata/claude/error-missing-max-tokens.json";
 import messageRecording from "./testdata/claude/message.json";
+import nativeCountTokensRecording from "./testdata/claude/native-count-tokens.json";
+import nativeErrorMissingMaxTokensRecording from "./testdata/claude/native-error-missing-max-tokens.json";
 import streamRecording from "./testdata/claude/stream.json";
 import thinkingRecording from "./testdata/claude/thinking.json";
 import toolUseRecording from "./testdata/claude/tool-use.json";
@@ -220,7 +222,7 @@ describe("Claude case executor", () => {
 
 describe("Claude case executor on recorded responses", () => {
 	type Recording = { status: number; headers: { "request-id": string | null }; body: unknown };
-	const recordings: Record<string, Recording> = { "cache-usage": cacheUsageRecording, "cache-warm": cacheWarmRecording, "count-tokens": countTokensRecording, "error-missing-max-tokens": errorMissingMaxTokensRecording, "message": messageRecording, "stream": streamRecording, "thinking": thinkingRecording, "tool-use": toolUseRecording };
+	const recordings: Record<string, Recording> = { "cache-usage": cacheUsageRecording, "cache-warm": cacheWarmRecording, "count-tokens": countTokensRecording, "error-missing-max-tokens": errorMissingMaxTokensRecording, "message": messageRecording, "native-count-tokens": nativeCountTokensRecording, "native-error-missing-max-tokens": nativeErrorMissingMaxTokensRecording, "stream": streamRecording, "thinking": thinkingRecording, "tool-use": toolUseRecording };
 	const recorded = (name: string): Recording => recordings[name];
 	const replay = (name: string) => () => {
 		const { status, headers, body } = recorded(name);
@@ -242,6 +244,26 @@ describe("Claude case executor on recorded responses", () => {
 			expect(result.calls.map((call) => [call.status, call.requestId]), id).toEqual(names.map((name) => [recorded(name).status, null]));
 			expect(JSON.stringify(result), id).not.toContain("msg_bdrk_");
 		}
+	});
+
+	it("parses recorded native count_tokens success and request ids", async () => {
+		const tokens = await runClaudeCase(input("C10"), fake([replay("message"), replay("native-count-tokens")]).deps);
+		expect(tokens).toMatchObject({ verdict: "pass", source: "bedrock", note: "响应满足用例要求；无法测 Mantle" });
+		expect(tokens.calls.map((call) => [call.status, call.requestId])).toEqual([[200, null], [200, "req_011CgiAfaRnD4Sf2GgthJaxW"]]);
+
+		const error = await runClaudeCase(input("P2"), fake([replay("native-error-missing-max-tokens")]).deps);
+		expect(error).toMatchObject({ verdict: "pass", calls: [{ status: 400, requestId: "req_011CgiAfeFxNifG9ZZn4qku7" }] });
+		const { status, body } = recorded("native-error-missing-max-tokens");
+		const bodyOnly = await runClaudeCase(input("P2"), fake([() => new Response(JSON.stringify(body), { status })]).deps);
+		expect(bodyOnly).toMatchObject({ verdict: "pass", calls: [{ status: 400, requestId: null }] });
+	});
+
+	it("sends the long-prefix prompt with a single measurement seed", async () => {
+		const cache = fake(["cache-warm", "cache-usage", "cache-usage", "cache-usage", "cache-usage"].map(replay));
+		await runClaudeCase(input("C9"), cache.deps);
+		const prompt = String((cache.requests[0].body.messages as { content: unknown }[])[0].content);
+		expect(prompt).toMatch(/^Measurement \d+\.\n\n/);
+		expect(prompt.match(/Measurement /g)).toHaveLength(1);
 	});
 
 	it("returns the recorded tool_use and thinking blocks unchanged", async () => {

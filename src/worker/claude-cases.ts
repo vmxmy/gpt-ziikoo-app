@@ -216,7 +216,7 @@ export async function runClaudeCase(input: ClaudeCaseCommand, deps: ClaudeCaseDe
 		case "C9": {
 			const seed = crypto.getRandomValues(new Uint32Array(1))[0];
 			const question = instantiate(getQuestion("long-prefix")!, seed);
-			const body = { max_tokens: 32, cache_control: { type: "ephemeral" }, messages: [{ role: "user", content: `Measurement ${seed}.\n\n${question.prompt}\n\nReply with exactly OK.` }] };
+			const body = { max_tokens: 32, cache_control: { type: "ephemeral" }, messages: [{ role: "user", content: `${question.prompt}\n\nReply with exactly OK.` }] };
 			const replies: Reply[] = [];
 			for (let attempt = 0; attempt < 5; attempt++) replies.push(await send(body));
 			const warm = freshTokens(replies[0].body);
