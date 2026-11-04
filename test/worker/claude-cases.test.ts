@@ -1,8 +1,15 @@
-import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_CASES, type ClaudeCaseId } from "../../src/shared/claude-cases.ts";
 import { ClaudeCaseRateLimited, runClaudeCase } from "../../src/worker/claude-cases.ts";
 import { parseClaudeCaseRequest } from "../../src/worker/request.ts";
+import cacheUsageRecording from "./testdata/claude/cache-usage.json";
+import cacheWarmRecording from "./testdata/claude/cache-warm.json";
+import countTokensRecording from "./testdata/claude/count-tokens.json";
+import errorMissingMaxTokensRecording from "./testdata/claude/error-missing-max-tokens.json";
+import messageRecording from "./testdata/claude/message.json";
+import streamRecording from "./testdata/claude/stream.json";
+import thinkingRecording from "./testdata/claude/thinking.json";
+import toolUseRecording from "./testdata/claude/tool-use.json";
 
 vi.mock("cloudflare:workers", () => ({ DurableObject: class {} }));
 const { default: worker } = await import("../../src/worker/index.ts");
@@ -213,7 +220,8 @@ describe("Claude case executor", () => {
 
 describe("Claude case executor on recorded responses", () => {
 	type Recording = { status: number; headers: { "request-id": string | null }; body: unknown };
-	const recorded = (name: string): Recording => JSON.parse(readFileSync(new URL(`./testdata/claude/${name}.json`, import.meta.url), "utf8"));
+	const recordings: Record<string, Recording> = { "cache-usage": cacheUsageRecording, "cache-warm": cacheWarmRecording, "count-tokens": countTokensRecording, "error-missing-max-tokens": errorMissingMaxTokensRecording, "message": messageRecording, "stream": streamRecording, "thinking": thinkingRecording, "tool-use": toolUseRecording };
+	const recorded = (name: string): Recording => recordings[name];
 	const replay = (name: string) => () => {
 		const { status, headers, body } = recorded(name);
 		const requestId = headers["request-id"];
