@@ -89,7 +89,7 @@
  * 语义表。页面里每个状态词汇(调用点、结论、总评、监测档位、卡片提示)只在这里映射一次到语气,
  * 组件只读 --tone(填充色)和 --tone-text(文字色),不再各自写颜色。新增状态词汇就加进对应一行。
  */
-:is([data-state="ok"], [data-state="operational"], [data-status="passed"], [data-status="all_passed"]) {
+:is([data-state="ok"], [data-state="operational"], [data-status="passed"], [data-status="all_passed"], [data-verdict="pass"]) {
 	--tone: var(--ok);
 	--tone-text: var(--ok);
 }
@@ -104,12 +104,12 @@
 	--tone-text: var(--ok);
 }
 
-:is([data-state="fail"], [data-state="degraded"], [data-status="partial"], [data-status="unavailable"], [data-kind="rate_limited"]) {
+:is([data-state="fail"], [data-state="degraded"], [data-status="partial"], [data-status="unavailable"], [data-kind="rate_limited"], [data-verdict="gap"]) {
 	--tone: var(--warn);
 	--tone-text: var(--warn-text);
 }
 
-:is([data-state="wrong"], [data-state="down"], [data-status="failed"], [data-kind="bad_key"], [data-kind="rejected"]) {
+:is([data-state="wrong"], [data-state="down"], [data-status="failed"], [data-kind="bad_key"], [data-kind="rejected"], [data-verdict="fail"]) {
 	--tone: var(--bad);
 	--tone-text: var(--bad);
 }
@@ -119,7 +119,7 @@
 	--tone-text: var(--info);
 }
 
-:is([data-state="no_data"], [data-status="incomplete"], [data-kind="running"], [data-kind="paused"], [data-kind="needs_key"]) {
+:is([data-state="no_data"], [data-status="incomplete"], [data-kind="running"], [data-kind="paused"], [data-kind="needs_key"], [data-verdict="untested"], [data-verdict="na"]) {
 	--tone: var(--none);
 	--tone-text: var(--fg-2);
 }

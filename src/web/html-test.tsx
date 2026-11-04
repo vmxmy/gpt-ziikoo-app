@@ -5,6 +5,7 @@ import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/type
 import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
+import { downloadReport } from "./report.ts";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { ChoiceField } from "./watch-strategy.tsx";
@@ -119,17 +120,6 @@ function htmlFileName(model: string, at: Date): string {
 	return `${model.replace(/[^\w.-]+/g, "-")}-${stamp}.html`;
 }
 
-// The frame decodes the page as UTF-8 whatever it declares; the BOM makes a browser opening the file do the same.
-// octet-stream because a text/html blob URL, if ever navigated to, would run the untrusted page on this site's origin.
-function downloadHtml(html: string, fileName: string) {
-	const url = URL.createObjectURL(new Blob(["\uFEFF", html], { type: "application/octet-stream" }));
-	const link = document.createElement("a");
-	link.href = url;
-	link.download = fileName;
-	link.click();
-	URL.revokeObjectURL(url);
-}
-
 function ArtifactActions({ html, fileName }: { html: string; fileName: string }) {
 	const [playing, setPlaying] = useState(false);
 	const [copy, setCopy] = useState<CopyStatus | null>(null);
@@ -149,7 +139,7 @@ function ArtifactActions({ html, fileName }: { html: string; fileName: string })
 				<button type="button" class="btn-text" onClick={doCopy} data-testid="html-copy">
 					复制 HTML
 				</button>
-				<button type="button" class="btn-text" onClick={() => downloadHtml(html, fileName)} data-testid="html-download">
+				<button type="button" class="btn-text" onClick={() => downloadReport(html, fileName)} data-testid="html-download">
 					下载 HTML
 				</button>
 				<span class="muted small" role="status">
