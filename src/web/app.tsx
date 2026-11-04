@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
 import { fetchQuestions, HTML_QUESTION, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
+import { ClaudeTest } from "./claude-test.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { HtmlTest } from "./html-test.tsx";
@@ -169,13 +170,14 @@ function SiteHeader() {
 	);
 }
 
-type TabId = "live" | "html" | "watch" | "perf";
+type TabId = "live" | "html" | "watch" | "perf" | "claude";
 
 // The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
 function useTab(): [TabId, (tab: TabId) => void] {
 	const read = (): TabId => {
 		if (location.hash === "#html") return "html";
 		if (location.hash === "#perf") return "perf";
+		if (location.hash === "#claude") return "claude";
 		return location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live";
 	};
 	const [tab, setTab] = useState<TabId>(read);
@@ -195,6 +197,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 		["html", "HTML 生成"],
 		["watch", "持续监测"],
 		["perf", "性能测试"],
+		["claude", "Claude 专项"],
 	];
 	return (
 		<div class="tabs" role="tablist" aria-label="测试方式">
@@ -304,6 +307,9 @@ export function App() {
 			</div>
 			<div id="perf-pane" role="tabpanel" aria-labelledby="tab-perf" hidden={tab !== "perf"}>
 				<PerfTest />
+			</div>
+			<div id="claude-pane" role="tabpanel" aria-labelledby="tab-claude" hidden={tab !== "claude"}>
+				<ClaudeTest />
 			</div>
 			{tab === "watch" && (
 				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">

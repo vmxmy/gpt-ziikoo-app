@@ -1,0 +1,21 @@
+.claude-form {
+	gap: var(--space-4) var(--space-5);
+	margin-top: var(--space-4);
+}
+
+.claude-matrix {
+	margin-top: var(--space-5);
+}
+
+.claude-report {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+	padding-top: var(--space-5);
+	border-top: var(--border-width) solid var(--border);
+}
+
+.claude-verdict {
+	color: var(--tone-text);
+	font-weight: 600;
+}

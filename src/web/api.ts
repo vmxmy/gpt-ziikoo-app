@@ -1,3 +1,4 @@
+import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseRequest, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import type {
 	ApiError,
 	CustomQuestion,
@@ -240,6 +241,53 @@ export async function fetchModels(t: Target, signal?: AbortSignal): Promise<Mode
 	const res = await post("/api/models", t, signal);
 	if (!res.ok) throw await failure(res);
 	return res.json();
+}
+
+export async function runClaudeCase(request: ClaudeCaseRequest, signal?: AbortSignal): Promise<ClaudeCaseResult> {
+	const redact = (text: string) => text.replaceAll(`Bearer ${request.key}`, "[redacted]").replaceAll(request.key, "[redacted]");
+	try {
+		const res = await post("/api/claude-case", request, signal);
+		if (!res.ok) throw await failure(res);
+		const result: ClaudeCaseResult = await res.json();
+		if (!["pass", "fail", "gap", "untested"].includes(result.verdict)) throw new Error("invalid verdict");
+		return {
+			id: request.case,
+			verdict: result.verdict,
+			note: redact(result.note),
+			preview: result.preview === null ? null : redact(result.preview),
+			source: result.source !== null && ["anthropic", "bedrock", "vertex", "other"].includes(result.source) ? result.source : null,
+			calls: result.calls.map((call) => ({
+				status: typeof call.status === "number" ? call.status : null,
+				requestId: call.requestId === null ? null : redact(call.requestId),
+				ms: typeof call.ms === "number" ? call.ms : 0,
+			})),
+		};
+	} catch (error) {
+		if (signal?.aborted) throw error;
+		if (error instanceof ApiFailure) throw new ApiFailure(error.status, redact(error.message), error.retryAfterSec);
+		throw new Error("无法读取用例结果，请稍后重试");
+	}
+}
+
+export async function runClaudeCases(
+	request: Omit<ClaudeCaseRequest, "case">,
+	signal: AbortSignal,
+	onProgress: (id: ClaudeCaseId, results: ClaudeCaseResult[]) => void,
+): Promise<ClaudeCaseResult[] | null> {
+	const results: ClaudeCaseResult[] = [];
+	for (const entry of CLAUDE_CASES) {
+		if (signal.aborted) return null;
+		onProgress(entry.id, [...results]);
+		try {
+			const result = await runClaudeCase({ ...request, case: entry.id }, signal);
+			if (signal.aborted) return null;
+			results.push(result);
+		} catch (error) {
+			if (signal.aborted) return null;
+			throw error;
+		}
+	}
+	return results;
 }
 
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);
