@@ -112,16 +112,16 @@ describe("measureCalls", () => {
 		const replies = [0, 4800, 0, 4800];
 		const prompts = stubFetch(() => new Response(answer(replies.shift()!)));
 		vi.spyOn(crypto, "getRandomValues").mockReturnValueOnce(new Uint32Array([7])).mockReturnValueOnce(new Uint32Array([8]));
-		const base = getQuestion("long-prefix")!.prompt;
+		const question = getQuestion("long-prefix")!;
 
 		const { row, attempts } = await measureCalls(env(true), target, "sk-test-12345678");
-		expect(prompts).toEqual(Array(2).fill(`Measurement 7.\n\n${base}`));
+		expect(prompts).toEqual(Array(2).fill(instantiate(question, 7).prompt));
 		expect(attempts).toHaveLength(2);
 		expect(row).toMatchObject({ cache: { promptTokens: 5000, cachedTokens: 4800 } });
 
 		prompts.length = 0;
 		await measureCalls(env(true), target, "sk-test-12345678");
-		expect(prompts).toEqual(Array(2).fill(`Measurement 8.\n\n${base}`));
+		expect(prompts).toEqual(Array(2).fill(instantiate(question, 8).prompt));
 	});
 
 	it("skips the second call after a failed first one and still records the attempt", async () => {

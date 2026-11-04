@@ -181,7 +181,7 @@ export async function probeRound(
 export async function measureCalls(env: Pick<Env, "HOST_LIMITER">, state: ProbeTarget, key: string): Promise<{ row: MeasureRow | null; attempts: ProbeCapture[] }> {
 	const question = getQuestion(MEASURE_QUESTION);
 	if (!question) return { row: null, attempts: [] };
-	const input = probeInput(state, key, { ...question, prompt: `Measurement ${randomSeed()}.\n\n${question.prompt}` }, DEFAULT_LIMITS);
+	const input = probeInput(state, key, instantiate(question, randomSeed()), DEFAULT_LIMITS);
 	const call = async (): Promise<ProbeResult | null> => {
 		if (!(await env.HOST_LIMITER.limit({ key: state.host })).success) return null;
 		const result = await probe(input);

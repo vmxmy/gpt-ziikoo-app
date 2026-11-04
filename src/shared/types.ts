@@ -9,7 +9,7 @@ export type Scorer =
 
 export type Effort = "low" | "medium" | "high" | "xhigh";
 export type Protocol = "responses" | "chat" | "anthropic";
-export type GeneratorId = "candy" | "pelican";
+export type GeneratorId = "candy" | "pelican" | "prefix";
 
 export type QuestionMeta = {
 	id: string;
