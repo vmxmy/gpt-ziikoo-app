@@ -34,7 +34,8 @@ it("keeps the measurement question out of rotation and long enough to reach ever
 	const q = getQuestion("long-prefix")!;
 	expect(q).toMatchObject({ kind: "metrics", inWatchRotation: false, defaultEffort: "low" });
 	expect(q.scorer).toBeUndefined();
-	expect(q.prompt.length).toBeGreaterThanOrEqual(18_000);
+	// Claude counts about 4.5 characters a token here, and the oldest models need 4096 tokens before they cache.
+	expect(q.prompt.length).toBeGreaterThanOrEqual(21_000);
 	expect(watchQuestions().map((w) => w.id)).not.toContain("long-prefix");
 });
 

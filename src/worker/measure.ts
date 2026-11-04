@@ -4,12 +4,16 @@ import { stat } from "./history.ts";
 import { validCount } from "./parse.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Claude's highest documented caching minimum; a shorter prompt reaching us means a site cut it, so its hit rate says nothing.
+// Claude's highest documented caching minimum; less of the fresh prompt than this means a site cut it or claims it was cached already.
 const MIN_PROMPT_TOKENS = 4096;
 const MIN_ANSWER_TOKENS = 100;
 const MIN_STREAM_MS = 500;
 
-export type MeasureRow = { ts: number; cache: { promptTokens: number; cachedTokens: number } | null; speeds: number[] };
+// Rows stored before the fresh-number prompt carry no version: their cache figure counts input a site adds as hits, so only their speed still holds.
+const CACHE_VERSION = 2;
+
+// cache.promptTokens is the part of the prompt under test; cache.cachedTokens is how much of it the second call no longer sent uncached.
+export type MeasureRow = { ts: number; cache: { promptTokens: number; cachedTokens: number } | null; cacheVersion?: number; speeds: number[] };
 export type MeasureState = { measuredSeq: number | null; rows: MeasureRow[] };
 
 export function applyMeasure(current: MeasureState | undefined, on: boolean | undefined): MeasureState | undefined {
@@ -17,8 +21,13 @@ export function applyMeasure(current: MeasureState | undefined, on: boolean | un
 	return on ? (current ?? { measuredSeq: null, rows: [] }) : undefined;
 }
 
-export function measureDue(measure: MeasureState, { status, seq, intervalMin }: { status: WatchStatus; seq: number; intervalMin: number }): boolean {
-	if (status.kind !== "running") return false;
+// Only after a round that answered on the first try: that round took at most one call's timeout, and the two measurement calls add at most two more,
+// so the newest sample stays within the 10 minutes before a card reads as no data. A struggling site is not worth the spend either.
+export function measureDue(
+	measure: MeasureState,
+	{ status, seq, intervalMin, firstTry }: { status: WatchStatus; seq: number; intervalMin: number; firstTry: boolean },
+): boolean {
+	if (status.kind !== "running" || !firstTry) return false;
 	return measure.measuredSeq === null || seq - measure.measuredSeq >= measureEveryRounds(intervalMin);
 }
 
@@ -32,21 +41,31 @@ function tokensPerSec(r: ProbeResponse): number | null {
 	return answer >= MIN_ANSWER_TOKENS && streamMs >= MIN_STREAM_MS ? answer / (streamMs / 1000) : null;
 }
 
-function cacheFigures(r: ProbeResponse | null): MeasureRow["cache"] {
+function tokenCounts(r: ProbeResponse | null): { prompt: number; cached: number } | null {
 	if (!r?.ok) return null;
-	const promptTokens = validCount(r.promptTokens);
-	const cachedTokens = validCount(r.cachedTokens);
-	if (promptTokens === null || cachedTokens === null || promptTokens < MIN_PROMPT_TOKENS || cachedTokens > promptTokens) return null;
-	return { promptTokens, cachedTokens };
+	const prompt = validCount(r.promptTokens);
+	const cached = validCount(r.cachedTokens);
+	return prompt !== null && cached !== null && cached <= prompt ? { prompt, cached } : null;
 }
 
-// The first call writes the cache, so only the second says anything about hits.
+// The prompt opens with a new number, so the first call cannot have it cached: whatever that call reports cached is input the site adds
+// on its own. Only the rest is under test, and a hit is what the second call no longer had to send uncached. Counting extra reads
+// instead would credit a site that reports more input, and more of it read, on an identical request.
+function cacheFigures(warm: ProbeResponse, hit: ProbeResponse | null): MeasureRow["cache"] {
+	const first = tokenCounts(warm);
+	const second = tokenCounts(hit);
+	if (!first || !second) return null;
+	const promptTokens = first.prompt - first.cached;
+	if (promptTokens < MIN_PROMPT_TOKENS) return null;
+	return { promptTokens, cachedTokens: Math.max(0, promptTokens - (second.prompt - second.cached)) };
+}
+
 export function measureRow(ts: number, warm: ProbeResponse, hit: ProbeResponse | null): MeasureRow {
 	const speeds = [warm, hit].flatMap((r) => {
 		const speed = r && tokensPerSec(r);
 		return speed ? [speed] : [];
 	});
-	return { ts, cache: cacheFigures(hit), speeds };
+	return { ts, cache: cacheFigures(warm, hit), cacheVersion: CACHE_VERSION, speeds };
 }
 
 export function addRow(state: MeasureState, row: MeasureRow, now: number): MeasureState {
@@ -55,7 +74,7 @@ export function addRow(state: MeasureState, row: MeasureRow, now: number): Measu
 
 export function summarizePerf(measure: MeasureState, seq: number, intervalMin: number, now: number): WatchPerf {
 	const rows = measure.rows.filter((r) => r.ts > now - DAY_MS);
-	const caches = rows.flatMap((r) => (r.cache ? [r.cache] : []));
+	const caches = rows.flatMap((r) => (r.cache && r.cacheVersion === CACHE_VERSION ? [r.cache] : []));
 	const prompt = caches.reduce((sum, c) => sum + c.promptTokens, 0);
 	const cached = caches.reduce((sum, c) => sum + c.cachedTokens, 0);
 	const speeds = rows.flatMap((r) => r.speeds);
