@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_CASES, type ClaudeCaseId } from "../../src/shared/claude-cases.ts";
 import { ClaudeCaseRateLimited, runClaudeCase } from "../../src/worker/claude-cases.ts";
@@ -207,6 +208,50 @@ describe("Claude case executor", () => {
 		}
 		expect((await runClaudeCase(input("C4"), fake([() => reply(text(' {"name":"Alice","age":30}'))]).deps)).verdict).toBe("fail");
 		expect((await runClaudeCase(input("C8"), fake([() => reply(text())]).deps)).calls).toHaveLength(1);
+	});
+});
+
+describe("Claude case executor on recorded responses", () => {
+	type Recording = { status: number; headers: { "request-id": string | null }; body: unknown };
+	const recorded = (name: string): Recording => JSON.parse(readFileSync(new URL(`./testdata/claude/${name}.json`, import.meta.url), "utf8"));
+	const replay = (name: string) => () => {
+		const { status, headers, body } = recorded(name);
+		const requestId = headers["request-id"];
+		return new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: requestId === null ? {} : { "request-id": requestId } });
+	};
+
+	it("parses recorded message, stream, cache, and count_tokens responses", async () => {
+		const cases: [ClaudeCaseId, string[], object][] = [
+			["C1", ["message"], { verdict: "pass", source: "bedrock", preview: "OK" }],
+			["C2", ["stream", "stream", "stream"], { verdict: "pass", source: "bedrock", preview: "OK" }],
+			["C9", ["cache-warm", "cache-usage", "cache-usage", "cache-usage", "cache-usage"], { verdict: "pass", note: "freshHit：99.9%、99.9%、99.9%、99.9%；cache_read：0、5531、5531、5531、5531" }],
+			["C10", ["message", "count-tokens"], { verdict: "gap", source: "bedrock", note: "中转未暴露同路径；无法测 Mantle" }],
+			["P2", ["error-missing-max-tokens"], { verdict: "fail" }],
+		];
+		for (const [id, names, expected] of cases) {
+			const result = await runClaudeCase(input(id), fake(names.map(replay)).deps);
+			expect(result, id).toMatchObject(expected);
+			expect(result.calls.map((call) => [call.status, call.requestId]), id).toEqual(names.map((name) => [recorded(name).status, null]));
+			expect(JSON.stringify(result), id).not.toContain("msg_bdrk_");
+		}
+	});
+
+	it("returns the recorded tool_use and thinking blocks unchanged", async () => {
+		const tools = fake([replay("tool-use"), replay("message")]);
+		expect((await runClaudeCase(input("C6"), tools.deps)).verdict).toBe("pass");
+		const toolMessages = tools.requests[1].body.messages as { content: unknown }[];
+		expect(toolMessages[1].content).toEqual((recorded("tool-use").body as { content: unknown }).content);
+		expect(toolMessages[2].content).toEqual([{ type: "tool_result", tool_use_id: "toolu_bdrk_01MR5UWa8dZHATCdSYM9z5AB", content: "Sunny, 20 degrees Celsius." }]);
+
+		const thinking = fake([replay("thinking"), replay("message"), replay("count-tokens")]);
+		expect((await runClaudeCase(input("C8"), thinking.deps)).verdict).toBe("pass");
+		const blocks = (recorded("thinking").body as { content: { signature?: string }[] }).content;
+		const original = (thinking.requests[1].body.messages as { content: { signature?: string }[] }[])[1].content;
+		const altered = (thinking.requests[2].body.messages as { content: { signature?: string }[] }[])[1].content;
+		expect(original).toEqual(blocks);
+		expect(altered[0].signature).toHaveLength(blocks[0].signature!.length);
+		expect([...altered[0].signature!].filter((char, index) => char !== blocks[0].signature![index])).toHaveLength(1);
+		expect(altered[1]).toEqual(blocks[1]);
 	});
 });
 
