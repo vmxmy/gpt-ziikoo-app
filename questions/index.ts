@@ -6,7 +6,6 @@ import candyVarMeta from "./candy-var/meta.json";
 import cialloMeta from "./ciallo/meta.json";
 import cialloPrompt from "./ciallo/prompt.txt?raw";
 import longPrefixMeta from "./long-prefix/meta.json";
-import longPrefixPrompt from "./long-prefix/prompt.txt?raw";
 import pelicanMeta from "./pelican-svg/meta.json";
 import thibaultMeta from "./thibault/meta.json";
 import thibaultPrompt from "./thibault/prompt.txt?raw";
@@ -45,7 +44,7 @@ function isGeneratorId(value: string): value is GeneratorId {
 }
 
 function defineQuestion(meta: RawMeta, prompt?: string): Question {
-	const { status, kind, generator, defaultEffort } = meta;
+	const { status, kind, generator, defaultEffort, scorer, ...details } = meta;
 	if (status !== "active" && status !== "retired") throw new Error(`question ${meta.id}: invalid status`);
 	if (!isOneOf(KINDS, kind)) throw new Error(`question ${meta.id}: invalid kind`);
 	if (defaultEffort !== undefined && !isOneOf(EFFORTS, defaultEffort)) {
@@ -53,10 +52,10 @@ function defineQuestion(meta: RawMeta, prompt?: string): Question {
 	}
 	if (generator !== undefined) {
 		if (!isGeneratorId(generator)) throw new Error(`question ${meta.id}: invalid generator`);
-		return { ...meta, status, kind, generator, defaultEffort, ...GENERATORS[generator](SAMPLE_SEED) };
+		return { ...details, status, kind, generator, defaultEffort, ...GENERATORS[generator](SAMPLE_SEED) };
 	}
 	if (prompt === undefined) throw new Error(`question ${meta.id}: missing prompt`);
-	return { ...meta, status, kind, generator, defaultEffort, scorer: parseScorer(meta.scorer, meta.id), prompt };
+	return { ...details, status, kind, generator, defaultEffort, scorer: parseScorer(scorer, meta.id), prompt };
 }
 
 export const QUESTIONS: readonly Question[] = [
@@ -65,7 +64,7 @@ export const QUESTIONS: readonly Question[] = [
 	defineQuestion(candyVarMeta),
 	defineQuestion(cialloMeta, cialloPrompt),
 	defineQuestion(pelicanMeta),
-	defineQuestion(longPrefixMeta, longPrefixPrompt),
+	defineQuestion(longPrefixMeta),
 ];
 
 export function instantiate(question: Question, seed: number): Question {

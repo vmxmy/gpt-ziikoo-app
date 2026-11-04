@@ -22,6 +22,7 @@ const PRIVACY = [
 const GENERATOR_HINT: Record<GeneratorId, string> = {
 	candy: "每轮的物品、属性和数字都会变，下面是一个示例。",
 	pelican: "每轮的鸟和场景都会变，下面是一个示例。",
+	prefix: "每轮开头的随机数都会变，下面是一个示例。",
 };
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 

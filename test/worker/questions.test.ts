@@ -39,6 +39,20 @@ it("keeps the measurement question out of rotation and long enough to reach ever
 	expect(watchQuestions().map((w) => w.id)).not.toContain("long-prefix");
 });
 
+it.each([0, 7, 8, 4_294_967_295])("long-prefix opens with the number from its seed %i", async (seed) => {
+	const question = instantiate(getQuestion("long-prefix")!, seed);
+	const opening = `Measurement ${seed}.\n\n`;
+	expect(question).toMatchObject({ version: 2, generator: "prefix" });
+	expect(question).not.toHaveProperty("scorer");
+	expect(question.prompt.startsWith(opening)).toBe(true);
+	const catalogue = question.prompt.slice(opening.length);
+	const bytes = new TextEncoder().encode(catalogue);
+	expect(bytes.byteLength).toBe(21_432);
+	const digest = await crypto.subtle.digest("SHA-256", bytes);
+	expect(Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")).toBe("506b046877a60f27209864cf536876d5c2f3dcf144bd4d91d6cb68bc85531ba0");
+	expect(instantiate(question, seed).prompt).toBe(question.prompt);
+});
+
 it("lists only active questions", () => {
 	expect(activeQuestions().map((q) => q.id)).toEqual(["thibault", "candy", "candy-var", "ciallo", "pelican-svg", "long-prefix"]);
 });
