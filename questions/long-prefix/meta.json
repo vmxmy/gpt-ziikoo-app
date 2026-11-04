@@ -1,6 +1,6 @@
 {
   "id": "long-prefix",
-  "version": 1,
+  "version": 2,
   "status": "active",
   "title": "缓存与速度测量",
   "measures": "只用于持续监测的测量：算缓存命中率与输出速度，不评分",

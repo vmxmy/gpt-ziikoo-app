@@ -23,7 +23,7 @@ const ok = (over: Partial<Extract<ProbeResponse, { ok: true }>> = {}): ProbeResp
 	...over,
 });
 const failed: ProbeResponse = { ok: false, reason: "timeout", httpStatus: null };
-const running = { status: { kind: "running" } as const, seq: 40, intervalMin: 5 };
+const running = { status: { kind: "running" } as const, seq: 40, intervalMin: 5, firstTry: true };
 
 describe("applyMeasure", () => {
 	const state = { measuredSeq: 3, rows: [] };
@@ -47,26 +47,55 @@ describe("measureDue", () => {
 		expect(measureDue({ measuredSeq: 34, rows: [] }, { ...running, intervalMin: 30 })).toBe(true);
 		expect(measureDue({ measuredSeq: null, rows: [] }, { ...running, status: { kind: "paused" } })).toBe(false);
 	});
+
+	it("waits for a round that answered on the first try, so a struggling site is not measured", () => {
+		expect(measureDue({ measuredSeq: null, rows: [] }, { ...running, firstTry: false })).toBe(false);
+		expect(measureDue({ measuredSeq: 4, rows: [] }, { ...running, firstTry: false })).toBe(false);
+	});
 });
 
 describe("measureRow", () => {
-	it("reads the cache from the second call only and the speed from both", () => {
-		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ outputTokens: 900, reasoningTokens: 100 }))).toEqual({
+	it("reads the cache on the part the first call had not cached, and the speed from both calls", () => {
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: 4900, outputTokens: 900, reasoningTokens: 100 }))).toEqual({
 			ts: NOW,
-			cache: { promptTokens: 5000, cachedTokens: 4000 },
+			cache: { promptTokens: 5000, cachedTokens: 4900 },
 			speeds: [200, 400],
 		});
 	});
 
-	it("gives no cache figure for a missing field, a failed call or a prompt below the caching threshold", () => {
-		expect(measureRow(NOW, ok(), ok({ cachedTokens: null })).cache).toBeNull();
-		expect(measureRow(NOW, ok(), failed).cache).toBeNull();
-		expect(measureRow(NOW, ok(), null).cache).toBeNull();
-		expect(measureRow(NOW, ok(), ok({ promptTokens: 4095, cachedTokens: 0 })).cache).toBeNull();
+	it("leaves out the input a site adds and caches on its own", () => {
+		const warm = ok({ promptTokens: 22000, cachedTokens: 17000 });
+		expect(measureRow(NOW, warm, ok({ promptTokens: 22000, cachedTokens: 22000 })).cache).toEqual({ promptTokens: 5000, cachedTokens: 5000 });
+	});
+
+	it("counts as hits only what the second call no longer sent uncached, so reads a site adds on top do not count", () => {
+		expect(measureRow(NOW, ok({ promptTokens: 20216, cachedTokens: 14946 }), ok({ promptTokens: 28761, cachedTokens: 23967 })).cache).toEqual({
+			promptTokens: 5270,
+			cachedTokens: 476,
+		});
+		expect(measureRow(NOW, ok({ promptTokens: 22013, cachedTokens: 17687 }), ok({ promptTokens: 23068, cachedTokens: 17916 })).cache).toEqual({
+			promptTokens: 4326,
+			cachedTokens: 0,
+		});
+	});
+
+	it("counts no fewer hits than none", () => {
+		expect(measureRow(NOW, ok({ promptTokens: 9000, cachedTokens: 3000 }), ok({ promptTokens: 9000, cachedTokens: 1000 })).cache).toEqual({
+			promptTokens: 6000,
+			cachedTokens: 0,
+		});
+	});
+
+	it("gives no cache figure for a missing field, a failed call, or a first call that already had the fresh prompt cached", () => {
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: null })).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: null }), ok()).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), failed).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), null).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: 905 }), ok()).cache).toBeNull();
 	});
 
 	it("keeps a zero cache hit as a figure", () => {
-		expect(measureRow(NOW, ok(), ok({ cachedTokens: 0 })).cache).toEqual({ promptTokens: 5000, cachedTokens: 0 });
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: 0 })).cache).toEqual({ promptTokens: 5000, cachedTokens: 0 });
 	});
 
 	it("gives no speed for a short answer, a buffered stream or a failure", () => {
@@ -76,7 +105,8 @@ describe("measureRow", () => {
 
 	it("ignores figures a site made up", () => {
 		expect(measureRow(NOW, ok({ outputTokens: 1e12 }), ok({ promptTokens: -5 }))).toEqual({ ts: NOW, cache: null, speeds: [200] });
-		expect(measureRow(NOW, ok(), ok({ cachedTokens: 6000 })).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: 6000 })).cache).toBeNull();
+		expect(measureRow(NOW, ok({ cachedTokens: 6000 }), ok()).cache).toBeNull();
 	});
 });
 

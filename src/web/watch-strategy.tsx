@@ -126,7 +126,7 @@ export function WatchStrategyFields<I extends number>({ testPrefix: t, strategy,
 							<span>同时测缓存命中率和输出速度</span>
 						</label>
 						<p class="muted small">
-							每 {measureEveryRounds(intervalMin)} 轮测一次，约每 3 小时。每天多 {measureDailyCalls(intervalMin)} 次调用，约多用 8 万 token，消耗这把密钥的额度。
+							每 {measureEveryRounds(intervalMin)} 轮测一次，约每 3 小时。每天多 {measureDailyCalls(intervalMin)} 次调用，按题面估算约多用 8 万 token，不含站点额外加的输入，消耗这把密钥的额度。
 						</p>
 					</div>
 				</div>

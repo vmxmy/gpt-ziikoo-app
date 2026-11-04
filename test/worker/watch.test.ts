@@ -95,7 +95,8 @@ describe("measureCalls", () => {
 
 	const target = { origin: "https://relay.example", host: "relay.example", protocol: "responses" as const, model: "m" };
 	const env = (success: boolean) => ({ HOST_LIMITER: { limit: async () => ({ success }) } });
-	const answer = JSON.stringify({ id: "resp_1", output: [{ type: "message", content: [{ type: "output_text", text: "1" }] }], usage: { input_tokens: 5000, output_tokens: 300, input_tokens_details: { cached_tokens: 4000 } } });
+	const answer = (cached: number) =>
+		JSON.stringify({ id: "resp_1", output: [{ type: "message", content: [{ type: "output_text", text: "1" }] }], usage: { input_tokens: 5000, output_tokens: 300, input_tokens_details: { cached_tokens: cached } } });
 
 	function stubFetch(reply: () => Response): unknown[] {
 		const prompts: unknown[] = [];
@@ -107,12 +108,20 @@ describe("measureCalls", () => {
 		return prompts;
 	}
 
-	it("sends the long prefix twice, the first call warming the cache", async () => {
-		const prompts = stubFetch(() => new Response(answer));
+	it("sends the long prefix twice under a fresh number, the first call warming the cache", async () => {
+		const replies = [0, 4800, 0, 4800];
+		const prompts = stubFetch(() => new Response(answer(replies.shift()!)));
+		vi.spyOn(crypto, "getRandomValues").mockReturnValueOnce(new Uint32Array([7])).mockReturnValueOnce(new Uint32Array([8]));
+		const base = getQuestion("long-prefix")!.prompt;
+
 		const { row, attempts } = await measureCalls(env(true), target, "sk-test-12345678");
-		expect(prompts).toEqual(Array(2).fill(getQuestion("long-prefix")!.prompt));
+		expect(prompts).toEqual(Array(2).fill(`Measurement 7.\n\n${base}`));
 		expect(attempts).toHaveLength(2);
-		expect(row).toMatchObject({ cache: { promptTokens: 5000, cachedTokens: 4000 } });
+		expect(row).toMatchObject({ cache: { promptTokens: 5000, cachedTokens: 4800 } });
+
+		prompts.length = 0;
+		await measureCalls(env(true), target, "sk-test-12345678");
+		expect(prompts).toEqual(Array(2).fill(`Measurement 8.\n\n${base}`));
 	});
 
 	it("skips the second call after a failed first one and still records the attempt", async () => {
@@ -124,7 +133,7 @@ describe("measureCalls", () => {
 	});
 
 	it("records nothing when the rate limit refuses the first call", async () => {
-		const prompts = stubFetch(() => new Response(answer));
+		const prompts = stubFetch(() => new Response(answer(0)));
 		expect(await measureCalls(env(false), target, "sk-test-12345678")).toEqual({ row: null, attempts: [] });
 		expect(prompts).toEqual([]);
 	});

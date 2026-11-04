@@ -249,7 +249,7 @@ curl -s https://gpt.ziikoo.app/api/probe \
 
 - `usage` 是累计用量。`since` 是开始计数的时间。`calls` 是发出的调用次数，含重试。`unmetered` 是可能已扣额度但没有返回可用用量的调用次数。`outputTokens` 含 `reasoningTokens`，`promptTokens` 含 `cachedTokens`。这项上线前建的监测在跑完下一轮之前是 `null`。
 - `measure` 为 `true` 时开启缓存与速度测量，默认关闭，传 `false` 时关闭并清除结果。测量约每 3 小时一次，次数由间隔算出，每次多发 2 次长调用，消耗这把密钥的额度。
-- `perf` 是 24 小时内的测量结果，未开启时是 `null`。`cacheHitPct` 只看每次测量的第 2 次调用。`tokensPerSec` 是回答 token 数除以首字到结束时长的中位数。`nextInRounds` 是距下次测量的轮数。这些是参考值，不参与 `state` 的判定。站点没有返回可用数据时，`cacheHitPct`、`tokensPerSec` 是 `null`。
+- `perf` 是 24 小时内的测量结果，未开启时是 `null`。每次测量的题面开头带一个新的随机数。`cacheHitPct` 的分母是第 1 次没有缓存的输入 token 数，分子是它减去第 2 次仍没有缓存的输入 token 数（最低为 0）。站点自己加并缓存的输入不算在内。`tokensPerSec` 是回答 token 数除以首字到结束时长的中位数。`nextInRounds` 是距下次测量的轮数。这些是参考值，不参与 `state` 的判定。站点没有返回可用数据时，`cacheHitPct`、`tokensPerSec` 是 `null`。
 
 `state` 是 `operational`、`fair`、`quality`、`degraded`、`down`、`insufficient` 或 `no_data`。
 

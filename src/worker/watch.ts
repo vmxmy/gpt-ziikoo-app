@@ -4,7 +4,7 @@ import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
 import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
 import { addRow, applyMeasure, measureDue, measureRow, summarizePerf, type MeasureRow, type MeasureState } from "./measure.ts";
-import { DEFAULT_LIMITS, defaultEffort, MAX_BODY_BYTES, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";
+import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";
 import { readUsage, validCount } from "./parse.ts";
 import type { WatchCreateCommand } from "./request.ts";
 
@@ -15,8 +15,6 @@ const MAX_SAMPLES = 1440;
 const RETRIES = 3;
 const UNAUTHORIZED_LIMIT = 5;
 const MEASURE_QUESTION = "long-prefix";
-// With a hung round of 8 minutes, two calls at this limit keep a watch's newest sample within the 10 minutes before it reads as no data.
-const MEASURE_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 60_000 };
 const TRANSIENT: readonly FailReason[] = ["timeout", "upstream_error", "bad_response"];
 
 const encoder = new TextEncoder();
@@ -179,10 +177,11 @@ export async function probeRound(
 }
 
 // Never retried, so a measurement costs at most two calls. Without a warm cache the second call would prove nothing, so a failed first call ends it.
+// Both calls open with the same new number, so nothing cached before, by the site or by an earlier measurement, can pass for a hit.
 export async function measureCalls(env: Pick<Env, "HOST_LIMITER">, state: ProbeTarget, key: string): Promise<{ row: MeasureRow | null; attempts: ProbeCapture[] }> {
 	const question = getQuestion(MEASURE_QUESTION);
 	if (!question) return { row: null, attempts: [] };
-	const input = probeInput(state, key, question, MEASURE_LIMITS);
+	const input = probeInput(state, key, { ...question, prompt: `Measurement ${randomSeed()}.\n\n${question.prompt}` }, DEFAULT_LIMITS);
 	const call = async (): Promise<ProbeResult | null> => {
 		if (!(await env.HOST_LIMITER.limit({ key: state.host })).success) return null;
 		const result = await probe(input);
@@ -319,11 +318,11 @@ export class Watch extends DurableObject<Env> {
 		this.addSample(toSample(Date.now(), round.question, round.response));
 		const next: WatchState = { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) };
 		await this.ctx.storage.put(STATE_KEY, next);
-		await this.runMeasure(next, key);
+		await this.runMeasure(next, key, round.attempts.length === 1 && round.response.ok);
 	}
 
-	private async runMeasure(state: WatchState, key: string): Promise<void> {
-		if (!state.measure || !measureDue(state.measure, state)) return;
+	private async runMeasure(state: WatchState, key: string, firstTry: boolean): Promise<void> {
+		if (!state.measure || !measureDue(state.measure, { ...state, firstTry })) return;
 		// Written before the calls, so a crash midway cannot spend them a second time.
 		await this.ctx.storage.put(STATE_KEY, { ...state, measure: { ...state.measure, measuredSeq: state.seq } });
 		const { row, attempts } = await measureCalls(this.env, state, key);

@@ -143,7 +143,7 @@ function PerfMetrics({ t, perf, intervalMin }: { t: string; perf: WatchPerf; int
 		<>
 			<dl class="metrics">
 				<div>
-					<dt title="24 小时内，每次测量第 2 次调用的缓存 token 数除以输入 token 数">缓存命中率</dt>
+					<dt title="24 小时内，题面在第 2 次调用里从缓存读取的比例，站点自己加的输入不算在内">缓存命中率</dt>
 					<dd class="num" data-testid={`${t}-cache-hit`}>
 						{pct(perf.cacheHitPct)}
 					</dd>

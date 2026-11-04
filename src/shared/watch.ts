@@ -30,7 +30,7 @@ export const WATCH_STRATEGIES: readonly WatchStrategy[] = [
 	{ id: "authenticity", label: "真伪核查", answers: "模型是不是一直是原装？", intervalMin: 5, questions: ["thibault", "candy", "candy-var", "ciallo"], measure: false },
 	{ id: "saver", label: "省额度值守", answers: "密钥还正常吗，模型有没有变笨？", intervalMin: 30, questions: ["thibault", "candy-var"], measure: false },
 	{ id: "line", label: "线路值守", answers: "站点断了没有？", note: "不推送告警，要打开看板查看。", intervalMin: 1, questions: ["thibault"], measure: false },
-	{ id: "compare", label: "选型对比", answers: "这个站点能不能用，多快？", note: "含缓存与速度测量，约多用 8 万 token。", intervalMin: 5, questions: ["thibault", "candy-var"], measure: true },
+	{ id: "compare", label: "选型对比", answers: "这个站点能不能用，多快？", note: "含缓存与速度测量，按题面估算约多用 8 万 token。", intervalMin: 5, questions: ["thibault", "candy-var"], measure: true },
 ];
 
 export const matchStrategy = ({ intervalMin, questions, measure }: { intervalMin: number; questions: readonly string[]; measure: boolean }): WatchStrategy | undefined =>

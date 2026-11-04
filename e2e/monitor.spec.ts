@@ -237,7 +237,9 @@ test("开启测量后下一轮显示缓存命中率与输出速度", async ({ pa
 		const id = await lastCardId(page);
 		await expect(page.getByTestId(`custom-${id}-perf-note`)).toContainText("下一轮开始首次测量");
 		await expect(page.getByTestId(`custom-${id}-checks`)).toHaveText("1", { timeout: 150_000 });
-		await expect(page.getByTestId(`custom-${id}-cache-hit`)).toHaveText("90.0%");
+		// mock-measure reports the same share cached on both calls, as if the fresh prompt were cached before it was sent, so it is left out.
+		await expect(page.getByTestId(`custom-${id}-cache-hit`)).toHaveText("—");
+		await expect(page.getByTestId(`custom-${id}-perf-note`)).toContainText("站点没有返回可用的缓存数据");
 		await expect(page.getByTestId(`custom-${id}-speed`)).toHaveText(/\d+ token\/秒/);
 		await page.getByTestId(`custom-${id}-edit`).click();
 		await page.getByTestId(`custom-${id}-measure`).uncheck();
