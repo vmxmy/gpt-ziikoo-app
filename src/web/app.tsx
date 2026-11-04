@@ -5,6 +5,7 @@ import { CustomQuestionForm } from "./custom-question.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { HtmlTest } from "./html-test.tsx";
+import { PerfTest } from "./perf-test.tsx";
 import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
@@ -22,6 +23,7 @@ const PRIVACY = [
 const GENERATOR_HINT: Record<GeneratorId, string> = {
 	candy: "每轮的物品、属性和数字都会变，下面是一个示例。",
 	pelican: "每轮的鸟和场景都会变，下面是一个示例。",
+	prefix: "每轮开头的随机数都会变，下面是一个示例。",
 };
 const KIND_LABEL: Record<QuestionListItem["kind"], string> = { knowledge: "知识", reasoning: "推理", metrics: "度量" };
 
@@ -167,12 +169,13 @@ function SiteHeader() {
 	);
 }
 
-type TabId = "live" | "html" | "watch";
+type TabId = "live" | "html" | "watch" | "perf";
 
 // The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
 function useTab(): [TabId, (tab: TabId) => void] {
 	const read = (): TabId => {
 		if (location.hash === "#html") return "html";
+		if (location.hash === "#perf") return "perf";
 		return location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live";
 	};
 	const [tab, setTab] = useState<TabId>(read);
@@ -191,6 +194,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 		["live", "实时测试"],
 		["html", "HTML 生成"],
 		["watch", "持续监测"],
+		["perf", "性能测试"],
 	];
 	return (
 		<div class="tabs" role="tablist" aria-label="测试方式">
@@ -274,7 +278,7 @@ export function App() {
 		<div class="container">
 			<SiteHeader />
 			<Tabs tab={tab} onSwitch={switchTab} />
-			{/* Live and HTML stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
+			{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 			<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
 				<details class="privacy">
 					<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
@@ -297,6 +301,9 @@ export function App() {
 			</div>
 			<div id="html-pane" role="tabpanel" aria-labelledby="tab-html" hidden={tab !== "html"}>
 				<HtmlTest />
+			</div>
+			<div id="perf-pane" role="tabpanel" aria-labelledby="tab-perf" hidden={tab !== "perf"}>
+				<PerfTest />
 			</div>
 			{tab === "watch" && (
 				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">

@@ -1,11 +1,10 @@
+import { freshHit } from "../shared/cache-hit.ts";
 import type { ProbeResponse } from "../shared/types.ts";
 import { measureEveryRounds, type WatchPerf, type WatchStatus } from "../shared/watch.ts";
 import { stat } from "./history.ts";
 import { validCount } from "./parse.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Claude's highest documented caching minimum; less of the fresh prompt than this means a site cut it or claims it was cached already.
-const MIN_PROMPT_TOKENS = 4096;
 const MIN_ANSWER_TOKENS = 100;
 const MIN_STREAM_MS = 500;
 
@@ -41,31 +40,12 @@ function tokensPerSec(r: ProbeResponse): number | null {
 	return answer >= MIN_ANSWER_TOKENS && streamMs >= MIN_STREAM_MS ? answer / (streamMs / 1000) : null;
 }
 
-function tokenCounts(r: ProbeResponse | null): { prompt: number; cached: number } | null {
-	if (!r?.ok) return null;
-	const prompt = validCount(r.promptTokens);
-	const cached = validCount(r.cachedTokens);
-	return prompt !== null && cached !== null && cached <= prompt ? { prompt, cached } : null;
-}
-
-// The prompt opens with a new number, so the first call cannot have it cached: whatever that call reports cached is input the site adds
-// on its own. Only the rest is under test, and a hit is what the second call no longer had to send uncached. Counting extra reads
-// instead would credit a site that reports more input, and more of it read, on an identical request.
-function cacheFigures(warm: ProbeResponse, hit: ProbeResponse | null): MeasureRow["cache"] {
-	const first = tokenCounts(warm);
-	const second = tokenCounts(hit);
-	if (!first || !second) return null;
-	const promptTokens = first.prompt - first.cached;
-	if (promptTokens < MIN_PROMPT_TOKENS) return null;
-	return { promptTokens, cachedTokens: Math.max(0, promptTokens - (second.prompt - second.cached)) };
-}
-
 export function measureRow(ts: number, warm: ProbeResponse, hit: ProbeResponse | null): MeasureRow {
 	const speeds = [warm, hit].flatMap((r) => {
 		const speed = r && tokensPerSec(r);
 		return speed ? [speed] : [];
 	});
-	return { ts, cache: cacheFigures(warm, hit), cacheVersion: CACHE_VERSION, speeds };
+	return { ts, cache: freshHit(warm, hit), cacheVersion: CACHE_VERSION, speeds };
 }
 
 export function addRow(state: MeasureState, row: MeasureRow, now: number): MeasureState {
