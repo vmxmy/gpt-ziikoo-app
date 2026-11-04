@@ -78,10 +78,11 @@ async function loadRun(send: Send, offsets: number[], signal: AbortSignal, onCou
 			halt.abort();
 			return { stop: outcome };
 		}
+		const returnedAt = performance.now();
 		const response = outcome.kind === "response" ? outcome.response : null;
 		counts = { ...counts, returned: counts.returned + 1, failed: counts.failed + (response?.ok ? 0 : 1) };
 		onCount(counts);
-		return { sample: { sentAt, response } };
+		return { sample: { sentAt, returnedAt, response } };
 	};
 	const fired = await Promise.all(offsets.map(fire));
 	signal.removeEventListener("abort", onAbort);

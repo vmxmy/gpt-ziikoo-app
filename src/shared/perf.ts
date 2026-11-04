@@ -5,7 +5,8 @@ export const PERF_QPS = [0.5, 1] as const;
 export const PERF_DURATIONS = [30, 60] as const;
 
 export type PerfConfig = { qps: (typeof PERF_QPS)[number]; durationSec: (typeof PERF_DURATIONS)[number] };
-export type PerfSample = { sentAt: number; response: ProbeResponse | null };
+// sentAt and returnedAt come from the browser clock, so the window spans the whole round trip of every call.
+export type PerfSample = { sentAt: number; returnedAt: number; response: ProbeResponse | null };
 export type PerfCriterion = {
 	id: "cache" | "success" | "ttft" | "tpot" | "tpm";
 	verdict: "pass" | "fail" | "na";
@@ -84,11 +85,8 @@ function criteria(s: Omit<PerfSummary, "criteria" | "verdict">): PerfCriterion[]
 }
 
 export function summarizeLoad(warm: ProbeResponse | null, samples: PerfSample[], _config: PerfConfig): PerfSummary {
-	const done = samples.flatMap((s) => (s.response?.ok ? [{ sentAt: s.sentAt, response: s.response }] : []));
-	const oks = done.map((d) => d.response);
-	const start = Math.min(...samples.map((s) => s.sentAt));
-	const end = Math.max(...samples.map((s) => s.sentAt), ...done.map((d) => d.sentAt + d.response.totalMs));
-	const windowMs = samples.length === 0 ? 0 : end - start;
+	const oks = samples.flatMap((s) => (s.response?.ok ? [s.response] : []));
+	const windowMs = samples.length === 0 ? 0 : Math.max(...samples.map((s) => s.returnedAt)) - Math.min(...samples.map((s) => s.sentAt));
 	const inputTpm = perMinute(oks.map((r) => r.promptTokens), windowMs);
 	const outputTpm = perMinute(oks.map((r) => r.outputTokens), windowMs);
 	const hits = samples.flatMap((s) => {

@@ -25,10 +25,10 @@ const WARM = ok({ prompt: 10_000, cached: 0, output: 300, reasoning: 0, ttft: 10
 const CONFIG = { qps: 1, durationSec: 30 } as const;
 
 const SAMPLES: PerfSample[] = [
-	{ sentAt: 1000, response: ok({ prompt: 10_000, cached: 9500, output: 300, reasoning: 100, ttft: 2000, total: 6000 }) },
-	{ sentAt: 2000, response: ok({ prompt: 10_000, cached: 9000, output: 101, reasoning: null, ttft: 1000, total: 3000 }) },
-	{ sentAt: 3000, response: ok({ prompt: 10_000, cached: 10_000, output: 1, reasoning: 0, ttft: 500, total: 4000 }) },
-	{ sentAt: 4000, response: null },
+	{ sentAt: 1000, returnedAt: 7000, response: ok({ prompt: 10_000, cached: 9500, output: 300, reasoning: 100, ttft: 2000, total: 6000 }) },
+	{ sentAt: 2000, returnedAt: 5000, response: ok({ prompt: 10_000, cached: 9000, output: 101, reasoning: null, ttft: 1000, total: 3000 }) },
+	{ sentAt: 3000, returnedAt: 7000, response: ok({ prompt: 10_000, cached: 10_000, output: 1, reasoning: 0, ttft: 500, total: 4000 }) },
+	{ sentAt: 4000, returnedAt: 5000, response: null },
 ];
 
 describe("sendOffsets", () => {
@@ -58,12 +58,20 @@ describe("summarizeLoad", () => {
 		expect(summarizeLoad(WARM, SAMPLES.slice(0, 3), CONFIG).verdict).toBe("pass");
 	});
 
+	it("ends the window at the last return, failed calls included", () => {
+		const late: PerfSample[] = [
+			{ sentAt: 0, returnedAt: 1000, response: ok({ prompt: 10_000, cached: 0, output: 10, reasoning: 0, ttft: 500, total: 900 }) },
+			{ sentAt: 1000, returnedAt: 121_000, response: null },
+		];
+		expect(summarizeLoad(WARM, late, CONFIG)).toMatchObject({ windowMs: 121_000, rpm: 120_000 / 121_000, inputTpm: 600_000_000 / 121_000 });
+	});
+
 	it("never passes a criterion it has no data for", () => {
 		const s = summarizeLoad(null, SAMPLES.slice(0, 3), CONFIG);
 		expect(s.cacheHitRate).toBeNull();
 		expect(s.criteria.find((c) => c.id === "cache")).toMatchObject({ verdict: "fail", value: null });
 		expect(s.verdict).toBe("fail");
-		const empty = summarizeLoad(WARM, [{ sentAt: 0, response: null }], CONFIG);
+		const empty = summarizeLoad(WARM, [{ sentAt: 0, returnedAt: 100, response: null }], CONFIG);
 		expect(empty.criteria.map((c) => c.verdict)).toEqual(["fail", "fail", "fail", "fail", "na"]);
 		expect(empty).toMatchObject({ inputTpm: null, totalTpm: null, maxLatencyMs: null, latencyMs: { avg: null, p50: null, p90: null } });
 	});
