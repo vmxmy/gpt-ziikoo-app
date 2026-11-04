@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "headers": {
+    "request-id": null
+  },
+  "body": {
+    "model": "claude-sonnet-4-6",
+    "id": "msg_bdrk_htbwcdzqcmulj27i4pfrphior2p2dho7xcyzhlx6sava2a5ysnxa",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "17 × 23\n\nI can break this down:\n17 × 23 = 17 × 20 + 17 × 3\n= 340 + 51\n= 391",
+        "signature": "EvMCCsABCBMYAipA2Ija8mNjFvTWR7weEnLb8JlJQmjzZj6LU73yQIJluxoLz4kxvFQVBO8yu+7FB6/jQTSlfUjjrjhWr5ssaSyRMzIRY2xhdWRlLXNvbm5ldC00LTY4AEIIdGhpbmtpbmdaJDdlZDQzNDI4LWZlN2UtNDg1Zi1iMmNlLTM3M2I1MzZkMjk1NXIQh+R06t5EYnO3XO97YvKThYgBAZoBEwoRY2xhdWRlLXNvbm5ldC00LTaoAff9rNcGsAECEgwTseZZV3Yb/2SDAu8aDM3g+mQ4RO4zCZd2/CIwj1Wk6zvQBc3q42L7rriF7B+vI22vpiJMu981UJ61o5fuRvhK36D3KBjAnkn9FXq9KmDhGz6jrU6G62D8k01kQCzg/qdchBcrwaIF3EEAY29qgsn+Paq3dLEtKdqXnBsNQjqbYXta4NA/ImwSPbCJuEAMbYD0I3gjQjwgiu/MHBvUEv/wnEHY5JvwIb0Mym0F6c8YAQ=="
+      },
+      {
+        "type": "text",
+        "text": "## Working Through 17 × 23\n\nI'll break it apart to make it easier:\n\n**17 × 20** = 340\n**17 × 3** = 51\n\n**340 + 51 = 391**"
+      }
+    ],
+    "container": null,
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+      "input_tokens": 21,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 118,
+      "output_tokens_details": {
+        "thinking_tokens": 59
+      },
+      "service_tier": "standard"
+    }
+  }
+}

@@ -16,6 +16,7 @@
 | GET | `/api/questions` | 题目清单 |
 | POST | `/api/probe` | 用一道题调用站点一次 |
 | POST | `/api/models` | 读取站点的模型列表 |
+| POST | `/api/claude-case` | 执行一个服务端固定的 Claude 专项用例 |
 | POST | `/api/history` | 读取最近几轮的判定与指标 |
 | POST | `/api/history/raw` | 读取一轮全部调用的原始数据 |
 | POST | `/api/history/delete` | 删除这个站点与密钥的全部历史 |
@@ -29,6 +30,32 @@
 | POST | `/api/board/move` | 合并看板 |
 | POST | `/api/board/order` | 保存看板里的顺序 |
 | GET | `/api/frame` | 「播放动画」用的沙箱宿主页，供页面使用，脚本不需要调用 |
+
+## POST /api/claude-case
+
+请求体为 `{ "site": "https://api.example.com", "key": "调用方密钥", "model": "claude-sonnet-4-6", "case": "C1" }`。站点、密钥、模型的校验同 `/api/probe`；`case` 只接受 C1 到 C10、P1 到 P3。调用方不能修改题面、工具或其他上游参数。
+
+协议固定为 Anthropic，仅访问 `POST /v1/messages`、`POST /v1/messages/count_tokens`、`GET /v1/models`，禁止跟随重定向。先过 IP 限速，每次上游调用前再过站点限速，任一步被限速返回 429。结果不落库，不进入历史或持续监测。
+
+| 用例 | 请求与通过条件 |
+| --- | --- |
+| C1 | 非流式要求只回答 OK，`max_tokens=32`；200 且有 `type=message`、`content`、`usage` |
+| C2 | 三次流式请求，每次 200 且依次收到 `message_start`、`text_delta`、`message_stop`；note 记录三次首字耗时 |
+| C3 | 固定 8×8 纯红 PNG，200 且回答含 red |
+| C4 | `output_config.format` 指定 name、age 的 JSON Schema，200 且回答严格等于 `{"name":"Alice","age":30}` |
+| C5 | 强制调用 get_weather；模型名含 `opus-5-5` 或 `sonnet-5-5` 时应返回 400，其余 200 |
+| C6 | 先调 get_weather，再回传 tool_result；两轮 200，第一轮有 tool_use |
+| C7 | `thinking.type=disabled`，状态码条件同 C5 |
+| C8 | adaptive thinking 取得签名后原样回传应为 200，改一个字符再回传应为 4xx |
+| C9 | 本轮随机 long-prefix 加 cache_control 连发五次，第 2 到 5 次新鲜缓存命中率均至少 90%；note 同时列出站点报的 cache_read |
+| C10 | 先发一次与 C1 相同的 `/v1/messages` 取消息来源，再调 `/v1/messages/count_tokens`；结论只看 count_tokens：200 且 input_tokens 大于 0 为通过，404 记 gap，note 写「中转未暴露同路径」；消息来源为 bedrock 时加「无法测 Mantle」 |
+| P1 | 模型列表包含目标模型 |
+| P2 | 故意缺 max_tokens，返回 4xx 且 request-id 以 req_ 开头或 JSON 含 request_id 字段 |
+| P3 | 恒为 untested，note 写「批量接口会创建异步任务并计费，本站不测」，不发上游请求 |
+
+响应为 `{ id, verdict, note, preview, source, calls }`，用例判定返回 HTTP 200；`verdict` 是 `pass`、`fail`、`gap`、`untested` 之一。`preview` 在脱敏后只保留前 70 字，或为 null。`source` 仅为 anthropic、bedrock、vertex、other 或 null，按消息 id 的 `msg_01`、`msg_bdrk_`、`msg_vrtx_` 前缀分类，不返回消息 id。
+
+`calls` 每项为 `{ status, requestId, ms }`。状态码、请求标识可为 null，耗时单位毫秒；请求标识仅接受 `^[A-Za-z0-9_-]{1,128}$`，包含密钥时同样不返回。响应不包含完整回答、原始响应或签名。日志只含主机名、用例 id、结论、状态码、延迟。
 
 ## 错误
 

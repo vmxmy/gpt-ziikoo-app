@@ -1,4 +1,5 @@
 import { getQuestion, instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
+import { CLAUDE_CASES, type ClaudeCaseId } from "../shared/claude-cases.ts";
 import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchChange, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
@@ -23,6 +24,7 @@ export type ProbeCommand = {
 };
 
 export type HistoryCommand = { origin: string; key: string };
+export type ClaudeCaseCommand = HistoryCommand & { host: string; model: string; case: ClaudeCaseId };
 
 const PROTOCOLS: readonly Protocol[] = ["responses", "chat", "anthropic"];
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
@@ -60,6 +62,17 @@ function parseTarget(f: Record<string, unknown>): Result<HistoryCommand & { host
 function inCodePoints(value: string, max: number): boolean {
 	const n = [...value].length;
 	return n >= 1 && n <= max;
+}
+
+export function parseClaudeCaseRequest(body: unknown): Result<ClaudeCaseCommand> {
+	const f = fields(body);
+	if (!f) return bad("请求体必须是 JSON 对象");
+	const target = parseTarget(f);
+	if (!target.ok) return target;
+	if (typeof f.model !== "string" || f.model.trim() === "" || f.model.length > MAX_MODEL_LENGTH) return bad("model 必须是 1 到 100 个字符");
+	const entry = CLAUDE_CASES.find((entry) => entry.id === f.case);
+	if (!entry) return bad("case 必须是 C1 到 C10 或 P1 到 P3");
+	return { ok: true, value: { ...target.value, model: f.model, case: entry.id } };
 }
 
 function parseCustom(raw: unknown): Result<CustomQuestion> {
