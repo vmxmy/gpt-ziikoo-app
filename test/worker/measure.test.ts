@@ -59,6 +59,7 @@ describe("measureRow", () => {
 		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: 4900, outputTokens: 900, reasoningTokens: 100 }))).toEqual({
 			ts: NOW,
 			cache: { promptTokens: 5000, cachedTokens: 4900 },
+			cacheVersion: 2,
 			speeds: [200, 400],
 		});
 	});
@@ -100,18 +101,18 @@ describe("measureRow", () => {
 
 	it("gives no speed for a short answer, a buffered stream or a failure", () => {
 		expect(measureRow(NOW, ok({ outputTokens: 199 }), ok({ ttftMs: 2600 })).speeds).toEqual([]);
-		expect(measureRow(NOW, failed, null)).toEqual({ ts: NOW, cache: null, speeds: [] });
+		expect(measureRow(NOW, failed, null)).toEqual({ ts: NOW, cache: null, cacheVersion: 2, speeds: [] });
 	});
 
 	it("ignores figures a site made up", () => {
-		expect(measureRow(NOW, ok({ outputTokens: 1e12 }), ok({ promptTokens: -5 }))).toEqual({ ts: NOW, cache: null, speeds: [200] });
+		expect(measureRow(NOW, ok({ outputTokens: 1e12 }), ok({ promptTokens: -5 }))).toEqual({ ts: NOW, cache: null, cacheVersion: 2, speeds: [200] });
 		expect(measureRow(NOW, ok({ cachedTokens: 0 }), ok({ cachedTokens: 6000 })).cache).toBeNull();
 		expect(measureRow(NOW, ok({ cachedTokens: 6000 }), ok()).cache).toBeNull();
 	});
 });
 
 describe("addRow and summarizePerf", () => {
-	const row = (hoursAgo: number, over: Partial<MeasureRow> = {}): MeasureRow => ({ ts: NOW - hoursAgo * HOUR, cache: null, speeds: [], ...over });
+	const row = (hoursAgo: number, over: Partial<MeasureRow> = {}): MeasureRow => ({ ts: NOW - hoursAgo * HOUR, cache: null, cacheVersion: 2, speeds: [], ...over });
 
 	it("drops rows older than a day", () => {
 		const added = addRow({ measuredSeq: 1, rows: [row(25), row(3)] }, row(0), NOW);
@@ -127,6 +128,17 @@ describe("addRow and summarizePerf", () => {
 			speedSamples: 0,
 			lastAt: null,
 			nextInRounds: 0,
+		});
+	});
+
+	it("leaves out the cache figure of a row written before the fresh-number prompt and keeps its speed", () => {
+		const before: MeasureRow = { ts: NOW - 2 * HOUR, cache: { promptTokens: 22000, cachedTokens: 17000 }, speeds: [300] };
+		const fresh = measureRow(NOW, ok({ promptTokens: 22000, cachedTokens: 17000 }), ok({ promptTokens: 22000, cachedTokens: 17000 }));
+		expect(summarizePerf(addRow({ measuredSeq: 40, rows: [before] }, fresh, NOW), 40, 5, NOW)).toMatchObject({
+			checks: 2,
+			cacheChecks: 1,
+			cacheHitPct: 0,
+			speedSamples: 3,
 		});
 	});
 

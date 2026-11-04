@@ -9,8 +9,11 @@ const MIN_PROMPT_TOKENS = 4096;
 const MIN_ANSWER_TOKENS = 100;
 const MIN_STREAM_MS = 500;
 
+// Rows stored before the fresh-number prompt carry no version: their cache figure counts input a site adds as hits, so only their speed still holds.
+const CACHE_VERSION = 2;
+
 // cache.promptTokens is the part of the prompt under test; cache.cachedTokens is how much of it the second call no longer sent uncached.
-export type MeasureRow = { ts: number; cache: { promptTokens: number; cachedTokens: number } | null; speeds: number[] };
+export type MeasureRow = { ts: number; cache: { promptTokens: number; cachedTokens: number } | null; cacheVersion?: number; speeds: number[] };
 export type MeasureState = { measuredSeq: number | null; rows: MeasureRow[] };
 
 export function applyMeasure(current: MeasureState | undefined, on: boolean | undefined): MeasureState | undefined {
@@ -62,7 +65,7 @@ export function measureRow(ts: number, warm: ProbeResponse, hit: ProbeResponse |
 		const speed = r && tokensPerSec(r);
 		return speed ? [speed] : [];
 	});
-	return { ts, cache: cacheFigures(warm, hit), speeds };
+	return { ts, cache: cacheFigures(warm, hit), cacheVersion: CACHE_VERSION, speeds };
 }
 
 export function addRow(state: MeasureState, row: MeasureRow, now: number): MeasureState {
@@ -71,7 +74,7 @@ export function addRow(state: MeasureState, row: MeasureRow, now: number): Measu
 
 export function summarizePerf(measure: MeasureState, seq: number, intervalMin: number, now: number): WatchPerf {
 	const rows = measure.rows.filter((r) => r.ts > now - DAY_MS);
-	const caches = rows.flatMap((r) => (r.cache ? [r.cache] : []));
+	const caches = rows.flatMap((r) => (r.cache && r.cacheVersion === CACHE_VERSION ? [r.cache] : []));
 	const prompt = caches.reduce((sum, c) => sum + c.promptTokens, 0);
 	const cached = caches.reduce((sum, c) => sum + c.cachedTokens, 0);
 	const speeds = rows.flatMap((r) => r.speeds);
