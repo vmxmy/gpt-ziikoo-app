@@ -12,6 +12,7 @@ import {
 	type WatchView,
 } from "../shared/watch.ts";
 import { newBoardCode } from "./board.ts";
+import { ClaudeCaseRateLimited, runClaudeCase } from "./claude-cases.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
 import { fetchModels } from "./models.ts";
@@ -22,6 +23,7 @@ import {
 	parseBoardMove,
 	parseBoardOrder,
 	parseBoardView,
+	parseClaudeCaseRequest,
 	parseHistoryRawRequest,
 	parseHistoryRequest,
 	parseProbeRequest,
@@ -165,6 +167,25 @@ const handleProbe: Handler = async (request, env, ctx) => {
 const handleQuestions: Handler = async () => {
 	const questions: Omit<Question, "scorer">[] = activeQuestions().map(({ scorer, ...rest }) => rest);
 	return json(questions);
+};
+
+const handleClaudeCase: Handler = async (request, env) => {
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	const parsed = parseClaudeCaseRequest(await readJson(request));
+	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
+	const cmd = parsed.value;
+	try {
+		const result = await runClaudeCase(cmd, {
+			fetch: (url, init) => fetch(url, init),
+			now: () => Date.now(),
+			limit: () => env.HOST_LIMITER.limit({ key: cmd.host }),
+		});
+		console.log(JSON.stringify({ host: cmd.host, case: result.id, verdict: result.verdict, status: result.calls.at(-1)?.status ?? null, ms: result.calls.reduce((sum, call) => sum + call.ms, 0) }));
+		return json(result);
+	} catch (error) {
+		if (error instanceof ClaudeCaseRateLimited) return rateLimited();
+		throw error;
+	}
 };
 
 const handleModels: Handler = async (request, env) => {
@@ -399,6 +420,7 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/questions": { GET: handleQuestions },
 	"/api/probe": { POST: handleProbe },
 	"/api/models": { POST: handleModels },
+	"/api/claude-case": { POST: handleClaudeCase },
 	"/api/history": { POST: handleHistory },
 	"/api/history/raw": { POST: handleHistoryRaw },
 	"/api/history/delete": { POST: handleHistoryDelete },
