@@ -43,7 +43,7 @@
 
 ```
 页头      标题、一句话说明、锚点导航
-页签      实时测试、HTML 生成、持续监测;HTML 生成见「生成器题 `pelican-svg`」
+页签      实时测试、HTML 生成、持续监测、性能测试、Claude 专项;HTML 生成见「生成器题 `pelican-svg`」
 监测页签  一句说明加工具条(添加站点、看板链接、卡片/列表切换)、区块级图例、卡片栅格或列表
 隐私说明  一行摘要,可展开看四条详情
 站点与密钥 站点、密钥、模型(字段带下拉)加开始按钮一行(宽屏),720 到 1039px 两行,窄屏单列   (全宽)
@@ -98,6 +98,11 @@ API 说明  一句说明加 `/api.md` 链接                      (全宽)
 | 改已建监测的题目与间隔 | 修改 | 编辑、设置 |
 | 一组预设的间隔与题目 | 监测策略 | 策略包、方案 |
 | 发两次长调用算缓存命中率与输出速度 | 测量 | 探测、性能测试 |
+| 按固定 QPS 连续调用并核对性能门槛的独立页签 | 性能测试 | 测量、压测 |
+| 核对 Claude Messages 协议的独立页签 | Claude 专项 | Claude 测评 |
+| Claude 专项中的一项固定请求序列 | 用例 | 题、关 |
+| 站点没有暴露计数接口 | 协议缺口 | 失败、故障 |
+| 本站没有执行的用例 | 未测 | 通过、不支持 |
 | 回答 token 数除以首字到结束的时长 | 输出速度 | 吞吐、TPS |
 | 不用预设,自己选间隔与题目 | 自定义 | |
 | 用户自带的单次测试题 | 自定义题 | 自定义题目、用户题、私人题 |
@@ -370,6 +375,87 @@ usage 原文
 - 两个阈值都没有用真实站点校准,页面写明是参考指标。
 - 盲区:站点只给它认得的题面加内容,而这些题本轮没选,就看不到。
 - mock 的 `mock-inject-candy` 只给原题加 300,`mock-inject-all` 每次调用加 200,两者都答错,e2e 只跑第 1 关。
+
+## 性能测试
+
+本节与「Claude 专项」依据飞书文档《中转站测试：测试内容与输出格式》及 2026-11-04 维护者确认的 GZA-378 到 GZA-382。0/4 即 GZA-378 只提供共用类型、用例表、报告工具与授权,不开放新页签或接口。1/4 提供随机长前缀和 `freshHit`;2/4 实现性能测试,3/4 实现 Claude 专项接口,4/4 实现 Claude 专项页面。下述运行行为是后续票的契约,不是 0/4 已上线的能力。
+
+2/4 注册 `#perf` 页签「性能测试」,表单包含站点、密钥、模型、协议、QPS 与时长。页签切走只隐藏,不卸载。仅提供探测档,QPS 为 0.5 或 1,时长为 30 或 60 秒,默认 1 × 30。开始前显示调用次数与按题面估算的 token 数,默认约 30 次加 1 次预热,最高 60 次加 1 次预热。上限依据现有 Worker 按站点 60 秒 120 次的限额,不是提额授权;其他调用仍会占用同一限额。
+
+每轮取一个随机 seed,先发一次 `long-prefix` 预热并等它返回,再按固定偏移开环发送,不等前一调用返回。每次使用 `/api/probe`,同一 seed,不带 `runId`,不入库、不进历史。显示已发、已返回、失败三个计数,允许取消。收到本站 429 时停止,标「本站限速,结果无效」,不能把不完整的限速结果当成通过。耗时从本站边缘到站点量起,不是用户本机耗时。
+
+### 共用数据结构
+
+`src/shared/perf.ts` 是类型契约。0/4 导出的 `sendOffsets(config): number[]` 与 `summarizeLoad(warm, samples, config): PerfSummary` 均抛出 `not implemented`,由 2/4 替换桩,页面在实现之前不得调用。
+
+| 类型或字段 | 定义 |
+| --- | --- |
+| `PERF_QPS`、`PERF_DURATIONS` | `[0.5, 1]`、`[30, 60]`,时长单位为秒 |
+| `PerfConfig` | `qps` 与 `durationSec`,分别只能取对应常量里的值 |
+| `PerfSample` | `sentAt` 是浏览器发出时的毫秒时间点,与本轮其他调用用同一时钟;`response` 是 `ProbeResponse` 或 `null`,空表示没有有效响应 |
+| `summarizeLoad` 入参 | `warm` 是预热的 `ProbeResponse` 或 `null`;`samples` 只包含发压调用,预热不计入请求数 |
+| `PerfCriterion` | `id` 为 `cache`、`success`、`ttft`、`tpot`、`tpm`;`verdict` 为 `pass`、`fail`、`na`;`value` 为数字或 `null`,`threshold` 为数字,`note` 写原因 |
+| `PerfSummary.requestCount`、`successCount`、`successRate` | 发压请求数、有效成功数、有效成功率,比率用 0 到 1 |
+| `windowMs`、`rpm` | 第一次发出到最后一次返回的毫秒窗口,以及该窗口每分钟请求数 |
+| `inputTpm`、`outputTpm`、`totalTpm`、`cachedTpm` | 输入、输出、总、缓存 token 的每分钟数量,不是以百万为单位;缺少相应用量时为 `null` |
+| `cacheHitRate` | 汇总新鲜缓存命中率,0 到 1;缺少有效分母时为 `null` |
+| `latencyMs`、`ttftMs`、`tpotMs` | 各自是 `PerfStats = { avg, p50, p90 }`,毫秒;无有效样本的数值为 `null` |
+| `maxLatencyMs`、`promptTokensMedian` | 最大延迟与实际输入 token 中位数,无有效样本时为 `null` |
+| `criteria`、`verdict` | 五项判定明细与总体 `pass` 或 `fail` |
+
+`sendOffsets({ qps: 1, durationSec: 30 })` 返回 `[0, 1000, …, 29000]`,单位毫秒。百分位用最近秩法。每 token 耗时为「总耗时减首字耗时」除以「回答 token 数减 1」,回答 token 数为输出减推理,不足 2 不计。
+
+缓存命中率用 1/4 的 `freshHit` 扣除站点自加并缓存的前缀。每个发压调用分别与同一预热响应比较,汇总命中 token 数及有效分母,不平均各调用的比率。不能只读站点报的 `cache_read` 就认定新鲜命中。
+
+### 达标规则与报告
+
+| 项目 | `threshold` | 通过标准 |
+| --- | --- | --- |
+| `cache` | 0.9 | 缓存命中率至少 90% |
+| `success` | 0.99 | 有效成功率至少 99% |
+| `ttft` | 20000 | 首字耗时 P90 小于 20 秒 |
+| `tpot` | 30 | 每 token 耗时 P90 小于 30 毫秒 |
+| `tpm` | 5000000 | 总 TPM 至少 5.00 M,但本站只有探测档,此项恒为 `na`,不参与总体判定 |
+
+其余四项全部 `pass` 才通过,任一不通过即未通过。没有数据不能记为通过。结果依次展示站点主机名、模型、时间与结论,五项达标表,明细和测试条件。条件写明协议、QPS × 时长、题面字符数、实际输入 token 中位数、有预热、边缘耗时口径及本档不判定 TPM。
+
+报告沿用来源文档 ① 的章节顺序,使用 `downloadReport` 下载。文件名为 `{主机名}_{模型}_qps_bench.html`,主机名与模型中不属于 `[\w.-]` 的每个字符换成 `-`。站点返回的文字先经 `escapeHtml` 转义 `< > & " '`,报告不含密钥的任何部分。下载保留 UTF-8 BOM 与 `application/octet-stream`,不把站点回答变成本站同源 HTML。
+
+## Claude 专项
+
+3/4 新增 `POST /api/claude-case`,请求体 `ClaudeCaseRequest = { site, key, model, case }`,前三项是字符串,校验规则同 `/api/probe`,`case` 为 `ClaudeCaseId`。协议固定为 anthropic。先过 IP 限速,每次上游调用前再过 `HOST_LIMITER`,不放宽现有限额。仅访问 `/v1/messages`、`/v1/messages/count_tokens` 与 `GET /v1/models`,结果不落库,不记录回答或原始响应。日志仅主机名、用例 id、结论、状态码、延迟。P3 不向站点发请求。
+
+### 用例与判定
+
+`src/shared/claude-cases.ts` 的 `CLAUDE_CASES` 固定按下表顺序排列。每条包含 `id`、`title`、`does` 与 `expect`,分别表示编号、标题、做了什么、通过标准。
+
+| id | 标题 | 做了什么 | 通过标准 |
+| --- | --- | --- | --- |
+| C1 | 基础对话 | 非流式,要求只回答 OK,`max_tokens=32` | 200,包含 `type=message`、`content`、`usage` |
+| C2 | 流式对话 | 连续三次流式对话,记录首字耗时 | 每次 200,事件依次含 `message_start`、`text_delta`、`message_stop` |
+| C3 | 图片理解 | 固定 8×8 纯红 PNG,问主色 | 200,回答含 red |
+| C4 | 结构化输出 | `output_config.format` 为 name、age 的 JSON Schema | 回答严格等于 `{"name":"Alice","age":30}` |
+| C5 | 强制工具调用 | `tool_choice` 强制 get_weather | 模型名含 `opus-5-5` 或 `sonnet-5-5` 时期望 400,其余期望 200 |
+| C6 | 工具结果回传 | 先要求 get_weather,再回传 `tool_result` | 两轮 200,第一轮含 `tool_use` |
+| C7 | 关闭思考 | `thinking` 设为 disabled | 状态码规则同 C5 |
+| C8 | 思考签名校验 | adaptive thinking 取签名,原样与改一个字符各回传一次 | 原样回传 200,篡改后 4xx |
+| C9 | 提示缓存 | 本轮随机 `long-prefix` 加 `cache_control` 连发五次 | 第 2 到 5 次 `freshHit` 均至少 90%,note 同时列出站点报的 `cache_read` |
+| C10 | 输入 token 计数 | `POST /v1/messages/count_tokens` | 200 且 `input_tokens>0`;404 记 `gap`,注明「中转未暴露同路径」;Bedrock 消息来源另注明「无法测 Mantle」 |
+| P1 | 模型列表 | 复用模型列表读取 | 列表含目标模型 |
+| P2 | 错误与请求标识 | 故意缺 `max_tokens` | 4xx,且响应头 `request-id` 以 `req_` 开头或响应体含 `request_id` |
+| P3 | 批量接口 | 不调用批量接口 | 恒为 `untested`,note 为「批量接口会创建异步任务并计费,本站不测」 |
+
+`CaseVerdict` 为 `pass`、`fail`、`gap`、`untested`,分别展示通过、未通过、协议缺口、未测。颜色只在 CSS 语义表映射,`pass` 用 ok,`fail` 用 bad,`gap` 用 warn,`untested` 与性能表的 `na` 用中性。
+
+`ClaudeCaseResult = { id, verdict, note, preview, source, calls }`。`preview` 先脱敏,只回前 70 字,或 `null`。`source` 为 `MessageSource` 或 `null`,`msg_bdrk_` 分为 `bedrock`,`msg_vrtx_` 分为 `vertex`,`msg_01` 分为 `anthropic`,其余为 `other`;不返回消息 id 原文,来源仅供参考。`calls` 的每项是 `CaseCall = { status, requestId, ms }`,状态码与请求标识可为 `null`,耗时单位毫秒。请求标识仅接受 `^[A-Za-z0-9_-]{1,128}$`,不合规为 `null`。所有返回字段都不得含密钥。
+
+### 页面与报告
+
+4/4 注册 `#claude` 页签「Claude 专项」,表单只有站点、密钥、模型。按用例表依次调用,同一时刻只发一个用例,每行显示进行中与结论,可以取消。切走只隐藏,不卸载。P3 保留在 13 行矩阵中但不产生上游调用。
+
+报告结论为可用或不可用,显示通过数与必须上游修改项。C1、C2 任一未通过即不可用;其余未通过列为必须上游修改项。C10 的 `gap` 与 P3 的 `untested` 不影响结论,不伪装成通过。报告另列不通过清单、来源汇总与全部 Request ID 表。
+
+下载沿用来源文档 ② 的七章格式,文件名 `{主机名}_{模型}_claude_protocol.html`,使用同一文件名清洗、转义与下载函数。「原始数据」章写「本站不保存原始数据」。页面只用文本节点渲染站点文字,下载报告将这些文字全部经 `escapeHtml`,不含密钥的任何部分。
 
 ## 监测
 
@@ -673,6 +759,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 监测的测量 | 2026-11-01 维护者确认。用户想比较缓存和速度,但现有题面太短,轮换里同一道题也隔太久,所以单独发一道长题。维护者要求周期性功能共用现有间隔,用户不重复配置,所以测量周期由间隔算出,不存时间点。默认关闭,因为它花用户的额度,每天约 8 万 token(估算)。2026-11-03 在一个真实站点上校准:站点每次调用都额外加上万 token 的输入并缓存它,题面本身没有命中,旧算法却算出约 78%。所以题面开头加随机数,第 1 次已缓存的部分不算。同一站点对完全相同的两次请求还会报出不同的输入总数,第 2 次多读也多写,所以命中只看第 2 次还剩多少没走缓存,不看多读了多少。同时发现题面只计约 4000 token,低于部分 Claude 模型的门槛,题面加长,`version` 改为 2 |
 | 监测策略 | 2026-11-01 维护者确认。用户想问的是模型是不是原装、站点断了没有,不是间隔和题目怎么配,所以表单先选策略。策略不写入 `Watch` 对象,以后调整策略定义不会改变已有监测的调用量。线路值守没有告警也保留,说明里写明不推送告警。题目与间隔只由这一个组件配置 |
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
+| 性能测试与 Claude 专项 | 2026-11-04 维护者授权。GZA-378 提供共用契约与报告工具,性能发压、Claude 接口和页签由后续票实现。性能只设 0.5/1 QPS × 30/60 秒探测档,不判定 5.00 M TPM。Claude 仅服务端固定用例,允许 count_tokens 与模型列表,批量接口恒为未测;结果不落库,日志仅含授权字段 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。
 
