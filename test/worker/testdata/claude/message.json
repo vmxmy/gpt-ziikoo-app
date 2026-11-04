@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "headers": {
+    "request-id": null
+  },
+  "body": {
+    "model": "claude-sonnet-4-6",
+    "id": "msg_bdrk_vkxvaqodi7huybdq2lpz3azblwo2cedwqrnoqp2khl7vx75f2fyq",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "OK"
+      }
+    ],
+    "container": null,
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+      "input_tokens": 11,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 0,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 4,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "service_tier": "standard"
+    }
+  }
+}
