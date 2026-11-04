@@ -39,7 +39,7 @@ describe("Claude case executor", () => {
 			C6: [() => reply(text("", { content: [tool] })), () => reply(text("Sunny"))],
 			C7: [() => reply(text())], C8: [() => reply(text("4", { content: [thinking, { type: "text", text: "4" }] })), () => reply(text()), () => reply({ error: { message: "Invalid signature" } }, 400)],
 			C9: [() => reply(text("OK", { usage: { input_tokens: 10, cache_creation_input_tokens: 9990, cache_read_input_tokens: 20000 } })), ...Array.from({ length: 4 }, () => () => reply(text("OK", { usage: { input_tokens: 500, cache_creation_input_tokens: 0, cache_read_input_tokens: 29500 } })))],
-			C10: [() => reply({ input_tokens: 12 })], P1: [() => reply({ data: [{ id: MODEL }] })],
+			C10: [() => reply(text()), () => reply({ input_tokens: 12 })], P1: [() => reply({ data: [{ id: MODEL }] })],
 			P2: [() => reply({ error: { message: "max_tokens is required" } }, 400)], P3: [],
 		};
 		for (const { id } of CLAUDE_CASES) {
@@ -95,7 +95,12 @@ describe("Claude case executor", () => {
 				expect(result.note).toContain("cache_read");
 				expect(result.note).toContain("95.0%");
 			}
-			if (id === "C10" || id === "P2") expect(requests[0].body).not.toHaveProperty("max_tokens");
+			if (id === "C10") {
+				expect(requests.map((request) => request.url)).toEqual(["https://api.example.com/v1/messages", "https://api.example.com/v1/messages/count_tokens"]);
+				expect(requests[0].body).toEqual({ model: MODEL, max_tokens: 32, messages: [{ role: "user", content: "Reply with exactly OK" }] });
+				expect(requests.at(-1)!.body).not.toHaveProperty("max_tokens");
+			}
+			if (id === "P2") expect(requests[0].body).not.toHaveProperty("max_tokens");
 			if (id === "P3") expect(result.note).toBe("批量接口会创建异步任务并计费，本站不测");
 		}
 	});
@@ -148,9 +153,25 @@ describe("Claude case executor", () => {
 	});
 
 	it("marks the absent token endpoint as a gap and identifies the Mantle limitation", async () => {
-		expect(await runClaudeCase(input("C10"), fake([() => reply({}, 404)]).deps)).toMatchObject({ verdict: "gap", note: "中转未暴露同路径" });
-		expect(await runClaudeCase(input("C10"), fake([() => reply({ input_tokens: 3, id: "msg_bdrk_hidden" })]).deps)).toMatchObject({ verdict: "pass", note: expect.stringContaining("无法测 Mantle") });
-		for (const input_tokens of [0, -1, "12", null]) expect((await runClaudeCase(input("C10"), fake([() => reply({ input_tokens })]).deps)).verdict).toBe("fail");
+		expect(await runClaudeCase(input("C10"), fake([() => reply(text()), () => reply({}, 404)]).deps)).toMatchObject({ verdict: "gap", note: "中转未暴露同路径" });
+		expect(await runClaudeCase(input("C10"), fake([() => reply(text("OK", { id: "msg_bdrk_hidden" })), () => reply({ input_tokens: 3 })]).deps)).toMatchObject({ verdict: "pass", source: "bedrock", note: expect.stringContaining("无法测 Mantle") });
+		expect(await runClaudeCase(input("C10"), fake([() => reply(text("OK", { id: "msg_bdrk_hidden" })), () => reply({}, 404)]).deps)).toMatchObject({ verdict: "gap", source: "bedrock", note: "中转未暴露同路径；无法测 Mantle" });
+		const anthropic = await runClaudeCase(input("C10"), fake([() => reply(text("OK", { id: "msg_01_x" })), () => reply({ input_tokens: 3 })]).deps);
+		expect(anthropic).toMatchObject({ verdict: "pass", source: "anthropic" });
+		expect(anthropic.note).not.toContain("无法测 Mantle");
+		for (const input_tokens of [0, -1, "12", null]) {
+			expect(await runClaudeCase(input("C10"), fake([() => reply(text("OK", { id: "msg_bdrk_hidden" })), () => reply({ input_tokens })]).deps)).toMatchObject({ verdict: "fail", source: "bedrock", note: expect.stringContaining("无法测 Mantle") });
+		}
+	});
+
+	it("uses only the token endpoint to decide C10 after a failed message call", async () => {
+		for (const message of [() => reply({}, 503), () => { throw new Error(KEY); }]) {
+			const { deps, requests } = fake([message, () => reply({ input_tokens: 3 })]);
+			const result = await runClaudeCase(input("C10"), deps);
+			expect(result).toMatchObject({ verdict: "pass", source: null });
+			expect(result.calls).toHaveLength(2);
+			expect(requests.map((request) => request.url)).toEqual(["https://api.example.com/v1/messages", "https://api.example.com/v1/messages/count_tokens"]);
+		}
 	});
 
 	it("requires the target model and a structured error request id", async () => {
@@ -178,8 +199,11 @@ describe("Claude case executor", () => {
 
 	it("does not use error bodies as successful case responses or follow redirects", async () => {
 		for (const id of ["C1", "C3", "C4", "C6", "C8", "C10"] as const) {
-			const result = await runClaudeCase(input(id), fake([() => reply(text('red {"name":"Alice","age":30}', { input_tokens: 12, content: [tool, thinking] }), 302)]).deps);
+			const responses = [() => reply(text('red {"name":"Alice","age":30}', { input_tokens: 12, content: [tool, thinking] }), 302)];
+			if (id === "C10") responses.unshift(() => reply(text()));
+			const result = await runClaudeCase(input(id), fake(responses).deps);
 			expect(result.verdict).toBe("fail");
+			if (id === "C10") expect(result.calls.map((call) => call.status)).toEqual([200, 302]);
 		}
 		expect((await runClaudeCase(input("C4"), fake([() => reply(text(' {"name":"Alice","age":30}'))]).deps)).verdict).toBe("fail");
 		expect((await runClaudeCase(input("C8"), fake([() => reply(text())]).deps)).calls).toHaveLength(1);

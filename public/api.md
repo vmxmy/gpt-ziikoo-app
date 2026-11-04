@@ -48,7 +48,7 @@
 | C7 | `thinking.type=disabled`，状态码条件同 C5 |
 | C8 | adaptive thinking 取得签名后原样回传应为 200，改一个字符再回传应为 4xx |
 | C9 | 本轮随机 long-prefix 加 cache_control 连发五次，第 2 到 5 次新鲜缓存命中率均至少 90%；note 同时列出站点报的 cache_read |
-| C10 | count_tokens 返回 200 且 input_tokens 大于 0；404 记 gap，note 写「中转未暴露同路径」；消息来源为 bedrock 时加「无法测 Mantle」 |
+| C10 | 先发一次与 C1 相同的 `/v1/messages` 取消息来源，再调 `/v1/messages/count_tokens`；结论只看 count_tokens：200 且 input_tokens 大于 0 为通过，404 记 gap，note 写「中转未暴露同路径」；消息来源为 bedrock 时加「无法测 Mantle」 |
 | P1 | 模型列表包含目标模型 |
 | P2 | 故意缺 max_tokens，返回 4xx 且 request-id 以 req_ 开头或 JSON 含 request_id 字段 |
 | P3 | 恒为 untested，note 写「批量接口会创建异步任务并计费，本站不测」，不发上游请求 |

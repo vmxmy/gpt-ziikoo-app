@@ -228,6 +228,7 @@ export async function runClaudeCase(input: ClaudeCaseCommand, deps: ClaudeCaseDe
 			return finish(replies.every(ok) && hits.every((hit) => hit !== null && hit >= 0.9), `freshHit：${hits.map((hit) => hit === null ? "未取得" : `${(hit * 100).toFixed(1)}%`).join("、")}；cache_read：${reads.join("、")}`);
 		}
 		case "C10": {
+			await send();
 			const reply = await send({ max_tokens: undefined }, "/v1/messages/count_tokens");
 			if (reply.status === 404) { result.verdict = "gap"; result.note = "中转未暴露同路径"; }
 			else finish(ok(reply) && (count(reply.body.input_tokens) ?? 0) > 0);
