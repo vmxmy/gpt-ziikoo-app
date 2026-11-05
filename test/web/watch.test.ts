@@ -64,9 +64,13 @@ describe("token storage", () => {
 
 describe("labels", () => {
 	it("labels a card with host only when the alias is empty", () => {
-		expect(cardLabel({ alias: "", host: "relay.example" })).toBe("relay.example");
-		expect(cardLabel({ alias: "备用", host: "relay.example" })).toBe("备用（relay.example）");
+		expect(cardLabel({ alias: "", host: "relay.example" }, TOKEN, false)).toBe("relay.example");
+		expect(cardLabel({ alias: "备用", host: "relay.example" }, TOKEN, false)).toBe("备用（relay.example）");
 		expect(cardId(TOKEN)).toHaveLength(8);
+	});
+
+	it("hides host and alias behind the card id in privacy mode", () => {
+		expect(cardLabel({ alias: "备用", host: "relay.example" }, `abcd1234${"A".repeat(35)}`, true)).toBe("站点已隐藏 #abcd1234");
 	});
 
 	it("trims and caps the alias", () => {

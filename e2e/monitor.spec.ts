@@ -7,6 +7,7 @@ test.describe.configure({ mode: "serial", retries: 0 });
 const BOARD_KEY = "gpt.board.v1";
 const TOKENS_KEY = "gpt.watch.v1";
 const LEGACY_KEY = "gpt.monitors.v1";
+const PRIVACY_KEY = "gpt.privacy.v1";
 const CARDS = '[data-testid^="custom-"][data-testid$="-card"]';
 
 type AddSetup = {
@@ -71,7 +72,7 @@ async function cleaned(page: Page, body: () => Promise<void>): Promise<void> {
 		}
 		await page.evaluate((keys) => {
 			for (const k of keys) localStorage.removeItem(k);
-		}, [BOARD_KEY, TOKENS_KEY, LEGACY_KEY]);
+		}, [BOARD_KEY, TOKENS_KEY, LEGACY_KEY, PRIVACY_KEY]);
 	}
 }
 
@@ -129,6 +130,7 @@ test("删除,服务器与本地令牌都清空", async ({ page, site, key }) =>
 test("别名区分同一站点的两张卡片", async ({ page, site, key }) =>
 	cleaned(page, async () => {
 		await openWatchTab(page);
+		await page.getByTestId("privacy-toggle").click();
 		await addWatch(page, { site, key, alias: "主通道" });
 		await expect(page.locator(CARDS)).toHaveCount(1);
 		await addWatch(page, { site, key });
@@ -136,6 +138,40 @@ test("别名区分同一站点的两张卡片", async ({ page, site, key }) =>
 		const [first, second] = await page.locator(CARDS).all();
 		await expect(first!.locator(".card-alias")).toHaveText("主通道");
 		await expect(second!.locator(".card-alias")).toHaveCount(0);
+	}));
+
+test("隐私模式默认开启,隐藏站点与别名,关闭后刷新仍关闭", async ({ page, site, key }) =>
+	cleaned(page, async () => {
+		const host = new URL(site).host;
+		const toggle = page.getByTestId("privacy-toggle");
+		await openWatchTab(page);
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		await addWatch(page, { site, key, alias: "主通道" });
+		await expect(page.locator(CARDS)).toHaveCount(1);
+		const id = await lastCardId(page);
+		const card = page.getByTestId(`custom-${id}-card`);
+		await expect(card).toContainText("站点已隐藏");
+		await expect(card).toContainText(`#${id}`);
+		const bodyText = await page.locator("body").innerText();
+		expect(bodyText).not.toContain(host);
+		expect(bodyText).not.toContain("主通道");
+		expect(await card.innerText()).not.toContain(host);
+
+		await page.getByTestId("watch-add-toggle").click();
+		const siteInput = page.getByTestId("watch-add-site");
+		expect(await siteInput.evaluate((el) => getComputedStyle(el).getPropertyValue("-webkit-text-security"))).toBe("disc");
+		await page.getByTestId("watch-add-toggle").click();
+
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-pressed", "false");
+		await expect(card).toContainText(host);
+		await expect(card.locator(".card-alias")).toHaveText("主通道");
+		await page.reload();
+		await expect(toggle).toHaveAttribute("aria-pressed", "false");
+		await expect(page.getByTestId(`custom-${id}-card`)).toContainText(host, { timeout: 30_000 });
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		await expect(page.getByTestId(`custom-${id}-card`)).not.toContainText(host);
 	}));
 
 test("置顶后顺序保持到刷新", async ({ page, site, key }) =>

@@ -2,6 +2,7 @@ import type { RefObject } from "preact";
 import { useRef, useState } from "preact/hooks";
 import type { Target } from "./api.ts";
 import { ModelField } from "./model-field.tsx";
+import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { costLine, normalizeKey } from "./results.ts";
 
 type Props = {
@@ -56,6 +57,7 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 
 export function TestForm(props: Props) {
 	const keyInput = useRef<HTMLInputElement>(null);
+	const privacy = usePrivacy();
 
 	return (
 		<section class="panel col-12" aria-labelledby="form-h">
@@ -76,6 +78,7 @@ export function TestForm(props: Props) {
 						placeholder="https://example.com"
 						value={props.site}
 						onInput={(e) => props.setSite(e.currentTarget.value)}
+						class={privateInputClass(privacy)}
 						data-testid="site-input"
 					/>
 				</label>

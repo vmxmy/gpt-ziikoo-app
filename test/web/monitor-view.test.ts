@@ -47,20 +47,24 @@ describe("monitor text", () => {
 	});
 
 	it("omits the last probe when there is none", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW)).toBe("站点 relay.example · 每 1 分钟一次");
-		expect(metaLine(buildMonitor([sample(2, 900)], NOW, "relay.example", 60), NOW)).toBe(
+		expect(metaLine("relay.example", buildMonitor([], NOW, "relay.example", 60), NOW)).toBe("站点 relay.example · 每 1 分钟一次");
+		expect(metaLine("relay.example", buildMonitor([sample(2, 900)], NOW, "relay.example", 60), NOW)).toBe(
 			"站点 relay.example · 每 1 分钟一次 · 最近一次调用 2 分钟前",
 		);
 	});
 
+	it("leaves the site out when the caller hides it", () => {
+		expect(metaLine(null, buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("每 1 分钟一次 · 协议 chat");
+	});
+
 	it("states longer custom intervals in minutes", () => {
 		const custom = buildMonitor([], NOW, "relay.example", 300);
-		expect(metaLine(custom, NOW)).toBe("站点 relay.example · 每 5 分钟一次");
+		expect(metaLine("relay.example", custom, NOW)).toBe("站点 relay.example · 每 5 分钟一次");
 	});
 
 	it("names the channel of a custom card", () => {
-		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 1 分钟一次 · 协议 chat");
-		expect(metaLine(buildMonitor([], NOW, "relay.example", 60), NOW, "chat", ["thibault", "ciallo"])).toBe(
+		expect(metaLine("relay.example", buildMonitor([], NOW, "relay.example", 60), NOW, "chat")).toBe("站点 relay.example · 每 1 分钟一次 · 协议 chat");
+		expect(metaLine("relay.example", buildMonitor([], NOW, "relay.example", 60), NOW, "chat", ["thibault", "ciallo"])).toBe(
 			"站点 relay.example · 每 1 分钟一次 · 协议 chat · 题目 thibault、ciallo",
 		);
 	});
@@ -77,11 +81,11 @@ describe("monitor text", () => {
 describe("metaLine strategy", () => {
 	it("names the strategy a watch's interval and questions match, and no name otherwise", () => {
 		const fiveMinutes = buildMonitor([], NOW, "relay.example", 300);
-		expect(metaLine(fiveMinutes, NOW, "chat", ["ciallo", "candy-var", "candy", "thibault"])).toBe(
+		expect(metaLine("relay.example", fiveMinutes, NOW, "chat", ["ciallo", "candy-var", "candy", "thibault"])).toBe(
 			"站点 relay.example · 真伪核查 · 每 5 分钟一次 · 协议 chat · 题目 ciallo、candy-var、candy、thibault",
 		);
-		expect(metaLine(fiveMinutes, NOW, "chat", ["ciallo"])).toBe("站点 relay.example · 每 5 分钟一次 · 协议 chat · 题目 ciallo");
-		expect(metaLine(fiveMinutes, NOW, "chat", ["thibault", "candy-var"], true)).toBe("站点 relay.example · 选型对比 · 每 5 分钟一次 · 协议 chat · 题目 thibault、candy-var");
+		expect(metaLine("relay.example", fiveMinutes, NOW, "chat", ["ciallo"])).toBe("站点 relay.example · 每 5 分钟一次 · 协议 chat · 题目 ciallo");
+		expect(metaLine("relay.example", fiveMinutes, NOW, "chat", ["thibault", "candy-var"], true)).toBe("站点 relay.example · 选型对比 · 每 5 分钟一次 · 协议 chat · 题目 thibault、candy-var");
 	});
 });
 

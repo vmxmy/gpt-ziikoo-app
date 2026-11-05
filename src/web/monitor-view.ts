@@ -29,10 +29,10 @@ export function agoText(ts: number, now: number): string {
 	return minutes < 60 ? `${minutes} 分钟前` : `${Math.floor(minutes / 60)} 小时前`;
 }
 
-export function metaLine(data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[], measure = false): string {
+export function metaLine(site: string | null, data: MonitorResponse, now: number, protocol?: Protocol, questions?: readonly string[], measure = false): string {
 	const intervalMin = data.intervalSec / 60;
 	const strategy = questions && matchStrategy({ intervalMin, questions, measure });
-	const parts = [`站点 ${data.target}`, ...(strategy ? [strategy.label] : []), `每 ${intervalMin} 分钟一次`];
+	const parts = [...(site ? [`站点 ${site}`] : []), ...(strategy ? [strategy.label] : []), `每 ${intervalMin} 分钟一次`];
 	if (protocol) parts.push(`协议 ${protocol}`);
 	if (questions?.length) parts.push(`题目 ${questions.join("、")}`);
 	if (data.last) parts.push(`最近一次调用 ${agoText(data.last.ts, now)}`);

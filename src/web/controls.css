@@ -169,6 +169,10 @@ select:focus,
 	border-color: var(--focus);
 }
 
+.private-input {
+	-webkit-text-security: disc;
+}
+
 input[aria-invalid="true"],
 .affix:has([aria-invalid="true"]) {
 	border-color: var(--bad);

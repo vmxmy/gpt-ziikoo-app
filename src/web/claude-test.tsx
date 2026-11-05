@@ -3,6 +3,7 @@ import { useRef, useState } from "preact/hooks";
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import { missingFields, runClaudeCases } from "./api.ts";
 import { buildClaudeReport, claudeCaseTitle, CLAUDE_VERDICT, summarizeClaude, type ClaudeReport } from "./claude-report.ts";
+import { fileHost, privateInputClass, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, reportFileName } from "./report.ts";
 import { normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
@@ -10,6 +11,7 @@ import { parseSite } from "./watch.ts";
 import "./claude.css";
 
 function ClaudeSummary({ run }: { run: ClaudeReport }) {
+	const privacy = usePrivacy();
 	const summary = summarizeClaude(run.results);
 	return (
 		<div class="claude-report" data-testid="claude-result">
@@ -31,12 +33,13 @@ function ClaudeSummary({ run }: { run: ClaudeReport }) {
 					<tbody>{summary.calls.map((call) => <tr key={`${call.id}-${call.index}`}><td>{call.id}</td><td>{call.index}</td><td>{call.status ?? "—"}</td><td>{call.requestId ?? "—"}</td><td>{call.ms}</td></tr>)}</tbody>
 				</table>
 			</div>
-			<button type="button" class="btn" data-testid="claude-download" onClick={() => downloadReport(buildClaudeReport(run), reportFileName(run.host, run.model, "claude_protocol"))}>下载报告</button>
+			<button type="button" class="btn" data-testid="claude-download" onClick={() => downloadReport(buildClaudeReport({ ...run, host: siteLabel(run.host, privacy) }), reportFileName(fileHost(run.host, privacy), run.model, "claude_protocol"))}>下载报告</button>
 		</div>
 	);
 }
 
 export function ClaudeTest() {
+	const privacy = usePrivacy();
 	const [site, setSite] = useState("");
 	const [model, setModel] = useState("");
 	const [results, setResults] = useState<ClaudeCaseResult[]>([]);
@@ -87,7 +90,7 @@ export function ClaudeTest() {
 			<form class="grid claude-form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
 				<label class="field col-12 col-md-6 col-lg-4">
 					<span class="field-label">站点地址</span>
-					<input data-testid="claude-site" value={site} onInput={(event) => setSite(event.currentTarget.value)} disabled={running} placeholder="https://api.example.com" />
+					<input data-testid="claude-site" class={privateInputClass(privacy)} value={site} onInput={(event) => setSite(event.currentTarget.value)} disabled={running} placeholder="https://api.example.com" />
 				</label>
 				<label class="field col-12 col-md-6 col-lg-4">
 					<span class="field-label">密钥</span>

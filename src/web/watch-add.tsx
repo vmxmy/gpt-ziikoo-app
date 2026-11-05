@@ -3,6 +3,7 @@ import type { RefObject } from "preact";
 import type { Protocol } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS } from "../shared/watch.ts";
 import { ModelField } from "./model-field.tsx";
+import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { ChoiceField, DEFAULT_STRATEGY, useWatchStrategy, WatchStrategyFields } from "./watch-strategy.tsx";
@@ -23,6 +24,7 @@ const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 	error?.field === field ? { "aria-invalid": true, "aria-describedby": ERROR_ID } : {};
 
 function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value: string; onInput: (v: string) => void; error: FieldError | null }) {
+	const privacy = usePrivacy();
 	return (
 		<label class="field col-12 col-md-6 col-lg-4">
 			<span class="field-label">站点地址</span>
@@ -34,6 +36,7 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 				placeholder="https://example.com"
 				value={props.value}
 				onInput={(e) => props.onInput(e.currentTarget.value)}
+				class={privateInputClass(privacy)}
 				data-testid="watch-add-site"
 				{...invalid(props.error, "site")}
 			/>
@@ -45,6 +48,7 @@ function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value:
 const CONSENT_TEXT = "我同意本站加密保存这把密钥，并由本站服务器按所选间隔持续调用该站点。";
 
 export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) => Promise<FieldError | null>; onClose: () => void }) {
+	const privacy = usePrivacy();
 	const [site, setSite] = useState("");
 	// State only feeds the model-list target; the submit still reads the ref, and the key never enters storage or logs.
 	const [key, setKey] = useState("");
@@ -110,6 +114,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 					placeholder="区分同一站点的不同通道"
 					autocomplete="off"
 					onInput={(e) => setAlias(e.currentTarget.value)}
+					class={privateInputClass(privacy)}
 					data-testid="watch-add-alias"
 				/>
 			</label>

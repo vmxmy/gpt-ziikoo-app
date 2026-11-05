@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorState } from "../shared/monitor.ts";
 import { WATCH_IDLE_DAYS, type WatchChange, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState, updateWatch } from "./api.ts";
-import { BAR_HINT, LEGEND, MonitorCard } from "./monitor-card.tsx";
+import { BAR_HINT, LEGEND, MonitorCard, SiteName } from "./monitor-card.tsx";
 import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
+import { usePrivacy } from "./privacy.ts";
 import { ms, pct } from "./results.ts";
 import { WatchAddForm } from "./watch-add.tsx";
 import { WatchEditForm } from "./watch-edit.tsx";
@@ -47,10 +48,10 @@ type CardProps = {
 	onSave: (token: string, change: WatchChange) => Promise<string | null>;
 };
 
-const cardName = (card: WatchCard): string => (card.kind === "live" ? cardLabel(card.view) : `令牌 ${cardId(card.token)}`);
+const cardName = (card: WatchCard, privacy: boolean): string => (card.kind === "live" ? cardLabel(card.view, card.token, privacy) : `令牌 ${cardId(card.token)}`);
 
 // `running` as a boolean cannot say bad_key, whose row shows neither pause nor resume.
-type LiveRowCells = { kind: "live"; host: string; alias: string | null; state: MonitorState; label: string; uptime: string; correct: string; p50: string; states: MonitorState[]; status: WatchStatus["kind"] };
+type LiveRowCells = { kind: "live"; host: string; alias: string | undefined; state: MonitorState; label: string; uptime: string; correct: string; p50: string; states: MonitorState[]; status: WatchStatus["kind"] };
 type LiveCard = Extract<WatchCard, { kind: "live" }>;
 
 const bucketsOf = (view: WatchView) => (view.monitor.buckets.length === MONITOR.buckets ? view.monitor.buckets : emptyBuckets());
@@ -61,7 +62,7 @@ function rowCells(card: LiveCard): LiveRowCells {
 	return {
 		kind: "live",
 		host: card.view.host,
-		alias: card.view.alias || null,
+		alias: card.view.alias || undefined,
 		state: view.data.state,
 		label: badgeLabel(view),
 		uptime: pct(view.data.uptimePct),
@@ -76,12 +77,13 @@ function rowCells(card: LiveCard): LiveRowCells {
 // insufficient and no_data carry no verdict and sort with the rows that have no value.
 const HEALTH: Partial<Record<MonitorState, number>> = { down: 0, degraded: 1, quality: 2, fair: 3, operational: 4 };
 
-const SORT_VALUE: Record<SortKey, (view: WatchView) => string | number | null> = {
-	site: (view) => view.alias || view.host,
-	state: (view) => HEALTH[view.monitor.state] ?? null,
-	uptime: (view) => view.monitor.uptimePct,
-	correct: (view) => view.monitor.correctPct,
-	p50: (view) => latencyP50(bucketsOf(view)),
+// A masked list sorts by the label it shows, so the order does not leak the hidden hosts.
+const SORT_VALUE: Record<SortKey, (card: LiveCard, privacy: boolean) => string | number | null> = {
+	site: ({ view, token }, privacy) => (privacy ? cardLabel(view, token, true) : view.alias || view.host),
+	state: ({ view }) => HEALTH[view.monitor.state] ?? null,
+	uptime: ({ view }) => view.monitor.uptimePct,
+	correct: ({ view }) => view.monitor.correctPct,
+	p50: ({ view }) => latencyP50(bucketsOf(view)),
 };
 
 type BoardActions = Pick<CardProps, "onToggle" | "onRemove" | "onRetry" | "onMove" | "onEdit" | "onSave">;
@@ -91,6 +93,7 @@ type RowActionProps = { card: WatchCard; index: number; count: number; editing: 
 
 function RowActions({ card, onToggle, onRemove, index, count, onMove, editing, onEdit }: RowActionProps) {
 	const t = `custom-${cardId(card.token)}`;
+	const privacy = usePrivacy();
 	return (
 		<>
 			{card.kind === "live" && (
@@ -146,7 +149,7 @@ function RowActions({ card, onToggle, onRemove, index, count, onMove, editing, o
 				class="icon-btn icon-btn-danger"
 				aria-label="删除"
 				title="删除"
-				onClick={() => confirm(`删除 ${cardName(card)} 的持续监测？服务器上的密钥与调用记录会立即清空。`) && onRemove(card)}
+				onClick={() => confirm(`删除 ${cardName(card, privacy)} 的持续监测？服务器上的密钥与调用记录会立即清空。`) && onRemove(card)}
 				data-testid={`${t}-remove`}
 			>
 				<svg viewBox="0 0 16 16" aria-hidden="true">
@@ -173,7 +176,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 		return (
 			<section class="card monitor-card" data-testid={`${t}-card`}>
 				<h3 class="card-title">
-					<span class="mono">{cardName(card)}</span>
+					<span class="mono">{cardName(card, false)}</span>
 				</h3>
 				<p class="card-notice" data-kind="rejected" role="alert" data-testid={`${t}-error`}>
 					{card.message}
@@ -194,6 +197,7 @@ function WatchCardItem(props: CardProps & { index: number; count: number }) {
 			rootTestId={`${t}-card`}
 			host={card.view.host}
 			alias={card.view.alias || undefined}
+			cardId={cardId(card.token)}
 			protocol={card.view.protocol}
 			questions={card.view.questions}
 			view={monitorView(card.view.monitor)}
@@ -222,7 +226,7 @@ function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove
 	if (card.kind !== "live") {
 		return (
 			<tr data-testid={`${t}-row`}>
-				<td class="mono">{cardName(card)}</td>
+				<td class="mono">{cardName(card, false)}</td>
 				<td colspan={5}>
 					{card.kind === "loading" ? (
 						<span class="muted" data-testid={`${t}-loading`}>
@@ -251,8 +255,7 @@ function WatchTableRow({ card, index, count, onToggle, onRemove, onRetry, onMove
 			<tr data-testid={`${t}-row`} data-paused={cells.status === "paused" ? true : undefined}>
 				<td>
 					<span class="row-site">
-						{cells.alias && <span class="card-alias">{cells.alias}</span>}
-						<span class={cells.alias ? "mono muted" : "mono"}>{cells.host}</span>
+						<SiteName host={cells.host} alias={cells.alias} cardId={cardId(card.token)} />
 					</span>
 				</td>
 				<td data-state={cells.state}>
@@ -301,7 +304,8 @@ function SortHeader({ label, sortKey, sort, onSort, num, col }: { label: string;
 function WatchTable(props: { cards: WatchCard[]; editing: string | null } & BoardActions) {
 	const { cards, editing, onMove, ...rest } = props;
 	const [sort, setSort] = useState<TableSort>(null);
-	const rows = sort ? sortRows(cards, (card) => (card.kind === "live" ? SORT_VALUE[sort.key](card.view) : null), sort.dir) : cards;
+	const privacy = usePrivacy();
+	const rows = sort ? sortRows(cards, (card) => (card.kind === "live" ? SORT_VALUE[sort.key](card, privacy) : null), sort.dir) : cards;
 	const header = { sort, onSort: (key: SortKey) => setSort(nextSort(sort, key)) };
 	return (
 		<div class="watch-table-wrap">

@@ -5,6 +5,7 @@ import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/type
 import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField } from "./model-field.tsx";
+import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { downloadReport } from "./report.ts";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
@@ -253,6 +254,7 @@ function HtmlResult({ result, protocol, effort, fileName }: Done) {
 }
 
 export function HtmlTest() {
+	const privacy = usePrivacy();
 	const [site, setSite] = useState("");
 	const [key, setKey] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
@@ -316,6 +318,7 @@ export function HtmlTest() {
 						placeholder="https://example.com"
 						value={site}
 						onInput={(e) => setSite(e.currentTarget.value)}
+						class={privateInputClass(privacy)}
 						data-testid="html-site"
 					/>
 				</label>
