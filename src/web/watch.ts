@@ -1,5 +1,6 @@
 import type { Protocol } from "../shared/types.ts";
 import { isWatchInterval, WATCH_MAX_ALIAS, type WatchChange, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
+import { HIDDEN_SITE } from "./privacy.ts";
 import { normalizeKey } from "./results.ts";
 
 export const BOARD_KEY = "gpt.board.v1";
@@ -33,9 +34,12 @@ export function parseSite(input: string): ParsedSite {
 
 export const normalizeAlias = (input: string): string => input.trim().slice(0, WATCH_MAX_ALIAS);
 
-export const cardLabel = ({ alias, host }: { alias: string; host: string }): string => (alias === "" ? host : `${alias}（${host}）`);
-
 export const cardId = (token: string): string => token.slice(0, 8);
+
+export function cardLabel({ alias, host }: { alias: string; host: string }, token: string, privacy: boolean): string {
+	if (privacy) return `${HIDDEN_SITE} #${cardId(token)}`;
+	return alias === "" ? host : `${alias}（${host}）`;
+}
 
 export type SortKey = "site" | "state" | "uptime" | "correct" | "p50";
 export type SortDir = "asc" | "desc";

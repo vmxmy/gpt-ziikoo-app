@@ -22,6 +22,7 @@ import {
 	WAITING_NOTICE,
 	SPARSE_NOTICE,
 } from "./monitor-view.ts";
+import { HIDDEN_SITE, usePrivacy } from "./privacy.ts";
 import { ms, pct } from "./results.ts";
 
 export const LEGEND: Record<MonitorState, string> = { operational: "正常", fair: "基本正常", quality: "降智", degraded: "不稳定", down: "故障", insufficient: "调用数不足", no_data: "无数据" };
@@ -33,6 +34,7 @@ export type CardProps = {
 	rootTestId: string;
 	host: string;
 	alias?: string;
+	cardId: string;
 	protocol?: Protocol;
 	questions?: readonly string[];
 	view: MonitorView;
@@ -43,8 +45,27 @@ export type CardProps = {
 	children?: ComponentChildren;
 };
 
+// In privacy mode the card id stands in for host and alias, so cards on one board stay apart.
+export function SiteName({ host, alias, cardId }: { host: string; alias?: string; cardId: string }) {
+	if (usePrivacy()) {
+		return (
+			<>
+				<span>{HIDDEN_SITE}</span>
+				<span class="mono muted">#{cardId}</span>
+			</>
+		);
+	}
+	return (
+		<>
+			{alias && <span class="card-alias">{alias}</span>}
+			<span class={alias ? "mono muted" : "mono"}>{host}</span>
+		</>
+	);
+}
+
 export function MonitorCard(props: CardProps) {
 	const { testPrefix: t, view } = props;
+	const privacy = usePrivacy();
 	const { data } = view;
 	const buckets = data.buckets.length === MONITOR.buckets ? data.buckets : emptyBuckets();
 	const headingId = `${t}-h`;
@@ -52,8 +73,7 @@ export function MonitorCard(props: CardProps) {
 		<section class="card monitor-card" aria-labelledby={headingId} data-testid={props.rootTestId}>
 			<header class="card-head">
 				<h3 id={headingId} class="card-title">
-					{props.alias && <span class="card-alias">{props.alias}</span>}
-					<span class={props.alias ? "mono muted" : "mono"}>{props.host}</span>
+					<SiteName host={props.host} alias={props.alias} cardId={props.cardId} />
 				</h3>
 				{props.actions && <div class="card-actions">{props.actions}</div>}
 			</header>
@@ -61,7 +81,7 @@ export function MonitorCard(props: CardProps) {
 				<p class="status-badge" data-testid={`${t}-badge`} data-state={data.state}>
 					{badgeLabel(view)}
 				</p>
-				<p class="meta">{metaLine(data, props.now, props.protocol, props.questions, Boolean(props.perf))}</p>
+				<p class="meta">{metaLine(privacy ? null : data.target, data, props.now, props.protocol, props.questions, Boolean(props.perf))}</p>
 			</div>
 			{props.children}
 			<Metrics t={t} uptime={data.uptimePct} correct={data.correctPct} p50={latencyP50(buckets)} />

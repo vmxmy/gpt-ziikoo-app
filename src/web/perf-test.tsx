@@ -6,6 +6,7 @@ import type { ProbeResponse, Protocol } from "../shared/types.ts";
 import { missingFields, probeLoad } from "./api.ts";
 import { ModelField } from "./model-field.tsx";
 import "./perf.css";
+import { fileHost, privateInputClass, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, escapeHtml, reportFileName } from "./report.ts";
 import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
 import type { ProbeOutcome } from "./runner.ts";
@@ -202,7 +203,9 @@ function PairTable({ testId, head, rows }: { testId: string; head: [string, stri
 	);
 }
 
-function PerfResult(d: Done) {
+function PerfResult(done: Done) {
+	const privacy = usePrivacy();
+	const d = { ...done, host: siteLabel(done.host, privacy) };
 	const { summary } = d;
 	return (
 		<div class="perf-result" data-testid="perf-result">
@@ -250,7 +253,7 @@ function PerfResult(d: Done) {
 			<h3>结论</h3>
 			<p data-testid="perf-conclusion">{conclusion(summary)}</p>
 			<div class="actions">
-				<button type="button" class="btn btn-secondary" onClick={() => downloadReport(reportHtml(d), reportFileName(d.host, d.model, "qps_bench"))} data-testid="perf-download">
+				<button type="button" class="btn btn-secondary" onClick={() => downloadReport(reportHtml(d), reportFileName(fileHost(done.host, privacy), d.model, "qps_bench"))} data-testid="perf-download">
 					下载报告
 				</button>
 			</div>
@@ -267,6 +270,7 @@ function PerfProgress({ warming, counts }: { warming: boolean; counts: Counts })
 }
 
 export function PerfTest() {
+	const privacy = usePrivacy();
 	const [site, setSite] = useState("");
 	const [key, setKey] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
@@ -325,6 +329,7 @@ export function PerfTest() {
 						placeholder="https://example.com"
 						value={site}
 						onInput={(e) => setSite(e.currentTarget.value)}
+						class={privateInputClass(privacy)}
 						data-testid="perf-site"
 					/>
 				</label>

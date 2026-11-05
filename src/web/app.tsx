@@ -7,6 +7,7 @@ import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { HtmlTest } from "./html-test.tsx";
 import { PerfTest } from "./perf-test.tsx";
+import { loadPrivacy, PrivacyContext, savePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
@@ -159,13 +160,23 @@ function QuestionsSection({ questions, loadError, selected, model, target, onTog
 	);
 }
 
-function SiteHeader() {
+function SiteHeader({ privacy, onTogglePrivacy }: { privacy: boolean; onTogglePrivacy: () => void }) {
 	return (
 		<header class="site-header">
 			<div>
 				<h1>GPT 降智测试</h1>
 				<p class="lead">用固定题目调用你的站点，检查它返回的是不是你购买的 GPT 模型，有没有换成较弱的模型。</p>
 			</div>
+			<button
+				type="button"
+				class="btn btn-secondary"
+				aria-pressed={privacy}
+				title="开启时隐藏站点地址与别名，只改变页面显示"
+				onClick={onTogglePrivacy}
+				data-testid="privacy-toggle"
+			>
+				{privacy ? "隐私模式：开" : "隐私模式：关"}
+			</button>
 		</header>
 	);
 }
@@ -270,6 +281,11 @@ export function App() {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const r = useLadderRun({ site, key, model, questions: q.questions, selected: q.selected });
 	const [tab, switchTab] = useTab();
+	const [privacy, setPrivacy] = useState(loadPrivacy);
+	const togglePrivacy = () => {
+		savePrivacy(!privacy);
+		setPrivacy(!privacy);
+	};
 	const target = { site: site.trim(), key };
 	const formProps = { site, setSite, setKey, model, setModel, target, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
@@ -278,48 +294,50 @@ export function App() {
 	}, [r.run !== null]);
 
 	return (
-		<div class="container">
-			<SiteHeader />
-			<Tabs tab={tab} onSwitch={switchTab} />
-			{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
-			<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
-				<details class="privacy">
-					<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
-					<dl>
-						{PRIVACY.map(([term, text]) => (
-							<div key={term}>
-								<dt>{term}</dt>
-								<dd>{text}</dd>
-							</div>
-						))}
-					</dl>
-				</details>
-				<main class="grid main-grid">
-					<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-					{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
-					<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
-					<History target={target} />
-					<ApiDocs />
-				</main>
-			</div>
-			<div id="html-pane" role="tabpanel" aria-labelledby="tab-html" hidden={tab !== "html"}>
-				<HtmlTest />
-			</div>
-			<div id="perf-pane" role="tabpanel" aria-labelledby="tab-perf" hidden={tab !== "perf"}>
-				<PerfTest />
-			</div>
-			<div id="claude-pane" role="tabpanel" aria-labelledby="tab-claude" hidden={tab !== "claude"}>
-				<ClaudeTest />
-			</div>
-			{tab === "watch" && (
-				<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">
-					<WatchBoard />
+		<PrivacyContext.Provider value={privacy}>
+			<div class="container">
+				<SiteHeader privacy={privacy} onTogglePrivacy={togglePrivacy} />
+				<Tabs tab={tab} onSwitch={switchTab} />
+				{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
+				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
+					<details class="privacy">
+						<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
+						<dl>
+							{PRIVACY.map(([term, text]) => (
+								<div key={term}>
+									<dt>{term}</dt>
+									<dd>{text}</dd>
+								</div>
+							))}
+						</dl>
+					</details>
+					<main class="grid main-grid">
+						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
+						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
+						<History target={target} />
+						<ApiDocs />
+					</main>
 				</div>
-			)}
-			<footer class="site-footer">
-				<span>GPT 降智测试</span>
-				<span>实时测试不保存密钥 · 结果只代表测试当时的站点表现</span>
-			</footer>
-		</div>
+				<div id="html-pane" role="tabpanel" aria-labelledby="tab-html" hidden={tab !== "html"}>
+					<HtmlTest />
+				</div>
+				<div id="perf-pane" role="tabpanel" aria-labelledby="tab-perf" hidden={tab !== "perf"}>
+					<PerfTest />
+				</div>
+				<div id="claude-pane" role="tabpanel" aria-labelledby="tab-claude" hidden={tab !== "claude"}>
+					<ClaudeTest />
+				</div>
+				{tab === "watch" && (
+					<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">
+						<WatchBoard />
+					</div>
+				)}
+				<footer class="site-footer">
+					<span>GPT 降智测试</span>
+					<span>实时测试不保存密钥 · 结果只代表测试当时的站点表现</span>
+				</footer>
+			</div>
+		</PrivacyContext.Provider>
 	);
 }
