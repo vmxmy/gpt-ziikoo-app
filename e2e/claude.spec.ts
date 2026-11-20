@@ -20,7 +20,10 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 		await expect(page.getByTestId("tab-claude")).toHaveAttribute("aria-selected", "true");
 		await page.getByTestId("claude-site").fill(site);
 		await page.getByTestId("claude-key").fill(key);
-		await page.getByTestId("claude-model").fill("mock-claude");
+		await expect(page.getByTestId("claude-model-status")).toContainText("个模型", { timeout: 30_000 });
+		await page.getByTestId("claude-model-toggle").click();
+		await page.getByTestId("claude-model-option").filter({ hasText: /^mock-claude$/ }).click();
+		await expect(page.getByTestId("claude-model")).toHaveValue("mock-claude");
 		await page.getByTestId("claude-run").click();
 		await page.getByTestId("tab-live").click();
 		await page.getByTestId("tab-claude").click();
@@ -38,8 +41,10 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 		await page.getByTestId("claude-download").click();
 		const download = await downloading;
 		expect(download.suggestedFilename()).toMatch(/_mock-claude_claude_protocol\.html$/);
+		const reportPath = test.info().outputPath(download.suggestedFilename());
+		await download.saveAs(reportPath);
 		const viewer = await context.newPage();
-		await viewer.goto(`file://${await download.path()}`);
+		await viewer.goto(`file://${reportPath}`);
 		expect(await viewer.locator("h2").allTextContents()).toEqual(["测试条件", "结论", "用例矩阵", "不通过清单", "来源判断", "Request ID", "原始数据"]);
 		expect(await viewer.content()).not.toContain(key);
 		await expect(viewer.locator("body")).toContainText("本站不保存原始数据");
