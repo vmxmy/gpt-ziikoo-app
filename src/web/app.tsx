@@ -311,7 +311,6 @@ export function App() {
 						))}
 					</dl>
 				</details>
-				{/* Hidden rather than unmounted on the watch tab: the key input is uncontrolled, so a remount would blank it while state still holds the key. */}
 				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch"} />
 				{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>

@@ -24,7 +24,7 @@ test("模型列表自动加载并可从下拉选择", async ({ page, site, key }
 		await expect(page.getByTestId("model-input-list")).not.toBeVisible();
 	}));
 
-test("站点与密钥填一次，实时测试、Claude 专项、性能测试、HTML 生成共用，模型列表只请求一次", async ({ page, site, key }) =>
+test("站点与密钥填一次，实时测试、Claude 专项、性能测试、HTML 生成共用，切到持续监测再切回仍保留，模型列表只请求一次", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		const modelRequests: string[] = [];
 		page.on("request", (request) => {
@@ -38,6 +38,10 @@ test("站点与密钥填一次，实时测试、Claude 专项、性能测试、H
 			await page.getByTestId(`tab-${tab}`).click();
 			await expect(page.getByTestId(`${model}-status`)).toContainText("个模型");
 		}
+		await page.getByTestId("tab-watch").click();
+		await expect(page.getByTestId("site-input")).toBeHidden();
+		await page.getByTestId("tab-live").click();
+		await expect(page.getByTestId("key-input")).toHaveValue(key);
 		expect(modelRequests).toHaveLength(1);
 	}));
 
