@@ -241,6 +241,12 @@ describe("probe", () => {
 		});
 	});
 
+	it("sends the long-answer max_tokens on an anthropic HTML call", async () => {
+		const { deps, requests } = fakeUpstream({ status: 200, ttfb: 50, chunks: [{ at: 60, text: JSON.stringify({ id: "msg_01AbC", type: "message", content: [{ type: "text", text: "<html></html>" }], usage: { input_tokens: 31 } }) }] });
+		await probe(input({ protocol: "anthropic", model: "claude-opus-5-5", question: question("pelican-svg"), limits: LONG_ANSWER_LIMITS }), deps);
+		expect(JSON.parse(String(requests[0].init.body))).toMatchObject({ max_tokens: 128000 });
+	});
+
 	it("reads a whole anthropic message when the relay ignores stream", async () => {
 		const body = { id: "msg_01AbC", type: "message", content: [{ type: "thinking", thinking: "嗯" }, { type: "text", text: "No, I don't." }], usage: { input_tokens: 31 } };
 		const { deps } = fakeUpstream({ status: 200, ttfb: 50, chunks: [{ at: 60, text: JSON.stringify(body) }] });

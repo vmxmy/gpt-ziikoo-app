@@ -254,7 +254,7 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
 - 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
 - 「HTML 生成」页签:站点与密钥取自页签栏下方的共用面板,页签内只有模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。调用带 `progress: true`:调用中显示倒计时圆环(从本次超时倒数)、当前阶段(等站点响应、等首字、模型正在推理、正在接收回答)、已用时间、已收到的回答字符数和最近一次收到站点数据的时间,不显示回答原文(2026-10-27 维护者要求)。站点发出推理开始的信号后,首字前的阶段显示模型正在推理。信号是 Anthropic 的 `thinking` 块、responses 的 `reasoning` 项或 chat 的 `reasoning_content`。有的站点推理时不发推理内容,只每隔几秒发一次心跳,心跳也算收到数据,所以最近一次收到站点数据的时间能说明连接还在(2026-10-28 维护者同意)。每次调用随机抽一个 seed 出这题,题面不能自己写(2026-10-27 维护者决定)。从点「生成一次」起,表单下方完整显示本次题面,旁边的图标按钮一键复制;成功、失败都保留,取消后清除(2026-10-27 维护者要求)。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时和 token 数,失败时显示原因。token 数在站点给出推理 token 数时分成推理 token 数与回答 token 数(输出 token 数减推理 token 数),没给时只显示输出 token 数(含推理)(2026-10-27 维护者批准)。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
-- 上限:不带 `runId` 的 HTML 题调用,读取上限 8MB,超时 900 秒。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;xhigh 要先推理 5 分钟以上。读取上限不再往上加:解析时内存峰值约为响应的 6 倍,Worker 一个 isolate 只有 128MB。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
+- 上限:不带 `runId` 的 HTML 题调用,读取上限 8MB,超时 900 秒,`anthropic` 协议另发 `max_tokens: 128000`(见「架构」节的「Anthropic 协议」)。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;xhigh 要先推理 5 分钟以上。读取上限不再往上加:解析时内存峰值约为响应的 6 倍,Worker 一个 isolate 只有 128MB。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
 - 播放:探针接口对 HTML 题另返回 `artifact: { html, ending }`。`artifact` 不入库,也不进历史。
 - 取页面:Worker 只看回答,不看题面。这一步只决定能不能播放,不判对错(2026-10-27 维护者批准)。
   1. 标记都不区分大小写。起点是最后一个 `<html`。它前面最近的 `<!doctype html` 与它之间没有 `</html>` 时,这个 doctype 属于同一页,起点前移到 doctype。回答里没有 `<html` 时,起点是最后一个 `<!doctype html`。取最后一份,因为边想边写的模型会先写一份骨架页面,再写正式页面。
@@ -333,7 +333,7 @@ POST /api/probe   (Worker,匿名,限速)
 Anthropic 协议(2026-10-27 维护者授权):
 
 - 请求 `POST /v1/messages`。密钥放在请求头 `x-api-key`,另带 `anthropic-version: 2023-06-01`,不带 `Authorization`。
-- 请求体固定 `max_tokens: 32000`,这个接口要求必填。32000 适合 Opus 4 以后的 Claude 模型,也够写完一页 HTML。
+- 请求体必带 `max_tokens`,这个接口要求必填,且思考 token 也算在里面。不带 `runId` 的 HTML 题调用(「HTML 生成」页签的调用都属于这一类)发 `128000`,这是 Claude 4.6 以后模型的输出上限,留给高推理强度的思考加一整页 HTML。其他调用发 `32000`。输出上限低于 128K 的模型(如 Haiku 4.5)在不带 `runId` 的 HTML 题调用上会因 `128000` 返回 400。
 - 调用方给了推理强度时,请求体带 `thinking: { type: "adaptive" }` 与 `output_config: { effort }`。题的默认推理强度不用于这个协议:它按 OpenAI 推理模型设定,而 4.6 以前的 Claude 模型拒绝自适应思考。
 - 回答只取 `text_delta`,不取 `thinking_delta`。用量合并 `message_start` 与 `message_delta` 两处。输入 token 数是 `input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` 之和,缓存 token 数是 `cache_read_input_tokens`。思考 token 不单独计数,推理 token 数为空,`message_delta` 的 `output_tokens` 记为含思考的输出 token 数。响应 ID 形如 `msg_...`,形态记为 `other`。
 - 有协议选择的表单(「HTML 生成」、自定义题、添加监测)按模型名给默认值:模型名含 `claude` 时切到 `anthropic`;改成别的模型名时,`anthropic` 退回 `responses`,手选的 `chat` 保持。模型列表不用来判断协议:本站用 `Authorization` 请求 `/v1/models`,站点按 OpenAI 格式返回,看不出是否支持 `/v1/messages`。
@@ -779,6 +779,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | `ziikoo.app` zone 套餐 | Free(维护者确认)。不升级。边缘限速只当洪水闸,主要限速放在 Worker 里,Bot Fight Mode 保持关闭 |
 | 性能测试与 Claude 专项 | 2026-11-04 维护者授权。GZA-378 提供共用契约与报告工具,性能发压、Claude 接口和页签由后续票实现。性能只设 0.5/1 QPS × 30/60 秒探测档,不判定 5.00 M TPM。Claude 仅服务端固定用例,允许 count_tokens 与模型列表,批量接口恒为未测;结果不落库,日志仅含授权字段 |
 | 隐私模式 | 2026-11-05 维护者要求。默认开启,只遮显示:站点地址、主机名与别名不上屏、不进对话框、报告与报告文件名。接口与网络仍带主机名,看板链接的持有者可以自己关掉 |
+| HTML 题的 `max_tokens` | 2026-11-21 维护者决定。不带 `runId` 的 HTML 题调用在 `anthropic` 协议下发 `128000`,其余调用仍发 `32000`。原因:思考 token 计入 `max_tokens`,推理强度 high 时 32000 被思考用掉大半,页面写不完。代价:输出上限低于 128K 的模型(如 Haiku 4.5)在这类调用上返回 400,维护者接受。没有对全部 `anthropic` 调用提到 128000,否则这些模型的实时测试与监测每轮都会失败 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。
 
