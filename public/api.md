@@ -287,4 +287,5 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - 超出返回 429 并带 `Retry-After`。
 - 每轮最多 200 次调用。
 - 每次调用读取站点响应最多 256KB 与 120 秒。HTML 题不带 `runId` 时是 8MB 与 900 秒。
+- `anthropic` 协议的请求体带 `max_tokens`，思考 token 也计入。HTML 题不带 `runId` 时是 128000，其余调用是 32000。输出上限低于 128K 的模型（如 Haiku 4.5）在前一种调用上会被站点返回 400。
 - 每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。

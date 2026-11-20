@@ -7,15 +7,15 @@ export const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5
 export const MAX_BODY_BYTES = 256 * 1024;
 const ANSWER_PREVIEW_CHARS = 70;
 
-export type ProbeLimits = { maxBodyBytes: number; timeoutMs: number };
+export type ProbeLimits = { maxBodyBytes: number; timeoutMs: number; anthropicMaxTokens: number };
 
-export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 120_000 };
+// The Messages API requires max_tokens, and thinking tokens count against it. 128000 is the output cap of Claude 4.6
+// and later, which an HTML page with high effort needs; short calls stay at 32000 so models capped at 64K keep working.
+export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeoutMs: 120_000, anthropicMaxTokens: 32_000 };
 // A streamed HTML page costs about 200 bytes of events per token, past the stored-call cap, and an xhigh effort
 // reasons for more than five minutes first. Only unrecorded calls get these limits, so storage keeps its cap.
 // Parsing peaks at about six times the body in memory, so 8MB leaves room in the isolate's 128MB.
-export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 8 * 1024 * 1024, timeoutMs: 900_000 };
-// The Messages API requires max_tokens; 32000 fits every Claude model from Opus 4 on and leaves room for an HTML page.
-const ANTHROPIC_MAX_TOKENS = 32_000;
+export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 8 * 1024 * 1024, timeoutMs: 900_000, anthropicMaxTokens: 128_000 };
 const ANTHROPIC_VERSION = "2023-06-01";
 
 export type ProbeInput = {
@@ -80,11 +80,11 @@ const REQUEST_BUILDERS: Record<Protocol, (input: ProbeInput) => { path: string; 
 			...(effort && { reasoning_effort: effort }),
 		},
 	}),
-	anthropic: ({ model, question, effort }) => ({
+	anthropic: ({ model, question, effort, limits }) => ({
 		path: "/v1/messages",
 		body: {
 			model,
-			max_tokens: ANTHROPIC_MAX_TOKENS,
+			max_tokens: limits.anthropicMaxTokens,
 			messages: [{ role: "user", content: question.prompt }],
 			stream: true,
 			// Unlike the other protocols, the Messages API caches only on request.
