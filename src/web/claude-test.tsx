@@ -3,6 +3,7 @@ import { useRef, useState } from "preact/hooks";
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import { missingFields, runClaudeCases } from "./api.ts";
 import { buildClaudeReport, claudeCaseTitle, CLAUDE_VERDICT, summarizeClaude, type ClaudeReport } from "./claude-report.ts";
+import { ModelField } from "./model-field.tsx";
 import { fileHost, privateInputClass, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, reportFileName } from "./report.ts";
 import { normalizeKey } from "./results.ts";
@@ -41,6 +42,7 @@ function ClaudeSummary({ run }: { run: ClaudeReport }) {
 export function ClaudeTest() {
 	const privacy = usePrivacy();
 	const [site, setSite] = useState("");
+	const [key, setKey] = useState("");
 	const [model, setModel] = useState("");
 	const [results, setResults] = useState<ClaudeCaseResult[]>([]);
 	const [active, setActive] = useState<ClaudeCaseId | null>(null);
@@ -50,10 +52,10 @@ export function ClaudeTest() {
 	const controller = useRef<AbortController | null>(null);
 	const keyInput = useRef<HTMLInputElement>(null);
 	const running = active !== null;
+	const target = { site: site.trim(), key };
 
 	const start = async () => {
 		if (controller.current) return;
-		const target = { site: site.trim(), key: normalizeKey(keyInput.current?.value ?? "") };
 		const missing = missingFields(target, model);
 		if (missing.length) return setError(`请填写${missing.join("、")}`);
 		const parsed = parseSite(target.site);
@@ -94,12 +96,9 @@ export function ClaudeTest() {
 				</label>
 				<label class="field col-12 col-md-6 col-lg-4">
 					<span class="field-label">密钥</span>
-					<SecretInput inputRef={keyInput} testId="claude-key" />
+					<SecretInput inputRef={keyInput} testId="claude-key" onInput={(v) => setKey(normalizeKey(v))} />
 				</label>
-				<label class="field col-12 col-lg-4">
-					<span class="field-label">模型</span>
-					<input data-testid="claude-model" value={model} onInput={(event) => setModel(event.currentTarget.value)} disabled={running} placeholder="claude-..." />
-				</label>
+				<ModelField value={model} onInput={setModel} target={target} testId="claude-model" class="col-12 col-lg-4" disabled={running} />
 				<div class="actions col-12">
 					<button type="submit" class="btn" disabled={running} data-testid="claude-run">{running ? "正在测试…" : "开始测试"}</button>
 					{running && <button type="button" class="btn" data-testid="claude-cancel" onClick={() => controller.current?.abort()}>取消</button>}

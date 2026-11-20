@@ -13,6 +13,7 @@ type Props = {
 	invalid?: boolean;
 	describedBy?: string;
 	class?: string;
+	disabled?: boolean;
 };
 
 const DEBOUNCE_MS = 600;
@@ -20,7 +21,7 @@ const MIN_KEY_CHARS = 8;
 
 const loadable = (target: Target) => target.site !== "" && target.key.length >= MIN_KEY_CHARS;
 
-export function ModelField({ value, onInput, target, testId, invalid, describedBy, class: cellClass }: Props) {
+export function ModelField({ value, onInput, target, testId, invalid, describedBy, class: cellClass, disabled }: Props) {
 	const baseId = useId();
 	const listId = `${baseId}-list`;
 	const inputId = `${baseId}-input`;
@@ -131,6 +132,7 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 					aria-invalid={invalid || undefined}
 					aria-describedby={invalid ? describedBy : undefined}
 					autocomplete="off"
+					disabled={disabled}
 					data-testid={testId}
 				/>
 				<button
@@ -138,7 +140,7 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 					class="combo-toggle"
 					aria-label="展开模型列表"
 					data-testid={`${testId}-toggle`}
-					disabled={state.kind !== "ready"}
+					disabled={disabled || state.kind !== "ready"}
 					onClick={() => setOpen(!open)}
 				>
 					<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false">

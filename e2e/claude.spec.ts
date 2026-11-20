@@ -20,7 +20,10 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 		await expect(page.getByTestId("tab-claude")).toHaveAttribute("aria-selected", "true");
 		await page.getByTestId("claude-site").fill(site);
 		await page.getByTestId("claude-key").fill(key);
-		await page.getByTestId("claude-model").fill("mock-claude");
+		await expect(page.getByTestId("claude-model-status")).toContainText("个模型", { timeout: 30_000 });
+		await page.getByTestId("claude-model-toggle").click();
+		await page.getByTestId("claude-model-option").filter({ hasText: /^mock-claude$/ }).click();
+		await expect(page.getByTestId("claude-model")).toHaveValue("mock-claude");
 		await page.getByTestId("claude-run").click();
 		await page.getByTestId("tab-live").click();
 		await page.getByTestId("tab-claude").click();
