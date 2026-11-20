@@ -6,12 +6,13 @@ import { ClaudeTest } from "./claude-test.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { HtmlTest } from "./html-test.tsx";
+import { useModelList } from "./model-field.tsx";
 import { PerfTest } from "./perf-test.tsx";
 import { loadPrivacy, PrivacyContext, savePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
-import { TestForm } from "./test-form.tsx";
+import { TargetPanel, TestForm } from "./test-form.tsx";
 import { raceProtocols } from "./watch.ts";
 import { WatchBoard } from "./watch-board.tsx";
 
@@ -231,9 +232,9 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 	);
 }
 
-type RunInput = { site: string; key: string; model: string; questions: QuestionListItem[] | null; selected: string[] };
+type RunInput = { target: Target; model: string; questions: QuestionListItem[] | null; selected: string[] };
 
-function useLadderRun({ site, key, model, questions, selected }: RunInput) {
+function useLadderRun({ target, model, questions, selected }: RunInput) {
 	const [run, setRun] = useState<RunSnapshot | null>(null);
 	const [runQuestions, setRunQuestions] = useState<QuestionListItem[]>([]);
 	const [runSeed, setRunSeed] = useState(0);
@@ -250,7 +251,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 
 	const start = (protocol?: Protocol) => {
 		const chosen = (questions ?? []).filter((q) => selected.includes(q.id));
-		const missing = missingFields({ site, key }, model);
+		const missing = missingFields(target, model);
 		if (missing.length > 0) {
 			setFormError(`请填写${missing.join("、")}`);
 			return;
@@ -264,7 +265,7 @@ function useLadderRun({ site, key, model, questions, selected }: RunInput) {
 		runLadder({
 			runId: crypto.randomUUID(),
 			questions: chosen.map((q) => q.id),
-			probe: makeProbe({ site: site.trim(), key }, model.trim(), seed),
+			probe: makeProbe(target, model.trim(), seed),
 			signal: controller.signal,
 			race: raceProtocols(model.trim()),
 			protocol,
@@ -279,15 +280,16 @@ export function App() {
 	const [site, setSite] = useState("");
 	const [key, setKey] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
-	const r = useLadderRun({ site, key, model, questions: q.questions, selected: q.selected });
+	const target = { site: site.trim(), key };
+	const models = useModelList(target);
+	const r = useLadderRun({ target, model, questions: q.questions, selected: q.selected });
 	const [tab, switchTab] = useTab();
 	const [privacy, setPrivacy] = useState(loadPrivacy);
 	const togglePrivacy = () => {
 		savePrivacy(!privacy);
 		setPrivacy(!privacy);
 	};
-	const target = { site: site.trim(), key };
-	const formProps = { site, setSite, setKey, model, setModel, target, running: r.running, selectedCount: q.selected.length, error: r.formError };
+	const formProps = { model, setModel, models, running: r.running, selectedCount: q.selected.length, error: r.formError };
 
 	useEffect(() => {
 		if (r.run !== null) document.getElementById("results")?.scrollIntoView({ block: "start" });
@@ -298,19 +300,20 @@ export function App() {
 			<div class="container">
 				<SiteHeader privacy={privacy} onTogglePrivacy={togglePrivacy} />
 				<Tabs tab={tab} onSwitch={switchTab} />
+				<details class="privacy" hidden={tab !== "live"}>
+					<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
+					<dl>
+						{PRIVACY.map(([term, text]) => (
+							<div key={term}>
+								<dt>{term}</dt>
+								<dd>{text}</dd>
+							</div>
+						))}
+					</dl>
+				</details>
+				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch"} />
 				{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
-					<details class="privacy">
-						<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
-						<dl>
-							{PRIVACY.map(([term, text]) => (
-								<div key={term}>
-									<dt>{term}</dt>
-									<dd>{text}</dd>
-								</div>
-							))}
-						</dl>
-					</details>
 					<main class="grid main-grid">
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
 						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
@@ -320,13 +323,13 @@ export function App() {
 					</main>
 				</div>
 				<div id="html-pane" role="tabpanel" aria-labelledby="tab-html" hidden={tab !== "html"}>
-					<HtmlTest />
+					<HtmlTest target={target} models={models} />
 				</div>
 				<div id="perf-pane" role="tabpanel" aria-labelledby="tab-perf" hidden={tab !== "perf"}>
-					<PerfTest />
+					<PerfTest target={target} models={models} />
 				</div>
 				<div id="claude-pane" role="tabpanel" aria-labelledby="tab-claude" hidden={tab !== "claude"}>
-					<ClaudeTest />
+					<ClaudeTest target={target} models={models} />
 				</div>
 				{tab === "watch" && (
 					<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">

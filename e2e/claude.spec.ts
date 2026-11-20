@@ -18,8 +18,8 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 	try {
 		await page.goto("/#claude");
 		await expect(page.getByTestId("tab-claude")).toHaveAttribute("aria-selected", "true");
-		await page.getByTestId("claude-site").fill(site);
-		await page.getByTestId("claude-key").fill(key);
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
 		await expect(page.getByTestId("claude-model-status")).toContainText("个模型", { timeout: 30_000 });
 		await page.getByTestId("claude-model-toggle").click();
 		await page.getByTestId("claude-model-option").filter({ hasText: /^mock-claude$/ }).click();
@@ -50,7 +50,7 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 		await expect(viewer.locator("body")).toContainText("本站不保存原始数据");
 		await viewer.close();
 	} finally {
-		await page.getByTestId("claude-key").evaluateAll((inputs) => {
+		await page.getByTestId("key-input").evaluateAll((inputs) => {
 			for (const input of inputs) if (input instanceof HTMLInputElement) input.value = "";
 		});
 	}

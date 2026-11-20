@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 import type { Protocol } from "../shared/types.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS } from "../shared/watch.ts";
-import { ModelField } from "./model-field.tsx";
+import { ModelField, useModelList } from "./model-field.tsx";
 import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
@@ -55,6 +55,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 	const [alias, setAlias] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
+	const models = useModelList({ site: site.trim(), key });
 	const strategy = useWatchStrategy(DEFAULT_STRATEGY);
 	const [consent, setConsent] = useState(false);
 	const [error, setError] = useState<FieldError | null>(null);
@@ -121,7 +122,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			<ModelField
 				value={model}
 				onInput={chooseModel}
-				target={{ site: site.trim(), key }}
+				list={models}
 				testId="watch-add-model"
 				class="col-12 col-md-6 col-lg-4"
 				invalid={error?.field === "model"}

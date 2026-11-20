@@ -416,6 +416,10 @@ a {
 	margin-bottom: var(--space-4);
 }
 
+.target-panel {
+	margin-bottom: var(--space-5);
+}
+
 @media (max-width: 719px) {
 	.panel,
 	.card {

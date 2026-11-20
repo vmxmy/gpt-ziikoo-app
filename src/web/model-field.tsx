@@ -3,12 +3,12 @@ import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { ApiFailure, fetchModels, type Target } from "./api.ts";
 import { FAILURE_ADVICE } from "./results.ts";
 
-type LoadState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; models: string[] } | { kind: "failed"; message: string };
+export type ModelList = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; models: string[] } | { kind: "failed"; message: string };
 
 type Props = {
 	value: string;
 	onInput: (v: string) => void;
-	target: Target;
+	list: ModelList;
 	testId: string;
 	invalid?: boolean;
 	describedBy?: string;
@@ -21,28 +21,21 @@ const MIN_KEY_CHARS = 8;
 
 const loadable = (target: Target) => target.site !== "" && target.key.length >= MIN_KEY_CHARS;
 
-export function ModelField({ value, onInput, target, testId, invalid, describedBy, class: cellClass, disabled }: Props) {
-	const baseId = useId();
-	const listId = `${baseId}-list`;
-	const inputId = `${baseId}-input`;
-	const [state, setState] = useState<LoadState>({ kind: "idle" });
-	const [open, setOpen] = useState(false);
-	const [active, setActive] = useState(0);
-	const input = useRef<HTMLInputElement>(null);
-
+export function useModelList(target: Target): ModelList {
+	const [list, setList] = useState<ModelList>({ kind: "idle" });
 	useEffect(() => {
 		if (!loadable(target)) {
-			setState({ kind: "idle" });
+			setList({ kind: "idle" });
 			return;
 		}
 		const controller = new AbortController();
-		setState({ kind: "loading" });
+		setList({ kind: "loading" });
 		const timer = setTimeout(() => {
 			fetchModels(target, controller.signal).then(
-				(result) => setState(result.ok ? { kind: "ready", models: result.models } : { kind: "failed", message: FAILURE_ADVICE[result.reason].reason }),
+				(result) => setList(result.ok ? { kind: "ready", models: result.models } : { kind: "failed", message: FAILURE_ADVICE[result.reason].reason }),
 				(err: unknown) => {
 					if (controller.signal.aborted) return;
-					setState({ kind: "failed", message: err instanceof ApiFailure ? err.message : "连不上本站接口" });
+					setList({ kind: "failed", message: err instanceof ApiFailure ? err.message : "连不上本站接口" });
 				},
 			);
 		}, DEBOUNCE_MS);
@@ -51,8 +44,18 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 			controller.abort();
 		};
 	}, [target.site, target.key]);
+	return list;
+}
 
-	const models = state.kind === "ready" ? state.models : [];
+export function ModelField({ value, onInput, list, testId, invalid, describedBy, class: cellClass, disabled }: Props) {
+	const baseId = useId();
+	const listId = `${baseId}-list`;
+	const inputId = `${baseId}-input`;
+	const [open, setOpen] = useState(false);
+	const [active, setActive] = useState(0);
+	const input = useRef<HTMLInputElement>(null);
+
+	const models = list.kind === "ready" ? list.models : [];
 	const typing = value.trim() !== "" && !models.includes(value);
 	const filtered = typing ? models.filter((id) => id.toLowerCase().includes(value.toLowerCase())) : models;
 	const options = filtered.length > 0 ? filtered : models;
@@ -90,21 +93,21 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 	};
 
 	const status =
-		state.kind === "idle" ? (
+		list.kind === "idle" ? (
 			<p class="muted small" role="status" data-testid={`${testId}-status`}>
 				填写站点与密钥后自动加载模型列表
 			</p>
-		) : state.kind === "loading" ? (
+		) : list.kind === "loading" ? (
 			<p class="muted small" role="status" data-testid={`${testId}-status`}>
 				正在加载模型列表…
 			</p>
-		) : state.kind === "ready" ? (
+		) : list.kind === "ready" ? (
 			<p class="muted small" role="status" data-testid={`${testId}-status`}>
 				{models.length > 0 ? `${models.length} 个模型，可从列表选择` : "站点没有返回模型列表"}
 			</p>
 		) : (
 			<p class="warn small" data-testid={`${testId}-status`}>
-				{state.message}
+				{list.message}
 			</p>
 		);
 
@@ -120,7 +123,7 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 					value={value}
 					onInput={(e) => {
 						onInput(e.currentTarget.value);
-						if (state.kind === "ready") setOpen(true);
+						if (list.kind === "ready") setOpen(true);
 					}}
 					onKeyDown={onKeyDown}
 					onBlur={() => setOpen(false)}
@@ -140,7 +143,7 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 					class="combo-toggle"
 					aria-label="展开模型列表"
 					data-testid={`${testId}-toggle`}
-					disabled={disabled || state.kind !== "ready"}
+					disabled={disabled || list.kind !== "ready"}
 					onClick={() => setOpen(!open)}
 				>
 					<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
@@ -149,7 +152,7 @@ export function ModelField({ value, onInput, target, testId, invalid, describedB
 				</button>
 			</div>
 			{open &&
-				state.kind === "ready" &&
+				list.kind === "ready" &&
 				options.length > 0 && (
 					<ul role="listbox" id={listId} class="combo-list" data-testid={`${testId}-list`}>
 						{options.map((id, i) => (

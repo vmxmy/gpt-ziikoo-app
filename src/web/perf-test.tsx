@@ -3,14 +3,13 @@ import { useRef, useState } from "preact/hooks";
 import { GENERATORS } from "../shared/generators.ts";
 import { PERF_DURATIONS, PERF_QPS, sendOffsets, summarizeLoad, type PerfConfig, type PerfCriterion, type PerfSample, type PerfStats, type PerfSummary } from "../shared/perf.ts";
 import type { ProbeResponse, Protocol } from "../shared/types.ts";
-import { missingFields, probeLoad } from "./api.ts";
-import { ModelField } from "./model-field.tsx";
+import { missingFields, probeLoad, type Target } from "./api.ts";
+import { ModelField, type ModelList } from "./model-field.tsx";
 import "./perf.css";
-import { fileHost, privateInputClass, siteLabel, usePrivacy } from "./privacy.ts";
+import { fileHost, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, escapeHtml, reportFileName } from "./report.ts";
-import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
+import { DEFAULT_MODEL, ms } from "./results.ts";
 import type { ProbeOutcome } from "./runner.ts";
-import { SecretInput } from "./test-form.tsx";
 import { parseSite, protocolForModel, PROTOCOLS } from "./watch.ts";
 import { ChoiceField } from "./watch-strategy.tsx";
 
@@ -269,19 +268,14 @@ function PerfProgress({ warming, counts }: { warming: boolean; counts: Counts })
 	);
 }
 
-export function PerfTest() {
-	const privacy = usePrivacy();
-	const [site, setSite] = useState("");
-	const [key, setKey] = useState("");
+export function PerfTest({ target, models }: { target: Target; models: ModelList }) {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [qps, setQps] = useState<PerfConfig["qps"]>(1);
 	const [durationSec, setDurationSec] = useState<PerfConfig["durationSec"]>(30);
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [formError, setFormError] = useState("");
-	const keyInput = useRef<HTMLInputElement>(null);
 	const ctrl = useRef<AbortController | null>(null);
-	const target = { site: site.trim(), key };
 	const calls = qps * durationSec;
 	const chooseModel = (next: string) => {
 		setModel(next);
@@ -291,7 +285,7 @@ export function PerfTest() {
 	const start = async () => {
 		const missing = missingFields(target, model);
 		if (missing.length > 0) return setFormError(`请填写${missing.join("、")}`);
-		const parsed = parseSite(site);
+		const parsed = parseSite(target.site);
 		if (!parsed.ok) return setFormError(parsed.message);
 		setFormError("");
 		const controller = new AbortController();
@@ -320,24 +314,7 @@ export function PerfTest() {
 					void start();
 				}}
 			>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">站点地址</span>
-					<input
-						type="text"
-						inputMode="url"
-						autocomplete="username"
-						placeholder="https://example.com"
-						value={site}
-						onInput={(e) => setSite(e.currentTarget.value)}
-						class={privateInputClass(privacy)}
-						data-testid="perf-site"
-					/>
-				</label>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">密钥</span>
-					<SecretInput inputRef={keyInput} testId="perf-key" onInput={(v) => setKey(normalizeKey(v))} />
-				</label>
-				<ModelField value={model} onInput={chooseModel} target={target} testId="perf-model" class="col-12 col-md-6 col-lg-4" />
+				<ModelField value={model} onInput={chooseModel} list={models} testId="perf-model" class="col-12 col-md-6 col-lg-4" />
 				<ChoiceField label="协议" testId="perf-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="QPS" testId="perf-qps" value={qps} options={PERF_QPS} text={String} onChange={setQps} class="col-6 col-lg-2" />
 				<ChoiceField label="时长" testId="perf-duration" value={durationSec} options={PERF_DURATIONS} text={(d) => `${d} 秒`} onChange={setDurationSec} class="col-6 col-lg-2" />

@@ -42,7 +42,7 @@ export async function scrubbed(page: Page, body: () => Promise<void>): Promise<v
 	try {
 		await body();
 	} finally {
-		await page.locator('[data-testid="key-input"], [data-testid="html-key"]').evaluateAll((inputs) => {
+		await page.getByTestId("key-input").evaluateAll((inputs) => {
 			for (const input of inputs) if (input instanceof HTMLInputElement) input.value = "";
 		});
 	}

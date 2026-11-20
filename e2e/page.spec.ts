@@ -24,6 +24,27 @@ test("模型列表自动加载并可从下拉选择", async ({ page, site, key }
 		await expect(page.getByTestId("model-input-list")).not.toBeVisible();
 	}));
 
+test("站点与密钥填一次，实时测试、Claude 专项、性能测试、HTML 生成共用，切到持续监测再切回仍保留，模型列表只请求一次", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		const modelRequests: string[] = [];
+		page.on("request", (request) => {
+			if (new URL(request.url()).pathname === "/api/models") modelRequests.push(request.url());
+		});
+		await page.goto("/");
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
+		await expect(page.getByTestId("model-input-status")).toContainText("个模型", { timeout: 30_000 });
+		for (const [tab, model] of [["claude", "claude-model"], ["perf", "perf-model"], ["html", "html-model"]]) {
+			await page.getByTestId(`tab-${tab}`).click();
+			await expect(page.getByTestId(`${model}-status`)).toContainText("个模型");
+		}
+		await page.getByTestId("tab-watch").click();
+		await expect(page.getByTestId("site-input")).toBeHidden();
+		await page.getByTestId("tab-live").click();
+		await expect(page.getByTestId("key-input")).toHaveValue(key);
+		expect(modelRequests).toHaveLength(1);
+	}));
+
 test("custom 自定义题:规则为空或题面超 2000 码位时禁用测一次", async ({ page }) => {
 	await page.goto("/");
 	await page.getByTestId("custom-q-toggle").click();
@@ -77,8 +98,8 @@ test("custom 自定义题答错,回答按文本渲染", async ({ page, site, key
 test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生成后可播放", async ({ page, site, key }) =>
 	scrubbed(page, async () => {
 		await page.goto("/#html");
-		await page.getByTestId("html-site").fill(site);
-		await page.getByTestId("html-key").fill(key);
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
 		await page.getByTestId("html-model").fill("mock-claude");
 		await expect(page.getByTestId("html-protocol")).toHaveValue("anthropic");
 		await page.getByTestId("html-run").click();
@@ -91,8 +112,8 @@ test("HTML 生成页签按所选推理强度调用一次,生成中显示完整�
 	scrubbed(page, async () => {
 		await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 		await page.goto("/#html");
-		await page.getByTestId("html-site").fill(site);
-		await page.getByTestId("html-key").fill(key);
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
 		await page.getByTestId("html-model").fill("mock-slow");
 		await page.getByTestId("html-effort").selectOption("xhigh");
 		await page.getByTestId("html-run").click();
