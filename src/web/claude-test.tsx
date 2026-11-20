@@ -1,13 +1,11 @@
 /// <reference types="vite/client" />
 import { useRef, useState } from "preact/hooks";
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
-import { missingFields, runClaudeCases } from "./api.ts";
+import { missingFields, runClaudeCases, type Target } from "./api.ts";
 import { buildClaudeReport, claudeCaseTitle, CLAUDE_VERDICT, summarizeClaude, type ClaudeReport } from "./claude-report.ts";
-import { ModelField } from "./model-field.tsx";
-import { fileHost, privateInputClass, siteLabel, usePrivacy } from "./privacy.ts";
+import { ModelField, type ModelList } from "./model-field.tsx";
+import { fileHost, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, reportFileName } from "./report.ts";
-import { normalizeKey } from "./results.ts";
-import { SecretInput } from "./test-form.tsx";
 import { parseSite } from "./watch.ts";
 import "./claude.css";
 
@@ -39,10 +37,7 @@ function ClaudeSummary({ run }: { run: ClaudeReport }) {
 	);
 }
 
-export function ClaudeTest() {
-	const privacy = usePrivacy();
-	const [site, setSite] = useState("");
-	const [key, setKey] = useState("");
+export function ClaudeTest({ target, models }: { target: Target; models: ModelList }) {
 	const [model, setModel] = useState("");
 	const [results, setResults] = useState<ClaudeCaseResult[]>([]);
 	const [active, setActive] = useState<ClaudeCaseId | null>(null);
@@ -50,9 +45,7 @@ export function ClaudeTest() {
 	const [error, setError] = useState("");
 	const [cancelled, setCancelled] = useState(false);
 	const controller = useRef<AbortController | null>(null);
-	const keyInput = useRef<HTMLInputElement>(null);
 	const running = active !== null;
-	const target = { site: site.trim(), key };
 
 	const start = async () => {
 		if (controller.current) return;
@@ -90,15 +83,7 @@ export function ClaudeTest() {
 			<h2 id="claude-h">Claude 专项</h2>
 			<p class="muted small">协议固定为 anthropic，依次执行 13 个用例，同一时刻只执行一个。批量接口不向站点发请求。密钥仅在调用时转发，结果不保存，刷新页面即失。</p>
 			<form class="grid claude-form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">站点地址</span>
-					<input data-testid="claude-site" class={privateInputClass(privacy)} value={site} onInput={(event) => setSite(event.currentTarget.value)} disabled={running} placeholder="https://api.example.com" />
-				</label>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">密钥</span>
-					<SecretInput inputRef={keyInput} testId="claude-key" onInput={(v) => setKey(normalizeKey(v))} />
-				</label>
-				<ModelField value={model} onInput={setModel} target={target} testId="claude-model" class="col-12 col-lg-4" disabled={running} />
+				<ModelField value={model} onInput={setModel} list={models} testId="claude-model" class="col-12 col-lg-4" disabled={running} />
 				<div class="actions col-12">
 					<button type="submit" class="btn" disabled={running} data-testid="claude-run">{running ? "正在测试…" : "开始测试"}</button>
 					{running && <button type="button" class="btn" data-testid="claude-cancel" onClick={() => controller.current?.abort()}>取消</button>}

@@ -1,17 +1,13 @@
 import type { RefObject } from "preact";
 import { useRef, useState } from "preact/hooks";
-import type { Target } from "./api.ts";
-import { ModelField } from "./model-field.tsx";
+import { ModelField, type ModelList } from "./model-field.tsx";
 import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { costLine, normalizeKey } from "./results.ts";
 
 type Props = {
-	site: string;
-	setSite: (v: string) => void;
-	setKey: (v: string) => void;
 	model: string;
 	setModel: (v: string) => void;
-	target: Target;
+	models: ModelList;
 	running: boolean;
 	selectedCount: number;
 	error: string;
@@ -55,21 +51,15 @@ export function SecretInput({ inputRef, testId, onInput, invalid, describedBy }:
 	);
 }
 
-export function TestForm(props: Props) {
+export function TargetPanel(props: { site: string; setSite: (v: string) => void; setKey: (v: string) => void; hidden: boolean }) {
 	const keyInput = useRef<HTMLInputElement>(null);
 	const privacy = usePrivacy();
 
 	return (
-		<section class="panel col-12" aria-labelledby="form-h">
-			<h2 id="form-h">站点与密钥</h2>
-			<form
-				class="run-form"
-				onSubmit={(e) => {
-					e.preventDefault();
-					props.onStart();
-				}}
-			>
-				<label class="field">
+		<section class="panel target-panel" aria-labelledby="target-h" hidden={props.hidden}>
+			<h2 id="target-h">站点与密钥</h2>
+			<div class="grid">
+				<label class="field col-12 col-md-6">
 					<span class="field-label">站点地址</span>
 					<input
 						type="text"
@@ -82,11 +72,27 @@ export function TestForm(props: Props) {
 						data-testid="site-input"
 					/>
 				</label>
-				<label class="field">
+				<label class="field col-12 col-md-6">
 					<span class="field-label">密钥</span>
 					<SecretInput inputRef={keyInput} testId="key-input" onInput={(v) => props.setKey(normalizeKey(v))} />
 				</label>
-				<ModelField value={props.model} onInput={props.setModel} target={props.target} testId="model-input" />
+			</div>
+		</section>
+	);
+}
+
+export function TestForm(props: Props) {
+	return (
+		<section class="panel col-12" aria-labelledby="form-h">
+			<h2 id="form-h">实时测试</h2>
+			<form
+				class="run-form"
+				onSubmit={(e) => {
+					e.preventDefault();
+					props.onStart();
+				}}
+			>
+				<ModelField value={props.model} onInput={props.setModel} list={props.models} testId="model-input" />
 				<div class="run-form-actions">
 					{/* Distinct keys force a new node: reusing one would flip its type to submit inside the cancel click and resubmit the form. */}
 					{props.running ? (

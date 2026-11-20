@@ -2,13 +2,11 @@ import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/types.ts";
-import { customResult, missingFields, probeHtml, type CustomResult } from "./api.ts";
+import { customResult, missingFields, probeHtml, type CustomResult, type Target } from "./api.ts";
 import { Modal } from "./modal.tsx";
-import { ModelField } from "./model-field.tsx";
-import { privateInputClass, usePrivacy } from "./privacy.ts";
+import { ModelField, type ModelList } from "./model-field.tsx";
 import { downloadReport } from "./report.ts";
-import { DEFAULT_MODEL, ms, normalizeKey } from "./results.ts";
-import { SecretInput } from "./test-form.tsx";
+import { DEFAULT_MODEL, ms } from "./results.ts";
 import { ChoiceField } from "./watch-strategy.tsx";
 import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
@@ -253,18 +251,13 @@ function HtmlResult({ result, protocol, effort, fileName }: Done) {
 	);
 }
 
-export function HtmlTest() {
-	const privacy = usePrivacy();
-	const [site, setSite] = useState("");
-	const [key, setKey] = useState("");
+export function HtmlTest({ target, models }: { target: Target; models: ModelList }) {
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const [effort, setEffort] = useState<EffortChoice>("");
 	const [status, setStatus] = useState<Status>({ kind: "idle" });
 	const [formError, setFormError] = useState("");
-	const keyInput = useRef<HTMLInputElement>(null);
 	const ctrl = useRef<AbortController | null>(null);
-	const target = { site: site.trim(), key };
 	const chooseModel = (next: string) => {
 		setModel(next);
 		setProtocol((current) => protocolForModel(next, current));
@@ -309,27 +302,10 @@ export function HtmlTest() {
 					void send();
 				}}
 			>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">站点地址</span>
-					<input
-						type="text"
-						inputMode="url"
-						autocomplete="username"
-						placeholder="https://example.com"
-						value={site}
-						onInput={(e) => setSite(e.currentTarget.value)}
-						class={privateInputClass(privacy)}
-						data-testid="html-site"
-					/>
-				</label>
-				<label class="field col-12 col-md-6 col-lg-4">
-					<span class="field-label">密钥</span>
-					<SecretInput inputRef={keyInput} testId="html-key" onInput={(v) => setKey(normalizeKey(v))} />
-				</label>
 				<ChoiceField label="协议" testId="html-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="推理强度" testId="html-effort" value={effort} options={EFFORTS} text={effortText} onChange={setEffort} class="col-6 col-lg-2" />
 				{/* From 720px up the button sits beside the model field, where the open model list cannot cover it. */}
-				<ModelField value={model} onInput={chooseModel} target={target} testId="html-model" class="col-12 col-md-6 col-lg-4" />
+				<ModelField value={model} onInput={chooseModel} list={models} testId="html-model" class="col-12 col-md-6 col-lg-4" />
 				<div class="actions col-12 col-md-6 col-lg-4">
 					{status.kind === "sending" ? (
 						<button key="cancel" type="button" class="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="html-cancel">
