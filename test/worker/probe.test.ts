@@ -254,6 +254,62 @@ describe("probe", () => {
 		expect(result.response).toMatchObject({ ok: true, correct: false, answer: "No, I don't.", streamed: false, promptTokens: 31, cachedTokens: null });
 	});
 
+	it("parses a streamed gemini call, skipping thought parts for the answer and the first-token time and keeping the last cumulative usage", async () => {
+		const chunk = (parts: object[], extra: object = {}) => ({ candidates: [{ content: { role: "model", parts } }], modelVersion: "gemini-x", responseId: "abc", ...extra });
+		const { deps } = fakeUpstream({
+			status: 200,
+			ttfb: 70,
+			chunks: [
+				{ at: 90, text: sse(chunk([{ text: "他是谁", thought: true }], { usageMetadata: { promptTokenCount: 20, cachedContentTokenCount: 11, thoughtsTokenCount: 12, totalTokenCount: 32 } })) },
+				{ at: 150, text: sse(chunk([{ text: "", thoughtSignature: "c2ln" }])) },
+				{ at: 200, text: sse(chunk([{ text: "Yes, I know" }])) },
+				{
+					at: 230,
+					text: sse(
+						chunk([{ text: " him." }], {
+							candidates: [{ content: { role: "model", parts: [{ text: " him." }] }, finishReason: "STOP" }],
+							usageMetadata: { promptTokenCount: 20, cachedContentTokenCount: 11, candidatesTokenCount: 8, thoughtsTokenCount: 30, totalTokenCount: 58 },
+						}),
+					),
+				},
+			],
+		});
+		const result = await probe(input({}), deps);
+		expect(result.response).toEqual({
+			ok: true,
+			questionVersion: 1,
+			correct: true,
+			note: "YES",
+			reasoningTokens: 30,
+			outputTokens: 38,
+			idShape: "other",
+			answer: "Yes, I know him.",
+			streamed: true,
+			ttfbMs: 70,
+			ttftMs: 200,
+			totalMs: 230,
+			promptTokens: 20,
+			cachedTokens: 11,
+		});
+	});
+
+	it("counts a gemini usage without cached or thought counts as zero cached, zero reasoning and the candidate count as output", async () => {
+		const event = { candidates: [{ content: { role: "model", parts: [{ text: "Yes, I know him." }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 8, totalTokenCount: 28 } };
+		const { deps } = fakeUpstream({ status: 200, ttfb: 70, chunks: [{ at: 90, text: sse(event) }] });
+		const result = await probe(input({}), deps);
+		expect(result.response).toMatchObject({ ok: true, promptTokens: 20, cachedTokens: 0, reasoningTokens: 0, outputTokens: 8 });
+	});
+
+	it("reads a whole gemini JSON array when the relay ignores alt=sse", async () => {
+		const body = [
+			{ candidates: [{ content: { role: "model", parts: [{ text: "hmm", thought: true }, { text: "Yes, I know" }] } }], usageMetadata: { promptTokenCount: 20, cachedContentTokenCount: 11, candidatesTokenCount: 3, thoughtsTokenCount: 30 }, responseId: "abc" },
+			{ candidates: [{ content: { role: "model", parts: [{ text: " him." }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 20, cachedContentTokenCount: 11, candidatesTokenCount: 8, thoughtsTokenCount: 30 }, responseId: "abc" },
+		];
+		const { deps } = fakeUpstream({ status: 200, ttfb: 50, chunks: [{ at: 60, text: JSON.stringify(body) }] });
+		const result = await probe(input({}), deps);
+		expect(result.response).toMatchObject({ ok: true, correct: true, answer: "Yes, I know him.", streamed: false, ttftMs: null, promptTokens: 20, cachedTokens: 11, reasoningTokens: 30, outputTokens: 38 });
+	});
+
 	it("falls back to a whole JSON body with raw control characters", async () => {
 		const body =
 			'{"id":"resp_ft_123","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"No,\nI don\'t"}]}],' +
@@ -503,9 +559,10 @@ describe("probe", () => {
 	});
 
 	it.each([
-		["responses", { type: "response.output_item.added", output_index: 0, item: { type: "reasoning", id: "rs_1", summary: [] } }],
-		["chat", { choices: [{ index: 0, delta: { reasoning_content: "Let me" } }] }],
-	] as const)("reports reasoning from the %s protocol's reasoning signal", async (protocol, event) => {
+		["responses reasoning item", "responses", { type: "response.output_item.added", output_index: 0, item: { type: "reasoning", id: "rs_1", summary: [] } }],
+		["chat reasoning_content", "chat", { choices: [{ index: 0, delta: { reasoning_content: "Let me" } }] }],
+		["gemini thought part", "responses", { candidates: [{ content: { role: "model", parts: [{ text: "Let me", thought: true }] } }] }],
+	] as const)("reports reasoning from the %s", async (_label, protocol, event) => {
 		const { deps } = fakeUpstream({ status: 200, ttfb: 100, chunks: [{ at: 150, text: sse(event) }] });
 		const reports: StreamProgress[] = [];
 		await probe(input({ protocol, question: question("pelican-svg"), onProgress: (p) => reports.push(p) }), deps);
