@@ -2,7 +2,8 @@
 import { useRef, useState } from "preact/hooks";
 import { GENERATORS } from "../shared/generators.ts";
 import { PERF_DURATIONS, PERF_QPS, sendOffsets, summarizeLoad, type PerfConfig, type PerfCriterion, type PerfSample, type PerfStats, type PerfSummary } from "../shared/perf.ts";
-import type { ProbeResponse, Protocol } from "../shared/types.ts";
+import type { ProbeResponse } from "../shared/types.ts";
+import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import { missingFields, probeLoad, type Target } from "./api.ts";
 import { ModelField, type ModelList } from "./model-field.tsx";
 import "./perf.css";
@@ -10,7 +11,7 @@ import { fileHost, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, escapeHtml, reportFileName } from "./report.ts";
 import { DEFAULT_MODEL, ms } from "./results.ts";
 import type { ProbeOutcome } from "./runner.ts";
-import { parseSite, protocolForModel, PROTOCOLS } from "./watch.ts";
+import { parseSite } from "./watch.ts";
 import { ChoiceField } from "./watch-strategy.tsx";
 
 // Calibrated on a real site: the long-prefix prompt of about 21,400 characters counted about 4,700 input tokens.

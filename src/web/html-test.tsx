@@ -1,14 +1,14 @@
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { generatePelican } from "../shared/pelican-gen.ts";
-import type { Effort, PageEnding, ProbeProgress, Protocol } from "../shared/types.ts";
+import type { Effort, PageEnding, ProbeProgress } from "../shared/types.ts";
+import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import { customResult, missingFields, probeHtml, type CustomResult, type Target } from "./api.ts";
 import { Modal } from "./modal.tsx";
 import { ModelField, type ModelList } from "./model-field.tsx";
 import { downloadReport } from "./report.ts";
 import { DEFAULT_MODEL, ms } from "./results.ts";
 import { ChoiceField } from "./watch-strategy.tsx";
-import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
 type EffortChoice = Effort | "";
 const EFFORTS: readonly EffortChoice[] = ["", "low", "medium", "high", "xhigh"];

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { GeneratorId, Protocol, QuestionListItem } from "../shared/types.ts";
+import type { GeneratorId, QuestionListItem } from "../shared/types.ts";
+import { raceProtocols, type Protocol } from "../shared/protocols.ts";
 import { fetchQuestions, HTML_QUESTION, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ClaudeTest } from "./claude-test.tsx";
@@ -13,7 +14,6 @@ import { DEFAULT_MODEL } from "./results.ts";
 import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TargetPanel, TestForm } from "./test-form.tsx";
-import { raceProtocols } from "./watch.ts";
 import { WatchBoard } from "./watch-board.tsx";
 
 const PRIVACY = [

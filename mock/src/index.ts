@@ -1,6 +1,6 @@
 import { solveBag } from "../../src/shared/candy-gen.ts";
+import type { Protocol } from "../../src/shared/protocols.ts";
 
-type Protocol = "responses" | "chat" | "anthropic";
 type IdKind = "hex" | "ft" | "b64";
 type Topic = "thibault" | "candy" | "candy-var" | "ciallo" | "pelican-svg" | "long-prefix";
 type Answering = {
@@ -111,10 +111,14 @@ const PATHS = new Map<string, Protocol>([
 
 const VALID_AUTH = /^Bearer sk-\S{5,}$/;
 
+const bearerAuth = (request: Request): string => request.headers.get("Authorization") ?? "";
+
 // The Messages API takes the key in x-api-key, so it is read back into the bearer form the other endpoints check.
-function authOf(request: Request, protocol: Protocol): string {
-	return protocol === "anthropic" ? `Bearer ${request.headers.get("x-api-key") ?? ""}` : (request.headers.get("Authorization") ?? "");
-}
+const AUTH: Record<Protocol, (request: Request) => string> = {
+	responses: bearerAuth,
+	chat: bearerAuth,
+	anthropic: (request) => `Bearer ${request.headers.get("x-api-key") ?? ""}`,
+};
 
 const COUNT_MARKER = "Count from 1 to 200";
 const CANDY_VAR_MARKER = "最后一行严格按此格式写：答案：";
@@ -208,13 +212,18 @@ function base64url(bytes: number): string {
 		.replaceAll("/", "_");
 }
 
+const NATIVE_IDS: Record<Protocol, () => string> = {
+	responses: () => `resp_68${hex(23)}`,
+	chat: () => `chatcmpl-${hex(15)}`,
+	anthropic: () => `msg_01${base64url(18)}`,
+};
+
 // Shapes must land on the worker's idShape rules: hex ids never start with 0 (that prefix is
 // classified base64), and the leading Z keeps a base64 id from ever being all hex digits.
 function responseId(protocol: Protocol, kind: IdKind): string {
 	if (kind === "ft") return `resp_ft_${hex(20)}`;
 	if (kind === "b64") return `resp_Z${base64url(36)}`;
-	if (protocol === "anthropic") return `msg_01${base64url(18)}`;
-	return protocol === "responses" ? `resp_68${hex(23)}` : `chatcmpl-${hex(15)}`;
+	return NATIVE_IDS[protocol]();
 }
 
 function answerText(prompt: string, b: Answering): string {
@@ -225,41 +234,47 @@ function answerText(prompt: string, b: Answering): string {
 	return b.big ? `${text} ${"x".repeat(BIG_FILLER_CHARS)}` : text;
 }
 
+type Tokens = { input: number; cached: number; reasoning: number; output: number };
+
+const USAGE: Record<Protocol, (t: Tokens) => { usage: object; reasoning: number }> = {
+	responses: (t) => ({
+		usage: {
+			input_tokens: t.input,
+			input_tokens_details: { cached_tokens: t.cached },
+			output_tokens: t.output,
+			output_tokens_details: { reasoning_tokens: t.reasoning },
+			total_tokens: t.input + t.output,
+		},
+		reasoning: t.reasoning,
+	}),
+	chat: (t) => ({
+		usage: {
+			prompt_tokens: t.input,
+			completion_tokens: t.output,
+			total_tokens: t.input + t.output,
+			prompt_tokens_details: { cached_tokens: t.cached, audio_tokens: 0 },
+			completion_tokens_details: {
+				reasoning_tokens: t.reasoning,
+				audio_tokens: 0,
+				accepted_prediction_tokens: 0,
+				rejected_prediction_tokens: 0,
+			},
+		},
+		reasoning: t.reasoning,
+	}),
+	// Anthropic leaves the cached part out of input_tokens and has no reasoning count.
+	anthropic: (t) => ({
+		usage: { input_tokens: t.input - t.cached, cache_creation_input_tokens: 0, cache_read_input_tokens: t.cached, output_tokens: t.output },
+		reasoning: 0,
+	}),
+};
+
 function usageOf(protocol: Protocol, prompt: string, text: string, b: Answering): { usage: object; reasoning: number } {
 	const topic = topicOf(prompt);
 	const input = (b.cached ? 1280 : Math.ceil(prompt.length / 2)) + (topic ? (b.extraInput[topic] ?? 0) : 0);
 	const cached = b.cached ? 1024 : Math.floor(input * b.cacheShare);
 	const reasoning = b.correct ? 192 : 0;
-	const output = reasoning + Math.ceil(text.length / 2);
-	// Anthropic leaves the cached part out of input_tokens and has no reasoning count.
-	if (protocol === "anthropic") {
-		return {
-			usage: { input_tokens: input - cached, cache_creation_input_tokens: 0, cache_read_input_tokens: cached, output_tokens: output },
-			reasoning: 0,
-		};
-	}
-	const usage =
-		protocol === "responses"
-			? {
-					input_tokens: input,
-					input_tokens_details: { cached_tokens: cached },
-					output_tokens: output,
-					output_tokens_details: { reasoning_tokens: reasoning },
-					total_tokens: input + output,
-				}
-			: {
-					prompt_tokens: input,
-					completion_tokens: output,
-					total_tokens: input + output,
-					prompt_tokens_details: { cached_tokens: cached, audio_tokens: 0 },
-					completion_tokens_details: {
-						reasoning_tokens: reasoning,
-						audio_tokens: 0,
-						accepted_prediction_tokens: 0,
-						rejected_prediction_tokens: 0,
-					},
-				};
-	return { usage, reasoning };
+	return USAGE[protocol]({ input, cached, reasoning, output: reasoning + Math.ceil(text.length / 2) });
 }
 
 function split(text: string, size: number): string[] {
@@ -413,8 +428,15 @@ function field(value: unknown, key: string): unknown {
 	return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 }
 
+const messagesPrompt = (body: unknown): unknown => field(field(field(body, "messages"), "0"), "content");
+const PROMPTS: Record<Protocol, (body: unknown) => unknown> = {
+	responses: (body) => field(body, "input"),
+	chat: messagesPrompt,
+	anthropic: messagesPrompt,
+};
+
 function answer(protocol: Protocol, body: unknown, model: string, b: Answering): Response {
-	const input = protocol === "responses" ? field(body, "input") : field(field(field(body, "messages"), "0"), "content");
+	const input = PROMPTS[protocol](body);
 	const prompt = typeof input === "string" ? input : "";
 	const text = answerText(prompt, b);
 	const { usage, reasoning } = usageOf(protocol, prompt, text, b);
@@ -468,7 +490,7 @@ export default {
 		const protocol = PATHS.get(pathname);
 		if (!protocol) return openAiError(404, "Unknown URL.", "invalid_request_error", "unknown_url");
 		if (request.method !== "POST") return openAiError(405, "Method not allowed.", "invalid_request_error", null);
-		const auth = authOf(request, protocol);
+		const auth = AUTH[protocol](request);
 		if (!VALID_AUTH.test(auth)) return failure({ kind: "fail", status: 401, echo: false }, auth);
 		const body = await readBody(request);
 		if (body === undefined) {

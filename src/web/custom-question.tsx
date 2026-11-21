@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import type { Protocol } from "../shared/types.ts";
+import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import {
 	checkCustom,
 	codePoints,
@@ -13,7 +13,6 @@ import {
 	type Target,
 } from "./api.ts";
 import { ms } from "./results.ts";
-import { protocolForModel, PROTOCOLS } from "./watch.ts";
 
 type Status = { kind: "idle" } | { kind: "sending" } | { kind: "done"; result: CustomResult; protocol: Protocol };
 

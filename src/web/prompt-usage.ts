@@ -1,5 +1,6 @@
 import { GENERATORS } from "../shared/generators.ts";
-import type { Protocol, QuestionListItem } from "../shared/types.ts";
+import type { QuestionListItem } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import type { Attempt } from "./runner.ts";
 
 // Both thresholds are uncalibrated reference values; no real site has been measured against them.

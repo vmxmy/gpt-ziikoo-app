@@ -1,3 +1,5 @@
+import type { Protocol } from "./protocols.ts";
+
 export type QuestionKind = "knowledge" | "reasoning" | "metrics";
 
 export type Scorer =
@@ -8,7 +10,6 @@ export type Scorer =
 	| { type: "svg_animation" };
 
 export type Effort = "low" | "medium" | "high" | "xhigh";
-export type Protocol = "responses" | "chat" | "anthropic";
 export type GeneratorId = "candy" | "pelican" | "prefix";
 
 export type QuestionMeta = {

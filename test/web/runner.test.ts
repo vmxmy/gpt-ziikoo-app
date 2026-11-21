@@ -3,7 +3,7 @@ import { evaluateQuestion } from "../../src/shared/ladder.ts";
 import type { ProbeResponse } from "../../src/shared/types.ts";
 import { checkCustom, customResult, probeCustom, type CustomDraft } from "../../src/web/api.ts";
 import { ladderCalls, RATE_LIMIT_RETRIES, runLadder, type ProbeArgs, type ProbeOutcome } from "../../src/web/runner.ts";
-import { raceProtocols } from "../../src/web/watch.ts";
+import { raceProtocols } from "../../src/shared/protocols.ts";
 
 const RUN_ID = "11111111-2222-4333-8444-555555555555";
 
