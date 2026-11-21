@@ -226,7 +226,11 @@ describe("parseProbeRequest protocol", () => {
 		expect(parseProbeRequest({ ...target, protocol: "anthropic", question: "candy" })).toMatchObject({ ok: true, value: { protocol: "anthropic", effort: null } });
 		expect(parseProbeRequest({ ...target, protocol: "anthropic", question: "candy", effort: "high" })).toMatchObject({ ok: true, value: { effort: "high" } });
 		expect(parseProbeRequest({ ...target, question: "candy" })).toMatchObject({ ok: true, value: { effort: "low" } });
-		expect(parseProbeRequest({ ...target, protocol: "gemini", question: "candy" })).toEqual({ ok: false, message: "protocol 必须是 responses、chat 或 anthropic" });
+		expect(parseProbeRequest({ ...target, protocol: "grpc", question: "candy" })).toEqual({ ok: false, message: "protocol 必须是 responses、chat、anthropic 或 gemini" });
+	});
+
+	it("accepts the gemini protocol and skips a question's default effort for it", () => {
+		expect(parseProbeRequest({ ...target, protocol: "gemini", question: "candy" })).toMatchObject({ ok: true, value: { protocol: "gemini", effort: null } });
 	});
 });
 

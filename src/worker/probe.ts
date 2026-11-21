@@ -18,6 +18,8 @@ export const DEFAULT_LIMITS: ProbeLimits = { maxBodyBytes: MAX_BODY_BYTES, timeo
 // Parsing peaks at about six times the body in memory, so 8MB leaves room in the isolate's 128MB.
 export const LONG_ANSWER_LIMITS: ProbeLimits = { maxBodyBytes: 8 * 1024 * 1024, timeoutMs: 900_000, anthropicMaxTokens: 128_000 };
 const ANTHROPIC_VERSION = "2023-06-01";
+// Thinking counts against this cap, and above it Gemini 4 switches to long decode with a CONTINUATION finish.
+const GEMINI_MAX_OUTPUT_TOKENS = 65_536;
 
 export type ProbeInput = {
 	origin: string;
@@ -70,8 +72,9 @@ const EMPTY_CAPTURE: ProbeCapture = {
 type WireCall = Pick<ProbeInput, "model" | "question" | "effort" | "limits">;
 
 type Wire = {
-	// A question's default effort is tuned for OpenAI reasoning models; on anthropic it would switch on adaptive thinking,
-	// which Claude models before 4.6 reject, so only an effort the caller chose reaches them.
+	// A question's default effort is tuned for OpenAI reasoning models. On anthropic it would switch on adaptive thinking,
+	// which Claude models before 4.6 reject; on gemini, 2.5 models reject thinkingLevel and models without thinking reject
+	// thinkingConfig. So on those two only an effort the caller chose is sent.
 	questionEffort: boolean;
 	request(call: WireCall): { path: string; body: object };
 	auth(key: string): Record<string, string>;
@@ -115,6 +118,20 @@ const WIRE: Record<Protocol, Wire> = {
 			},
 		}),
 		auth: (key) => ({ "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION }),
+	},
+	gemini: {
+		questionEffort: false,
+		request: ({ model, question, effort }) => ({
+			path: `/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+			body: {
+				contents: [{ role: "user", parts: [{ text: question.prompt }] }],
+				generationConfig: {
+					maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+					...(effort && { thinkingConfig: { thinkingLevel: effort, includeThoughts: true } }),
+				},
+			},
+		}),
+		auth: (key) => ({ "x-goog-api-key": key }),
 	},
 };
 

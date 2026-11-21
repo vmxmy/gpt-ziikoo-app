@@ -148,6 +148,13 @@ describe("stage-1 protocol race", () => {
 		expect(view.protocol).toBe("anthropic");
 		expect(view.questions[0].verdict?.stages.slice(0, 2).map((s) => s.state)).toEqual(["passed", "passed"]);
 	});
+
+	it("counts the gemini answer when a Gemini race has gemini and chat both answering", () => {
+		const geminiStage2 = stage2.map((c) => ({ ...c, protocol: "gemini" as const }));
+		const [view] = buildRunViews([raceChatWrong, call({ protocol: "gemini" }), ...geminiStage2], () => "knowledge");
+		expect(view.protocol).toBe("gemini");
+		expect(view.questions[0].verdict?.stages.slice(0, 2).map((s) => s.state)).toEqual(["passed", "passed"]);
+	});
 });
 
 function rawCall(overrides: Partial<RawCall>): RawCall {
