@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_CASES, type ClaudeCaseResult } from "../../src/shared/claude-cases.ts";
-import { buildClaudeReport, summarizeClaude } from "../../src/web/claude-report.ts";
+import { buildClaudeReport, caseCounts, caseRows, summarizeClaude } from "../../src/web/claude-report.ts";
 import { runClaudeCase, runClaudeCases } from "../../src/web/api.ts";
 
 const results = (): ClaudeCaseResult[] => CLAUDE_CASES.map(({ id }) => ({
@@ -64,6 +64,19 @@ describe("Claude protocol report", () => {
 		expect(html).not.toMatch(/<script|<img|style=|<style/);
 		for (const id of ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "P1", "P2"]) expect(html).toContain(`req_${id}`);
 		expect(html).toContain("<td>C2</td><td>3</td><td>—</td><td>—</td><td>30</td>");
+	});
+});
+
+describe("Claude case progress", () => {
+	it("shows finished cases by verdict, the active case as running and the rest as waiting", () => {
+		const done = results().slice(0, 8).map((result) => result.id === "C4" ? { ...result, verdict: "fail" as const } : result);
+		const rows = caseRows(done, "C9", false);
+		expect(rows.map((row) => row.state)).toEqual(["pass", "pass", "pass", "fail", "pass", "pass", "pass", "pass", "running", "waiting", "waiting", "waiting", "waiting"]);
+		expect(caseCounts(rows)).toEqual([["pass", 7], ["fail", 1], ["running", 1], ["waiting", 4]]);
+	});
+
+	it("marks the unfinished cases as cancelled after a cancel", () => {
+		expect(caseRows(results().slice(0, 2), null, true).map((row) => row.state).slice(0, 4)).toEqual(["pass", "pass", "cancelled", "cancelled"]);
 	});
 });
 

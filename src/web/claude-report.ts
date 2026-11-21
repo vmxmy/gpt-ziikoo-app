@@ -1,8 +1,25 @@
-import { CLAUDE_CASES, type CaseVerdict, type ClaudeCaseResult } from "../shared/claude-cases.ts";
+import { CLAUDE_CASES, type CaseVerdict, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import { escapeHtml } from "./report.ts";
 
 export const CLAUDE_VERDICT: Record<CaseVerdict, string> = { pass: "通过", fail: "未通过", gap: "协议缺口", untested: "未测" };
 export type ClaudeReport = { host: string; model: string; at: Date; results: ClaudeCaseResult[] };
+
+export type CaseState = CaseVerdict | "running" | "waiting" | "cancelled";
+export const CASE_STATE_LABEL: Record<CaseState, string> = { ...CLAUDE_VERDICT, running: "进行中", waiting: "待执行", cancelled: "已取消" };
+const STATE_ORDER: readonly CaseState[] = ["pass", "fail", "gap", "untested", "running", "waiting", "cancelled"];
+
+export type CaseRow = (typeof CLAUDE_CASES)[number] & { result: ClaudeCaseResult | undefined; state: CaseState };
+
+export function caseRows(results: ClaudeCaseResult[], active: ClaudeCaseId | null, cancelled: boolean): CaseRow[] {
+	return CLAUDE_CASES.map((entry) => {
+		const result = results.find(({ id }) => id === entry.id);
+		const state = result ? result.verdict : entry.id === active ? "running" : cancelled ? "cancelled" : "waiting";
+		return { ...entry, result, state };
+	});
+}
+
+export const caseCounts = (rows: CaseRow[]): [CaseState, number][] =>
+	STATE_ORDER.map((state): [CaseState, number] => [state, rows.filter((row) => row.state === state).length]).filter(([, count]) => count > 0);
 
 export function summarizeClaude(results: ClaudeCaseResult[]) {
 	const failures = results.filter((result) => result.verdict !== "pass" && !(result.id === "C10" && result.verdict === "gap") && !(result.id === "P3" && result.verdict === "untested"));

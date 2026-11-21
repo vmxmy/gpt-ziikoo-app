@@ -3,8 +3,94 @@
 	margin-top: var(--space-4);
 }
 
+.claude-overview {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+}
+
+.claude-strip {
+	display: grid;
+	grid-auto-columns: minmax(0, 1fr);
+	grid-auto-flow: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.claude-strip li {
+	display: grid;
+	gap: var(--space-1);
+	justify-items: center;
+	min-width: 0;
+}
+
+.claude-strip-bar {
+	width: 100%;
+	height: 12px;
+	border-radius: var(--radius-1);
+	background: var(--tone, var(--none));
+}
+
+.claude-strip-id {
+	color: var(--fg-3);
+	font-size: var(--fs-12);
+	font-variant-numeric: tabular-nums;
+}
+
+.claude-counts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-4);
+	margin: 0;
+	padding: 0;
+	font-size: var(--fs-13);
+	list-style: none;
+}
+
+.claude-counts li,
+.claude-matrix .claude-verdict {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	white-space: nowrap;
+}
+
+.claude-counts li::before,
+.claude-matrix .claude-verdict::before {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--tone, var(--none));
+	content: "";
+}
+
+.claude-strip li[data-state="pending"] .claude-strip-bar,
+.claude-matrix .claude-verdict[data-state="pending"]::before {
+	animation: claude-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes claude-pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.claude-strip li[data-state="pending"] .claude-strip-bar,
+	.claude-matrix .claude-verdict[data-state="pending"]::before {
+		animation: none;
+	}
+}
+
 .claude-matrix {
 	margin-top: var(--space-5);
+}
+
+.claude-matrix tr[data-active] > * {
+	background: var(--surface-2);
 }
 
 .claude-report {

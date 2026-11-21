@@ -2,12 +2,33 @@
 import { useRef, useState } from "preact/hooks";
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import { missingFields, runClaudeCases, type Target } from "./api.ts";
-import { buildClaudeReport, claudeCaseTitle, CLAUDE_VERDICT, summarizeClaude, type ClaudeReport } from "./claude-report.ts";
+import { buildClaudeReport, caseCounts, caseRows, CASE_STATE_LABEL, claudeCaseTitle, summarizeClaude, type CaseRow, type CaseState, type ClaudeReport } from "./claude-report.ts";
 import { ModelField, type ModelList } from "./model-field.tsx";
 import { fileHost, siteLabel, usePrivacy } from "./privacy.ts";
 import { downloadReport, reportFileName } from "./report.ts";
 import { parseSite } from "./watch.ts";
 import "./claude.css";
+
+// A running case reuses the live test's "进行中" tone; a case that has not run keeps the neutral fill.
+const tone = (state: CaseState) => (state === "running" ? { "data-state": "pending" } : state === "waiting" || state === "cancelled" ? {} : { "data-verdict": state });
+
+function CaseOverview({ rows }: { rows: CaseRow[] }) {
+	return (
+		<div class="claude-overview">
+			<ol class="claude-strip" aria-hidden="true" data-testid="claude-strip">
+				{rows.map((row) => (
+					<li key={row.id} {...tone(row.state)} title={`${row.id} ${row.title}：${CASE_STATE_LABEL[row.state]}`} data-testid={`claude-strip-${row.id}`}>
+						<span class="claude-strip-bar" />
+						<span class="claude-strip-id">{row.id}</span>
+					</li>
+				))}
+			</ol>
+			<ul class="claude-counts" data-testid="claude-counts">
+				{caseCounts(rows).map(([state, count]) => <li key={state} {...tone(state)}>{CASE_STATE_LABEL[state]} {count}</li>)}
+			</ul>
+		</div>
+	);
+}
 
 function ClaudeSummary({ run }: { run: ClaudeReport }) {
 	const privacy = usePrivacy();
@@ -46,6 +67,8 @@ export function ClaudeTest({ target, models }: { target: Target; models: ModelLi
 	const [cancelled, setCancelled] = useState(false);
 	const controller = useRef<AbortController | null>(null);
 	const running = active !== null;
+	const rows = caseRows(results, active, cancelled);
+	const current = rows.find((row) => row.state === "running");
 
 	const start = async () => {
 		if (controller.current) return;
@@ -92,19 +115,20 @@ export function ClaudeTest({ target, models }: { target: Target; models: ModelLi
 			<div aria-live="polite">
 				{error && <p class="warn" role="alert" data-testid="claude-error">{error}</p>}
 				{cancelled && <p class="warn" data-testid="claude-cancelled">已取消，未完成的用例不计入结论。</p>}
-				{running && <p data-testid="claude-progress">正在执行 {active} · 已完成 {results.length} / {CLAUDE_CASES.length}</p>}
+				{current && <p data-testid="claude-progress">正在执行 {current.id} {current.title} · 已完成 {results.length} / {CLAUDE_CASES.length}</p>}
 			</div>
+			<CaseOverview rows={rows} />
 			<div class="table-wrap claude-matrix">
 				<table data-testid="claude-matrix">
-					<thead><tr><th>用例</th><th>做了什么</th><th>通过标准</th><th>结论</th><th>说明与回答预览</th></tr></thead>
-					<tbody>{CLAUDE_CASES.map((entry) => {
-						const result = results.find(({ id }) => id === entry.id);
-						return <tr key={entry.id} data-testid={`claude-case-${entry.id}`}>
-							<th scope="row">{entry.id} {entry.title}</th><td>{entry.does}</td><td>{entry.expect}</td>
-							<td><span class="claude-verdict" data-verdict={result?.verdict} data-kind={active === entry.id ? "running" : undefined} data-testid={`claude-verdict-${entry.id}`}>{result ? CLAUDE_VERDICT[result.verdict] : active === entry.id ? "进行中" : cancelled ? "已取消" : "待执行"}</span></td>
-							<td>{result?.note}{result?.preview && <p>{result.preview}</p>}</td>
-						</tr>;
-					})}</tbody>
+					<thead><tr><th>用例</th><th>结论</th><th>做了什么</th><th>通过标准</th><th>说明与回答预览</th></tr></thead>
+					<tbody>{rows.map((row) => (
+						<tr key={row.id} data-active={row.state === "running" || undefined} data-testid={`claude-case-${row.id}`}>
+							<th scope="row">{row.id} {row.title}</th>
+							<td><span class="claude-verdict" {...tone(row.state)} data-testid={`claude-verdict-${row.id}`}>{CASE_STATE_LABEL[row.state]}</span></td>
+							<td>{row.does}</td><td>{row.expect}</td>
+							<td>{row.result?.note}{row.result?.preview && <p>{row.result.preview}</p>}</td>
+						</tr>
+					))}</tbody>
 				</table>
 			</div>
 			{run && <ClaudeSummary run={run} />}
