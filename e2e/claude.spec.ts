@@ -33,6 +33,9 @@ test("Claude 专项依次执行 13 个用例，切换页签后保留结果，页
 			await expect(page.getByTestId(`claude-verdict-${id}`)).toHaveText(/^(通过|未通过|协议缺口|未测)$/);
 		}
 		await expect(page.getByTestId("claude-verdict-P3")).toHaveText("未测");
+		await expect(page.getByTestId("claude-strip").locator("li")).toHaveCount(13);
+		await expect(page.getByTestId("claude-strip-P3")).toHaveAttribute("data-verdict", "untested");
+		await expect(page.getByTestId("claude-counts")).toContainText(/未测 \d+/);
 		expect(sent).toEqual(["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "P1", "P2", "P3"]);
 		expect(maxPending).toBe(1);
 		expect(await page.content()).not.toContain(key);
