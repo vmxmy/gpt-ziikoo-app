@@ -78,6 +78,15 @@ export function lenientJson(text: string): unknown {
 	}
 }
 
+function geminiText(d: unknown): string {
+	const parts = get(d, "candidates", 0, "content", "parts");
+	if (!Array.isArray(get(d, "candidates")) || !Array.isArray(parts)) return "";
+	return parts
+		.filter((part) => get(part, "thought") !== true)
+		.map((part) => str(get(part, "text")) ?? "")
+		.join("");
+}
+
 function fullText(d: unknown): string {
 	const output = get(d, "output");
 	const parts = Array.isArray(output)
@@ -92,16 +101,17 @@ function fullText(d: unknown): string {
 		: [];
 	const blocks = get(d, "content");
 	const anthropicText = Array.isArray(blocks) ? blocks.filter((b) => get(b, "type") === "text").map((b) => str(get(b, "text")) ?? "") : [];
-	return parts.join("") || (str(get(d, "choices", 0, "message", "content")) ?? anthropicText.join(""));
+	return parts.join("") || (str(get(d, "choices", 0, "message", "content")) ?? anthropicText.join("")) || geminiText(d);
 }
 
 function deltaText(p: unknown): string {
 	if (get(p, "type") === "response.output_text.delta") return str(get(p, "delta")) ?? "";
 	if (get(p, "type") === "content_block_delta") return get(p, "delta", "type") === "text_delta" ? (str(get(p, "delta", "text")) ?? "") : "";
-	return str(get(p, "choices", 0, "delta", "content")) ?? "";
+	return str(get(p, "choices", 0, "delta", "content")) ?? geminiText(p);
 }
 
-const eventUsage = (p: unknown): object | null => obj(get(p, "response", "usage")) ?? obj(get(p, "message", "usage")) ?? obj(get(p, "usage"));
+const eventUsage = (p: unknown): object | null =>
+	obj(get(p, "response", "usage")) ?? obj(get(p, "message", "usage")) ?? obj(get(p, "usage")) ?? obj(get(p, "usageMetadata"));
 
 function isError(p: unknown): boolean {
 	const type = get(p, "type");
@@ -109,6 +119,17 @@ function isError(p: unknown): boolean {
 }
 
 export function readUsage(usage: unknown): Usage {
+	const geminiPrompt = num(get(usage, "promptTokenCount"));
+	if (geminiPrompt !== null) {
+		// Gemini may omit a count that is zero, so a missing count is 0.
+		const thoughts = num(get(usage, "thoughtsTokenCount")) ?? 0;
+		return {
+			promptTokens: geminiPrompt,
+			cachedTokens: num(get(usage, "cachedContentTokenCount")) ?? 0,
+			reasoningTokens: thoughts,
+			outputTokens: (num(get(usage, "candidatesTokenCount")) ?? 0) + thoughts,
+		};
+	}
 	const input = num(get(usage, "input_tokens"));
 	const cacheRead = num(get(usage, "cache_read_input_tokens"));
 	const cacheWrite = num(get(usage, "cache_creation_input_tokens"));
@@ -161,6 +182,8 @@ function eventPayload(block: string): unknown {
 function startsReasoning(p: unknown): boolean {
 	if (get(p, "type") === "content_block_start") return ["thinking", "redacted_thinking"].includes(str(get(p, "content_block", "type")) ?? "");
 	if (get(p, "type") === "response.output_item.added") return get(p, "item", "type") === "reasoning";
+	const geminiParts = get(p, "candidates", 0, "content", "parts");
+	if (Array.isArray(geminiParts) && geminiParts.some((part) => get(part, "thought") === true)) return true;
 	return Boolean(str(get(p, "choices", 0, "delta", "reasoning_content")) || str(get(p, "choices", 0, "delta", "reasoning")));
 }
 
@@ -195,7 +218,7 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 			text += delta;
 			ttftMs ??= event.t;
 		}
-		id ??= str(get(p, "response", "id")) ?? str(get(p, "message", "id")) ?? str(get(p, "id"));
+		id ??= str(get(p, "response", "id")) ?? str(get(p, "message", "id")) ?? str(get(p, "id")) ?? str(get(p, "responseId"));
 		// Anthropic reports input usage in message_start and output usage in message_delta, so later fields join earlier ones.
 		const found = eventUsage(p);
 		if (found) usage = { ...(usage ?? {}), ...found };
@@ -223,7 +246,9 @@ function parseSse(chunks: TimedText[], key: string): ParsedBody {
 // A key the relay wrote with \uXXXX escapes survives the byte-level redaction and only appears after JSON.parse.
 function parseWhole(body: string, key: string): ParsedBody {
 	const d = lenientJson(body);
-	const joined = fullText(d);
+	// A relay that ignores `alt=sse` answers with a JSON array of the objects the stream would have carried.
+	const items = Array.isArray(d) ? d : [d];
+	const joined = items.map(fullText).join("");
 	const text = redact(joined, key);
 	const rawDropped = text !== joined;
 	return {
@@ -233,9 +258,12 @@ function parseWhole(body: string, key: string): ParsedBody {
 		rawDropped,
 		text,
 		ttftMs: null,
-		usage: obj(get(d, "usage")),
-		id: str(get(d, "id")),
-		error: get(d, "error") != null,
+		usage: items.reduce<object | null>((merged, item) => {
+			const found = obj(get(item, "usage")) ?? obj(get(item, "usageMetadata"));
+			return found ? { ...(merged ?? {}), ...found } : merged;
+		}, null),
+		id: items.reduce<string | null>((found, item) => found ?? str(get(item, "id")) ?? str(get(item, "responseId")), null),
+		error: items.some((item) => get(item, "error") != null),
 	};
 }
 
