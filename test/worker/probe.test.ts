@@ -310,6 +310,37 @@ describe("probe", () => {
 		expect(result.response).toMatchObject({ ok: true, correct: true, answer: "Yes, I know him.", streamed: false, ttftMs: null, promptTokens: 20, cachedTokens: 11, reasoningTokens: 30, outputTokens: 38 });
 	});
 
+	it("sends a gemini call to the model's streamGenerateContent path with only x-goog-api-key and a thinking config", async () => {
+		const { deps, requests } = fakeUpstream({ status: 200, ttfb: 1, chunks: [{ at: 2, text: "{}" }] });
+		await probe(input({ protocol: "gemini", model: "gemini-4-neon", effort: "high" }), deps);
+		expect(requests[0].url).toBe("https://api.example.com/v1beta/models/gemini-4-neon:streamGenerateContent?alt=sse");
+		expect(requests[0].init.headers).toEqual({
+			"User-Agent": UA,
+			"x-goog-api-key": KEY,
+			"Content-Type": "application/json",
+			Accept: "text/event-stream",
+		});
+		expect(JSON.parse(String(requests[0].init.body))).toEqual({
+			contents: [{ role: "user", parts: [{ text: question("thibault").prompt }] }],
+			generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: "high", includeThoughts: true } },
+		});
+	});
+
+	it("leaves the gemini thinking config out when the caller gave no effort", async () => {
+		const { deps, requests } = fakeUpstream({ status: 200, ttfb: 1, chunks: [{ at: 2, text: "{}" }] });
+		await probe(input({ protocol: "gemini", model: "gemini-4-neon", question: question("candy") }), deps);
+		expect(JSON.parse(String(requests[0].init.body)).generationConfig).toEqual({ maxOutputTokens: 65536 });
+	});
+
+	it("keeps a hostile gemini model id inside one path segment and out of the query", async () => {
+		const { deps, requests } = fakeUpstream({ status: 200, ttfb: 1, chunks: [{ at: 2, text: "{}" }] });
+		await probe(input({ protocol: "gemini", model: "a/../b?key=x#y" }), deps);
+		const url = new URL(requests[0].url);
+		expect(url.origin).toBe("https://api.example.com");
+		expect(url.pathname).toBe("/v1beta/models/a%2F..%2Fb%3Fkey%3Dx%23y:streamGenerateContent");
+		expect(url.search).toBe("?alt=sse");
+	});
+
 	it("falls back to a whole JSON body with raw control characters", async () => {
 		const body =
 			'{"id":"resp_ft_123","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"No,\nI don\'t"}]}],' +

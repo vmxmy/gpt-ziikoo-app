@@ -108,6 +108,18 @@ test("模型名含 claude 时协议自动切到 anthropic,经 /v1/messages 生�
 		await expect(page.getByTestId("html-result")).toContainText("输出 token 数（含推理）");
 	}));
 
+test("模型名含 gemini 时协议自动切到 gemini,经 streamGenerateContent 生成后可播放", async ({ page, site, key }) =>
+	scrubbed(page, async () => {
+		await page.goto("/#html");
+		await page.getByTestId("site-input").fill(site);
+		await page.getByTestId("key-input").fill(key);
+		await page.getByTestId("html-model").fill("mock-gemini");
+		await expect(page.getByTestId("html-protocol")).toHaveValue("gemini");
+		await page.getByTestId("html-run").click();
+		await expect(page.getByTestId("html-play")).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId("html-result")).toContainText("协议 gemini");
+	}));
+
 test("HTML 生成页签按所选推理强度调用一次,生成中显示完整题面、倒计时与收到的字符数,切走再切回不中断,题面可复制,生成后可下载 HTML 并播放动画", async ({ page, context, site, key }) =>
 	scrubbed(page, async () => {
 		await context.grantPermissions(["clipboard-read", "clipboard-write"]);

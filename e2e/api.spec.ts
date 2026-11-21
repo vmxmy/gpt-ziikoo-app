@@ -146,6 +146,15 @@ test("anthropic 协议调 /v1/messages,解析流式回答并把缓存计入提�
 	expect(await probe("mock-cached")).toMatchObject({ ok: true, promptTokens: 1280, cachedTokens: 1024 });
 });
 
+test("gemini 协议只用 x-goog-api-key 调 streamGenerateContent,思考片段不进回答,缓存计入提示 token", async ({ request, site, key }) => {
+	const probe = async (model: string, extra: object = {}) =>
+		(await request.post("/api/probe", { data: { site, key, protocol: "gemini", model, question: "thibault", ...extra } })).json();
+	const thought = await probe("mock-gemini", { effort: "high" });
+	expect(thought).toMatchObject({ ok: true, correct: true, streamed: true, idShape: "other", reasoningTokens: 192 });
+	expect(thought.answer).not.toContain("THOUGHT-LEAK");
+	expect(await probe("mock-cached")).toMatchObject({ ok: true, promptTokens: 1280, cachedTokens: 1024 });
+});
+
 // seed 12345 is 24 total, 11 and 13; mock-wrong answers one too many for the total and the first count.
 test("candy-var 按 seed 出题,mock 解出后答对,seed 随调用落库", async ({ request, site, key }) => {
 	const runId = crypto.randomUUID();

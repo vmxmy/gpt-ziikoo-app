@@ -106,11 +106,11 @@
 | --- | --- | --- |
 | `site` | 是 | 站点地址，例如 `https://example.com` |
 | `key` | 是 | 站点密钥，8 到 1024 个字母、数字或 `_` `.` `-` |
-| `protocol` | 是 | `responses`、`chat` 或 `anthropic`，分别对应站点的 `/v1/responses`、`/v1/chat/completions`、`/v1/messages` |
+| `protocol` | 是 | `responses`、`chat`、`anthropic` 或 `gemini`，分别对应站点的 `/v1/responses`、`/v1/chat/completions`、`/v1/messages`、`/v1beta/models/{model}:streamGenerateContent?alt=sse`。`gemini` 协议把密钥放在请求头 `x-goog-api-key` 转给站点 |
 | `model` | 是 | 1 到 100 个字符 |
 | `question` | 二选一 | 题库的题 id |
 | `custom` | 二选一 | 自定义题，见下 |
-| `effort` | 否 | `low`、`medium`、`high` 或 `xhigh`。不带时用题目的 `defaultEffort`；`anthropic` 协议不带时不设推理强度 |
+| `effort` | 否 | `low`、`medium`、`high` 或 `xhigh`。不带时用题目的 `defaultEffort`；`anthropic` 与 `gemini` 协议不带时不设推理强度 |
 | `runId` | 否 | UUID。带它结果才保存进历史，同时必须带 `stage` 与 `seq` |
 | `stage` | 带 `runId` 时必填 | 关卡号，1 到 4 |
 | `seq` | 带 `runId` 时必填 | 关内序号，1 到 15 |
@@ -144,7 +144,7 @@
 | `correct` | `true` 答对，`false` 答错 |
 | `note` | 评分说明，例如抽出的答案 |
 | `answer` | 回答的前 70 个字符。带 `runId` 的调用，完整回答在 `/api/history/raw` |
-| `reasoningTokens`、`outputTokens`、`promptTokens`、`cachedTokens` | 用量。`outputTokens` 含推理 token。站点没返回的字段是 `null` |
+| `reasoningTokens`、`outputTokens`、`promptTokens`、`cachedTokens` | 用量。`outputTokens` 含推理 token。站点没返回的字段是 `null`。`gemini` 协议例外：站点返回了 `promptTokenCount` 时，缺失的缓存、推理、输出计数记 0 |
 | `idShape` | 响应 id 的形状：`hex`、`ft`、`base64` 或 `other` |
 | `streamed` | 站点是否按流式返回 |
 | `ttfbMs`、`ttftMs`、`totalMs` | 首字节、首字、总耗时，单位毫秒 |
@@ -156,7 +156,7 @@
 { "ok": false, "reason": "unauthorized", "httpStatus": 401 }
 ```
 
-`reason` 是 `unauthorized`、`forbidden`、`not_found`、`rate_limited`、`upstream_error`、`timeout` 或 `bad_response`。`httpStatus` 是站点的状态码，没有时是 `null`。
+`reason` 是 `unauthorized`、`forbidden`、`not_found`、`rate_limited`、`upstream_error`、`timeout` 或 `bad_response`。`httpStatus` 是站点的状态码，没有时是 `null`。Google 对无效密钥返回 400，本站记为 `upstream_error`，不记 `unauthorized`。
 
 ### progress: true
 
@@ -217,7 +217,7 @@
 
 1. 用 `GET /api/questions` 选题 id。
 2. 生成一个 UUID 作 `runId`，生成一个 0 到 4294967295 的整数作 `seed`。本轮所有调用用同一个 `runId` 与 `seed`。
-3. 选协议。模型名含 `claude`（不分大小写）时比较 `anthropic` 与 `chat`，否则比较 `responses` 与 `chat`。
+3. 选协议。模型名含 `claude`（不分大小写）时比较 `anthropic` 与 `chat`，含 `gemini`（不分大小写）时比较 `gemini` 与 `chat`，否则比较 `responses` 与 `chat`。两个都含时按 `claude` 处理。`gemma` 不算 `gemini`。
 4. 用第一道题的 `stage: 1, seq: 1` 同时调用两个协议。返回 `ok: true` 的协议胜出；两个都是 `ok: true` 时前一个胜出。两个都不是时，`attempt` 加 1 再比，最多 3 次。这次调用就是第一道题第 1 关的结果。
 5. 之后的调用都用胜出的协议。不同的题可以并行。
 6. 每道题从第 1 关开始。第 n 关的 `seq` 从 1 到这关的调用数，同时最多 4 个调用。
@@ -261,7 +261,7 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - `token` 只在建立时返回一次，持有它就能读取、暂停、修改与删除。`board` 给了且非空时加入这个看板，否则新签发。
 - 令牌无效或监测已过期时返回 404，不区分两者。7 天没有读取或操作，监测自动删除。
 - 全站最多 200 个持续监测，一个看板最多 30 个，超出返回 429 `watch_limit`。
-- 建立时参数不合法或站点拒绝密钥返回 400。问题出在 `site`、`key` 或 `model` 时带 `field` 指明字段。
+- 建立时参数不合法，或首次调用判为 `unauthorized`，返回 400。问题出在 `site`、`key` 或 `model` 时带 `field` 指明字段。
 
 `WatchView`：
 
@@ -288,4 +288,5 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - 每轮最多 200 次调用。
 - 每次调用读取站点响应最多 256KB 与 120 秒。HTML 题不带 `runId` 时是 8MB 与 900 秒。
 - `anthropic` 协议的请求体带 `max_tokens`，思考 token 也计入。HTML 题不带 `runId` 时是 128000，其余调用是 32000。输出上限低于 128K 的模型（如 Haiku 4.5）在前一种调用上会被站点返回 400。
+- `gemini` 协议的请求体恒带 `maxOutputTokens: 65536`，思考 token 也计入。
 - 每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。

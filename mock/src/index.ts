@@ -35,6 +35,7 @@ type Completion = {
 	usage: object;
 	gapMs: number;
 	includeUsage: boolean;
+	includeThoughts: boolean;
 };
 
 const FIRST_TOKEN_DELAY_MS = 80;
@@ -79,6 +80,7 @@ const MODELS = new Map<string, Behavior>([
 	["mock-good", ANSWER],
 	// The page defaults a model whose name holds "claude" to the anthropic protocol.
 	["mock-claude", ANSWER],
+	["mock-gemini", ANSWER],
 	["mock-wrong", { ...ANSWER, correct: false }],
 	["mock-partial", { ...ANSWER, wrongFor: new Set<Topic>(["candy"]) }],
 	["mock-nostream", { ...ANSWER, honorStream: false }],
@@ -109,15 +111,27 @@ const PATHS = new Map<string, Protocol>([
 	["/v1/messages", "anthropic"],
 ]);
 
+const GEMINI_PATH = /^\/v1beta\/models\/([^/]+):streamGenerateContent$/;
+
+type Route = { protocol: Protocol; fromUrl: { model: string; stream: boolean } | null };
+
+function route({ pathname, searchParams }: URL): Route | null {
+	const protocol = PATHS.get(pathname);
+	if (protocol) return { protocol, fromUrl: null };
+	const model = GEMINI_PATH.exec(pathname)?.[1];
+	if (model === undefined) return null;
+	return { protocol: "gemini", fromUrl: { model: decodeURIComponent(model), stream: searchParams.get("alt") === "sse" } };
+}
+
 const VALID_AUTH = /^Bearer sk-\S{5,}$/;
 
 const bearerAuth = (request: Request): string => request.headers.get("Authorization") ?? "";
 
-// The Messages API takes the key in x-api-key, so it is read back into the bearer form the other endpoints check.
 const AUTH: Record<Protocol, (request: Request) => string> = {
 	responses: bearerAuth,
 	chat: bearerAuth,
 	anthropic: (request) => `Bearer ${request.headers.get("x-api-key") ?? ""}`,
+	gemini: (request) => `Bearer ${request.headers.get("x-goog-api-key") ?? ""}`,
 };
 
 const COUNT_MARKER = "Count from 1 to 200";
@@ -216,6 +230,7 @@ const NATIVE_IDS: Record<Protocol, () => string> = {
 	responses: () => `resp_68${hex(23)}`,
 	chat: () => `chatcmpl-${hex(15)}`,
 	anthropic: () => `msg_01${base64url(18)}`,
+	gemini: () => base64url(18),
 };
 
 // Shapes must land on the worker's idShape rules: hex ids never start with 0 (that prefix is
@@ -266,6 +281,19 @@ const USAGE: Record<Protocol, (t: Tokens) => { usage: object; reasoning: number 
 	anthropic: (t) => ({
 		usage: { input_tokens: t.input - t.cached, cache_creation_input_tokens: 0, cache_read_input_tokens: t.cached, output_tokens: t.output },
 		reasoning: 0,
+	}),
+	// Gemini may omit a count that is zero. Candidates exclude thoughts, and the prompt count includes the cached part.
+	gemini: (t) => ({
+		usage: Object.fromEntries(
+			Object.entries({
+				promptTokenCount: t.input,
+				cachedContentTokenCount: t.cached,
+				candidatesTokenCount: t.output - t.reasoning,
+				thoughtsTokenCount: t.reasoning,
+				totalTokenCount: t.input + t.output,
+			}).filter(([, count]) => count !== 0),
+		),
+		reasoning: t.reasoning,
 	}),
 };
 
@@ -406,8 +434,38 @@ function chatFrames(c: Completion, deltas: string[]): Frame[] {
 	];
 }
 
-const OBJECTS: Record<Protocol, (c: Completion) => object> = { responses: (c) => responseObject(c, true), chat: chatObject, anthropic: anthropicObject };
-const FRAMES: Record<Protocol, (c: Completion, deltas: string[]) => Frame[]> = { responses: responsesFrames, chat: chatFrames, anthropic: anthropicFrames };
+function geminiEvent(c: Completion, parts: object[], done: boolean) {
+	return {
+		candidates: [{ content: { role: "model", parts }, ...(done && { finishReason: "STOP" }), index: 0 }],
+		...(done && { usageMetadata: c.usage }),
+		modelVersion: c.model,
+		responseId: c.id,
+	};
+}
+
+const geminiObject = (c: Completion) => [geminiEvent(c, [{ text: c.text }], true)];
+
+function geminiFrames(c: Completion, deltas: string[]): Frame[] {
+	const frame = (parts: object[], delayMs: number, done = false): Frame => ({ delayMs, text: `data: ${JSON.stringify(geminiEvent(c, parts, done))}\n\n` });
+	return [
+		...(c.reasoningId && c.includeThoughts ? [frame([{ text: "THOUGHT-LEAK", thought: true }], 0)] : []),
+		...deltas.map((text, i) => frame([{ text }], deltaDelay(i, c.gapMs))),
+		frame([{ text: "" }], 0, true),
+	];
+}
+
+const OBJECTS: Record<Protocol, (c: Completion) => object> = {
+	responses: (c) => responseObject(c, true),
+	chat: chatObject,
+	anthropic: anthropicObject,
+	gemini: geminiObject,
+};
+const FRAMES: Record<Protocol, (c: Completion, deltas: string[]) => Frame[]> = {
+	responses: responsesFrames,
+	chat: chatFrames,
+	anthropic: anthropicFrames,
+	gemini: geminiFrames,
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -433,9 +491,10 @@ const PROMPTS: Record<Protocol, (body: unknown) => unknown> = {
 	responses: (body) => field(body, "input"),
 	chat: messagesPrompt,
 	anthropic: messagesPrompt,
+	gemini: (body) => field(field(field(field(field(body, "contents"), "0"), "parts"), "0"), "text"),
 };
 
-function answer(protocol: Protocol, body: unknown, model: string, b: Answering): Response {
+function answer(protocol: Protocol, body: unknown, model: string, stream: boolean, b: Answering): Response {
 	const input = PROMPTS[protocol](body);
 	const prompt = typeof input === "string" ? input : "";
 	const text = answerText(prompt, b);
@@ -451,8 +510,9 @@ function answer(protocol: Protocol, body: unknown, model: string, b: Answering):
 		usage,
 		gapMs: b.gapMs,
 		includeUsage: field(field(body, "stream_options"), "include_usage") === true,
+		includeThoughts: field(field(field(body, "generationConfig"), "thinkingConfig"), "includeThoughts") === true,
 	};
-	if (field(body, "stream") !== true || !b.honorStream) {
+	if (!stream || !b.honorStream) {
 		return json(OBJECTS[protocol](c));
 	}
 	const deltas = split(text, b.big ? BIG_DELTA_CHARS : DELTA_CHARS);
@@ -479,7 +539,10 @@ async function readBody(request: Request): Promise<unknown> {
 
 export default {
 	async fetch(request) {
-		const { pathname } = new URL(request.url);
+		const url = new URL(request.url);
+		const { pathname } = url;
+		// The key belongs in a header. A request that puts it in the URL is rejected so that regression shows up in e2e.
+		if (url.searchParams.has("key")) return openAiError(400, "The API key must not be sent in the URL.", "invalid_request_error", null);
 		if (pathname === "/healthz") return new Response("ok");
 		if (pathname === "/v1/models") {
 			if (request.method !== "GET") return openAiError(405, "Method not allowed.", "invalid_request_error", null);
@@ -487,8 +550,9 @@ export default {
 			if (!VALID_AUTH.test(auth)) return failure({ kind: "fail", status: 401, echo: false }, auth);
 			return json({ object: "list", data: [...MODELS.keys()].map((id) => ({ id, object: "model", owned_by: "mock" })) });
 		}
-		const protocol = PATHS.get(pathname);
-		if (!protocol) return openAiError(404, "Unknown URL.", "invalid_request_error", "unknown_url");
+		const found = route(url);
+		if (!found) return openAiError(404, "Unknown URL.", "invalid_request_error", "unknown_url");
+		const { protocol } = found;
 		if (request.method !== "POST") return openAiError(405, "Method not allowed.", "invalid_request_error", null);
 		const auth = AUTH[protocol](request);
 		if (!VALID_AUTH.test(auth)) return failure({ kind: "fail", status: 401, echo: false }, auth);
@@ -496,12 +560,12 @@ export default {
 		if (body === undefined) {
 			return openAiError(400, "We could not parse the JSON body of your request.", "invalid_request_error", null);
 		}
-		const model = field(body, "model");
+		const { model, stream } = found.fromUrl ?? { model: field(body, "model"), stream: field(body, "stream") === true };
 		const behavior = typeof model === "string" ? MODELS.get(model) : undefined;
 		if (typeof model !== "string" || !behavior) {
 			return openAiError(404, "The model does not exist or you do not have access to it.", "invalid_request_error", "model_not_found");
 		}
 		if (behavior.kind === "canned") return behavior.reply();
-		return behavior.kind === "fail" ? failure(behavior, auth) : answer(protocol, body, model, behavior);
+		return behavior.kind === "fail" ? failure(behavior, auth) : answer(protocol, body, model, stream, behavior);
 	},
 } satisfies ExportedHandler;

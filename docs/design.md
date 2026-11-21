@@ -98,7 +98,7 @@ API 说明  一句说明加 `/api.md` 链接                      (全宽)
 | 概念 | 只用 | 不用 |
 | --- | --- | --- |
 | 被测的服务 | 站点 | 中转站、目标 |
-| responses、chat 与 anthropic 三种接口格式 | 协议 | 通道(API 字段仍叫 `protocol`) |
+| responses、chat、anthropic 与 gemini 四种接口格式 | 协议 | 通道(API 字段仍叫 `protocol`) |
 | 同一站点的不同线路,别名用它区分 | 通道 | |
 | 一次对站点的请求 | 调用 | 探测、样本(请求体、请求头等 HTTP 术语除外) |
 | 同一调用的第几次再发 | 尝试 | |
@@ -253,8 +253,8 @@ don't search the internet, do you know Thibault Sottiaux on X. answer yes or no
 - 四部分全有,note 为 `ok`。否则 note 为 `missing [...]`,只列缺的部分。HTML 前后的代码块标记与说明文字不影响评分。
 - `inWatchRotation` 为 `false`,不进监测轮转。每次调用都生成一段长 HTML,放进轮转会每隔几次监测调用就花掉用户密钥的一大段额度。
 - 成本:回答很长。页面只调用一次,不分关,不带 `runId`,所以不进历史。接口仍接受带 `runId` 的分关调用,脚本跑满四关是 31 次。
-- 「HTML 生成」页签:站点与密钥取自页签栏下方的共用面板,页签内只有模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。调用带 `progress: true`:调用中显示倒计时圆环(从本次超时倒数)、当前阶段(等站点响应、等首字、模型正在推理、正在接收回答)、已用时间、已收到的回答字符数和最近一次收到站点数据的时间,不显示回答原文(2026-10-27 维护者要求)。站点发出推理开始的信号后,首字前的阶段显示模型正在推理。信号是 Anthropic 的 `thinking` 块、responses 的 `reasoning` 项或 chat 的 `reasoning_content`。有的站点推理时不发推理内容,只每隔几秒发一次心跳,心跳也算收到数据,所以最近一次收到站点数据的时间能说明连接还在(2026-10-28 维护者同意)。每次调用随机抽一个 seed 出这题,题面不能自己写(2026-10-27 维护者决定)。从点「生成一次」起,表单下方完整显示本次题面,旁边的图标按钮一键复制;成功、失败都保留,取消后清除(2026-10-27 维护者要求)。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时和 token 数,失败时显示原因。token 数在站点给出推理 token 数时分成推理 token 数与回答 token 数(输出 token 数减推理 token 数),没给时只显示输出 token 数(含推理)(2026-10-27 维护者批准)。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
-- 上限:不带 `runId` 的 HTML 题调用,读取上限 8MB,超时 900 秒,`anthropic` 协议另发 `max_tokens: 128000`(见「架构」节的「Anthropic 协议」)。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;xhigh 要先推理 5 分钟以上。读取上限不再往上加:解析时内存峰值约为响应的 6 倍,Worker 一个 isolate 只有 128MB。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
+- 「HTML 生成」页签:站点与密钥取自页签栏下方的共用面板,页签内只有模型、协议、推理强度(不指定、low、medium、high、xhigh)加「生成一次」按钮,调用中可取消。调用带 `progress: true`:调用中显示倒计时圆环(从本次超时倒数)、当前阶段(等站点响应、等首字、模型正在推理、正在接收回答)、已用时间、已收到的回答字符数和最近一次收到站点数据的时间,不显示回答原文(2026-10-27 维护者要求)。站点发出推理开始的信号后,首字前的阶段显示模型正在推理。信号是 Anthropic 的 `thinking` 块、responses 的 `reasoning` 项、chat 的 `reasoning_content` 或 Gemini 带 `thought: true` 的 part。Gemini 只在调用方给了推理强度时请求这种 part。有的站点推理时不发推理内容,只每隔几秒发一次心跳,心跳也算收到数据,所以最近一次收到站点数据的时间能说明连接还在(2026-10-28 维护者同意)。每次调用随机抽一个 seed 出这题,题面不能自己写(2026-10-27 维护者决定)。从点「生成一次」起,表单下方完整显示本次题面,旁边的图标按钮一键复制;成功、失败都保留,取消后清除(2026-10-27 维护者要求)。页签不判对错,由用户播放后自己判断(2026-10-27 维护者决定):成功时只显示总耗时、首字耗时和 token 数,失败时显示原因。token 数在站点给出推理 token 数时分成推理 token 数与回答 token 数(输出 token 数减推理 token 数),没给时只显示输出 token 数(含推理)(2026-10-27 维护者批准)。回答里没有 HTML 页面时,另显示回答片段,并提示不能播放。页面切走或刷新,结果即失。
+- 上限:不带 `runId` 的 HTML 题调用,读取上限 8MB,超时 900 秒,`anthropic` 协议另发 `max_tokens: 128000`(见「架构」节的「Anthropic 协议」)。`gemini` 协议的每次调用都发 `maxOutputTokens: 65536`,这类调用也不例外(见「架构」节的「Gemini 协议」)。原因:流式 HTML 每个 token 一个事件,约 200 字节,完整页面会超过 256KB;xhigh 要先推理 5 分钟以上。读取上限不再往上加:解析时内存峰值约为响应的 6 倍,Worker 一个 isolate 只有 128MB。带 `runId` 的调用仍是 256KB 与 120 秒,存储上限不变。
 - 播放:探针接口对 HTML 题另返回 `artifact: { html, ending }`。`artifact` 不入库,也不进历史。
 - 取页面:Worker 只看回答,不看题面。这一步只决定能不能播放,不判对错(2026-10-27 维护者批准)。
   1. 标记都不区分大小写。起点是最后一个 `<html`。它前面最近的 `<!doctype html` 与它之间没有 `</html>` 时,这个 doctype 属于同一页,起点前移到 doctype。回答里没有 `<html` 时,起点是最后一个 `<!doctype html`。取最后一份,因为边想边写的模型会先写一份骨架页面,再写正式页面。
@@ -312,7 +312,8 @@ type CustomQuestion = {
 POST /api/probe   (Worker,匿名,限速)
    │ 校验目标 → 代发一次 → 评分
    ▼
-中转站 /v1/responses、/v1/chat/completions 或 /v1/messages
+中转站 /v1/responses、/v1/chat/completions、/v1/messages
+       或 /v1beta/models/{model}:streamGenerateContent
 ```
 
 为什么服务端代发:预检测试中,官方接口放行跨域,一家中转站对预检返回 403 且无 CORS 头。样本只有一家中转站,不能推广,但足以说明浏览器直连不可靠。代价是放弃「密钥不出浏览器」。
@@ -328,7 +329,9 @@ POST /api/probe   (Worker,匿名,限速)
 | 服务端 | 题库、评分、代发、流式计时、抽取 reasoning tokens 与响应 ID 形态、地址校验、限速、持久化与脱敏 |
 | 前端 | 四关阈值、并发、取消、进度、结论文案 |
 
-协议探测不另设接口:第 1 关两路并发发一次,哪路返回有效答案用哪路,都通或都不通时用第一路。模型名含 `claude`(不分大小写)时两路是 `anthropic` 与 `chat`,否则是 `responses` 与 `chat`。「也测另一协议」作为结果后的按钮,换成同一对里的另一路,默认不翻倍花费。
+协议探测不另设接口:第 1 关两路并发发一次,哪路返回有效答案用哪路,都通或都不通时用第一路。两路是模型家族的原生协议与 `chat`:模型名含 `claude`(不分大小写)时是 `anthropic` 与 `chat`,含 `gemini`(不分大小写)时是 `gemini` 与 `chat`,否则是 `responses` 与 `chat`。两个都含时取 `anthropic`。`gemma` 不算 `gemini`。仍是两路,第 1 关最多 6 次调用。「也测另一协议」作为结果后的按钮,换成同一对里的另一路,默认不翻倍花费。
+
+有协议选择的表单(「HTML 生成」、「性能测试」、自定义题、添加监测)按同一规则给默认值:模型名含 `claude` 时切到 `anthropic`,含 `gemini` 时切到 `gemini`;改成不再命中的模型名时,`anthropic` 与 `gemini` 都退回 `responses`,手选的 `chat` 保持。模型列表不用来判断协议:本站用 `Authorization` 请求 `/v1/models`,站点按 OpenAI 格式返回,看不出是否支持 `/v1/messages` 或 Gemini 的原生路径。
 
 Anthropic 协议(2026-10-27 维护者授权):
 
@@ -336,7 +339,21 @@ Anthropic 协议(2026-10-27 维护者授权):
 - 请求体必带 `max_tokens`,这个接口要求必填,且思考 token 也算在里面。不带 `runId` 的 HTML 题调用(「HTML 生成」页签的调用都属于这一类)发 `128000`,这是 Claude 4.6 以后模型的输出上限,留给高推理强度的思考加一整页 HTML。其他调用发 `32000`。输出上限低于 128K 的模型(如 Haiku 4.5)在不带 `runId` 的 HTML 题调用上会因 `128000` 返回 400。
 - 调用方给了推理强度时,请求体带 `thinking: { type: "adaptive" }` 与 `output_config: { effort }`。题的默认推理强度不用于这个协议:它按 OpenAI 推理模型设定,而 4.6 以前的 Claude 模型拒绝自适应思考。
 - 回答只取 `text_delta`,不取 `thinking_delta`。用量合并 `message_start` 与 `message_delta` 两处。输入 token 数是 `input_tokens`、`cache_read_input_tokens`、`cache_creation_input_tokens` 之和,缓存 token 数是 `cache_read_input_tokens`。思考 token 不单独计数,推理 token 数为空,`message_delta` 的 `output_tokens` 记为含思考的输出 token 数。响应 ID 形如 `msg_...`,形态记为 `other`。
-- 有协议选择的表单(「HTML 生成」、自定义题、添加监测)按模型名给默认值:模型名含 `claude` 时切到 `anthropic`;改成别的模型名时,`anthropic` 退回 `responses`,手选的 `chat` 保持。模型列表不用来判断协议:本站用 `Authorization` 请求 `/v1/models`,站点按 OpenAI 格式返回,看不出是否支持 `/v1/messages`。
+
+Gemini 协议(2026-11-21 维护者授权):
+
+- 请求 `POST /v1beta/models/{model}:streamGenerateContent?alt=sse`。模型 id 经 `encodeURIComponent` 放进路径,不另加字符规则。所以 `models/gemini-x` 这类名字得到站点的 404,不是本站的 400。
+- 密钥只放在请求头 `x-goog-api-key`。不用查询串 `?key=`,它把密钥放进 URL。不带 `Authorization`:Google 的原生接口把 Bearer 当作 OAuth 令牌,返回 401。
+- 请求体的 `contents` 只有一个 user 回合。`generationConfig.maxOutputTokens` 恒为 `65536`。思考 token 计入这个上限。`maxOutputTokens` 超过 65536 时,Gemini 4 进入 long decode,要客户端再发一跳。
+- 调用方给了推理强度时,`generationConfig` 带 `thinkingConfig: { thinkingLevel: <同名的推理强度>, includeThoughts: true }`。不发 `thinkingBudget`。题的默认推理强度不用于这个协议:2.5 系列收到 `thinkingLevel` 报错,不支持思考的模型收到 `thinkingConfig` 也报错。`xhigh` 原样发,模型不支持时站点的报错记为 `upstream_error`。
+- 回答取 `candidates[0].content.parts` 里 `thought` 不为 true 的 `text`。`thought: true` 的 part 是推理信号,只用于进度,不进回答,也不算首字。只带 `thoughtSignature` 的空 part 也不算首字。
+- 用量取 `usageMetadata`。它在一条流内是累计值,本站逐字段合并,后到的覆盖先到的。响应 ID 取 `responseId`,形态记为 `other`。输入 token 数是 `promptTokenCount`,它已含缓存,不再相加。缓存 token 数是 `cachedContentTokenCount`。推理 token 数是 `thoughtsTokenCount`。输出 token 数是 `candidatesTokenCount` 与 `thoughtsTokenCount` 之和,和其他协议一样含推理。
+- 有 `promptTokenCount` 时,缺失的另外三项记 0。没有 `promptTokenCount` 时四项都为空,表示站点没报用量。记 0 的原因:Google 可能省略值为 0 的计数,而缓存 token 数为空的调用不计入缓存命中率。后果:站点报了用量时,`gemini` 的推理 token 数不会为空,「HTML 生成」分开显示推理 token 数与回答 token 数。站点若删掉了真实的缓存计数,显示为 0 而不是未报。
+- 站点忽略 `alt=sse`、返回整个 JSON 数组时,本站逐项累加,按非流式处理,`streamed` 为 false。
+- 不读 `finishReason`,和其他三个协议一致。`promptFeedback` 拦截与思考中撞上限都表现为空答案,记 `bad_response`。
+- 失败归类不变。Google 对无效密钥返回 HTTP 400 与 `API_KEY_INVALID`,本站记 `upstream_error`,不记 `unauthorized`。原因见决策记录的「Gemini 协议」。
+- 站点地址的归一化不变。粘贴的 `…/v1beta` 不剥掉,因为站点地址参与历史对象的标识。
+- `/api/models` 不变,仍用 `Authorization` 请求 `GET /v1/models`。直接从 Google 列模型不在范围内。
 
 ## 持久化
 
@@ -377,7 +394,7 @@ usage 原文
 | 推理 token 数、输出 token 数、响应 ID 形态 | 来自 usage 与响应;输出 token 数只回给调用方,不落库 | 无 |
 | 各题通过率、成功率 | 由调用序列计算 | 无 |
 
-- 探针使用流式请求,聊天协议请求在末尾带回用量。Anthropic 协议的用量见「架构」节的「Anthropic 协议」。字段与选项名来自对 OpenAI 接口的了解,实现时先核对官方文档。
+- 探针使用流式请求,聊天协议请求在末尾带回用量。Anthropic 协议与 Gemini 协议的用量见「架构」节的「Anthropic 协议」与「Gemini 协议」。字段与选项名来自对 OpenAI 接口的了解,实现时先核对官方文档。
 - 首字时延 TTFT 是首个非空文本增量到达边缘的时刻,即「从边缘看到的首字」。响应是 SSE 就一律记录它,不再按到达节奏猜测是否被缓冲:短答案的增量与完成事件常在同一个网络块里到达,按节奏判断会把它们全部误判成非流式。站点缓冲了流时 TTFT 本来就应该很晚。站点忽略流式参数、返回整块 JSON 时,`streamed` 为 false,TTFT 记为空,不编数。
 - 原始数据以「事件加相对到达时间」存储,将来任何指标都能重算。
 - 时延是从 Cloudflare 边缘到站点的,不是用户本机到站点的。结果里要说明。
@@ -386,7 +403,7 @@ usage 原文
 
 ### 输入用量核对
 
-结果区末尾有一个默认折叠的「输入用量核对（参考）」,只在页面里计算,不改接口,不多发调用。每题取本轮所选协议下有效调用的输入 token 数中位数(来自 usage 的 `input_tokens` 或 `prompt_tokens`;Anthropic 协议另加两项缓存 token),出两条参考发现。逻辑在 `src/web/prompt-usage.ts`。
+结果区末尾有一个默认折叠的「输入用量核对（参考）」,只在页面里计算,不改接口,不多发调用。每题取本轮所选协议下有效调用的输入 token 数中位数(来自 usage 的 `input_tokens`、`prompt_tokens` 或 `promptTokenCount`;Anthropic 协议另加两项缓存 token,Gemini 协议的 `promptTokenCount` 已含缓存),出两条参考发现。逻辑在 `src/web/prompt-usage.ts`。
 
 - 全局注入:thibault 的中位数大于 `OVERHEAD_LIMIT_TOKENS = 50` 就报。题面是 79 个英文字符,原装接口算上消息格式约 20 到 35 个 token。它短、是英文、各代分词器的结果都稳定,所以是最准的量具。站点给每次调用都加了内容,这里会看到。
 - 定向注入:`candy` 与 `candy-var` 同一模板,原装接口上每字 token 数应接近。`candy` 的每字 token 数比 `candy-var` 多出 `TARGETED_RATIO = 0.25` 以上就报。`candy-var` 的字数按本轮 seed 生成的题面计算。只报这一个方向。站点只在公开原题上加内容,这里会看到。
@@ -532,7 +549,7 @@ GET /api/questions
 
 POST /api/probe
 { "site": "https://example.com", "key": "sk-...",
-  "protocol": "responses" | "chat" | "anthropic", "model": "gpt-6-astra",
+  "protocol": "responses" | "chat" | "anthropic" | "gemini", "model": "gpt-6-astra",
   "question": "<题库 id>", "effort": "low" | "medium" | "high" | "xhigh",   // effort 可省
   "runId": "<uuid>", "stage": 2, "seq": 3,      // 三项可省,带 runId 才持久化
   "seed": 12345,                                 // 可省,默认 0;只对生成器题生效,固定题忽略
@@ -546,7 +563,7 @@ POST /api/probe
       "idShape": "hex" | "ft" | "base64" | "other",
       "answer": "No, I don't ...",
       "streamed": true, "ttfbMs": 420, "ttftMs": 2100, "totalMs": 8400,
-      "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null
+      "promptTokens": 31, "cachedTokens": 0,           // 站点未返回的字段为 null,gemini 的例外见「Gemini 协议」
       "artifact": { "html": "<!doctype html>...",      // 只在 HTML 题、且回答里有 HTML 页面时出现
                     "ending": "closed" | "unclosed" | "truncated" } }
 200 { "ok": false, "reason": "unauthorized" | "forbidden" | "not_found" |
@@ -609,7 +626,7 @@ POST /api/board/order      { board, tokens }        按 tokens 的顺序保存�
 
 POST /api/watch            { site, key, model, protocol, intervalMin, alias, consent, questions? }   建立持续监测
 200 { token, watch }       // token 是 43 字符的随机令牌,只出现这一次,页面存 localStorage
-400 密钥被站点拒绝或参数不合法,带 field 指明字段
+400 首次调用为 unauthorized 或参数不合法,带 field 指明字段
 429 { error: "watch_limit", message }   // 全站 200 个已满
 
 POST /api/watch/view       { token }                读取监测与 24 小时样本
@@ -700,6 +717,8 @@ Free 套餐下限速的已知缺口,明确接受:
 | 超时 | 站点响应太慢 | 稍后重测 |
 | 空答案或非 JSON | 站点返回异常 | 若该站点与密钥此前已有历史,在历史里下载原始数据查看;否则在本机用 curl 自测该地址。失败调用不会建立新对象,首轮失败没有历史可下载 |
 
+Google 对无效密钥返回 400 与 `API_KEY_INVALID`。本站把它记为 `upstream_error`,不按 401 处理。原因见决策记录的「Gemini 协议」。
+
 ## 解析细节(来自脚本经验)
 
 - 需要浏览器 User-Agent,部分站前置 Cloudflare 会拦默认 UA。
@@ -780,6 +799,7 @@ Free 套餐下限速的已知缺口,明确接受:
 | 性能测试与 Claude 专项 | 2026-11-04 维护者授权。GZA-378 提供共用契约与报告工具,性能发压、Claude 接口和页签由后续票实现。性能只设 0.5/1 QPS × 30/60 秒探测档,不判定 5.00 M TPM。Claude 仅服务端固定用例,允许 count_tokens 与模型列表,批量接口恒为未测;结果不落库,日志仅含授权字段 |
 | 隐私模式 | 2026-11-05 维护者要求。默认开启,只遮显示:站点地址、主机名与别名不上屏、不进对话框、报告与报告文件名。接口与网络仍带主机名,看板链接的持有者可以自己关掉 |
 | HTML 题的 `max_tokens` | 2026-11-21 维护者决定。不带 `runId` 的 HTML 题调用在 `anthropic` 协议下发 `128000`,其余调用仍发 `32000`。原因:思考 token 计入 `max_tokens`,推理强度 high 时 32000 被思考用掉大半,页面写不完。代价:输出上限低于 128K 的模型(如 Haiku 4.5)在这类调用上返回 400,维护者接受。没有对全部 `anthropic` 调用提到 128000,否则这些模型的实时测试与监测每轮都会失败 |
+| Gemini 协议 | 2026-11-21 维护者授权。协议加 `gemini`,探针可访问 `/v1beta/models/{model}:streamGenerateContent`,密钥只放请求头 `x-goog-api-key`。模型名含 `gemini` 时,表单默认选 `gemini`,实时测试竞速 `gemini` 与 `chat`;不加第三路,第 1 关最多仍是 6 次调用;`gemma` 不算。仍不按模型列表判断协议,理由同「Anthropic 协议」。Google 对无效密钥返回 400 与 `API_KEY_INVALID`,本站记 `upstream_error`,不记 `unauthorized`。原因:站点可能原样转发它自己上游 Google 密钥的报错,改判会把用户的有效密钥判成无效,添加监测被拒,或监测进入 `bad_key`。改判还会波及另外三个协议,因为解析按响应形状识别,不看协议。代价:直连 Google 时填错密钥,页面提示「站点推理接口不可用」,添加监测不被拒,监测也不会进入 `bad_key`。站点地址不剥 `/v1beta`,因为它参与历史对象的标识。`/api/models` 不变,直接从 Google 列模型不在范围内。回滚风险:已存为 `gemini` 的监测在旧代码里每轮都失败 |
 
 文案草案如下。隐私说明在上线前必须人工复核,它不是法律意见。
 

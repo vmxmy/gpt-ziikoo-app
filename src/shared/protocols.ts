@@ -1,10 +1,10 @@
-export const PROTOCOLS = ["responses", "chat", "anthropic"] as const;
+export const PROTOCOLS = ["responses", "chat", "anthropic", "gemini"] as const;
 export type Protocol = (typeof PROTOCOLS)[number];
 
 const DEFAULT_PROTOCOL = "responses" satisfies Protocol;
 const RACE_PARTNER = "chat" satisfies Protocol;
 
-const MODEL_FAMILIES: Record<Protocol, RegExp | null> = { responses: null, chat: null, anthropic: /claude/i };
+const MODEL_FAMILIES: Record<Protocol, RegExp | null> = { responses: null, chat: null, anthropic: /claude/i, gemini: /gemini/i };
 
 const family = (model: string): Protocol | null => PROTOCOLS.find((p) => MODEL_FAMILIES[p]?.test(model)) ?? null;
 

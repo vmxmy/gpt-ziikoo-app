@@ -143,7 +143,7 @@ CI 凭证:`CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID`。令牌权限只�
 | Durable Object `Target` | 每 [站点 × 密钥] 对象一实例,存最近 10 轮 |
 | Durable Object `Watch` / `WatchRegistry` | 每个持续监测一实例,存加密密钥与 24 小时样本;Registry 是名为 `global` 的单例,只存上限计数行 |
 | Durable Object `Board` | 每个看板一实例,存看板码加密的令牌列表,最多 30 个。闲置 7 天 alarm 清除 |
-| Worker `gpt-ziikoo-mock-relay` | e2e 用的 mock 中转站,`https://gpt-ziikoo-mock-relay.blueyang.workers.dev`,不绑域名。任何人都能访问,它不存任何东西 |
+| Worker `gpt-ziikoo-mock-relay` | e2e 用的 mock 中转站,`https://gpt-ziikoo-mock-relay.blueyang.workers.dev`,不绑域名。任何人都能访问,它不存任何东西。Gemini 协议走 `/v1beta/models/{model}:streamGenerateContent`,密钥只认 `x-goog-api-key`,URL 带 `?key=` 时回 400;模型 `mock-gemini` 用来触发表单的 `gemini` 默认值 |
 | 秘密 `PEPPER` | 备份在维护者本机 `~/.config/gpt-ziikoo-app/pepper`,权限 0600。**不可轮换**:换掉它会让全部历史对象失联 |
 | 秘密 `WATCH_ENC_KEY` | `Watch` 对象里密钥的 AES-GCM 加密密钥(取 SHA-256 后使用)。**不可轮换**:换掉它会让全部持续监测的密钥失联。备份方式由维护者定,建议与 PEPPER 同放 |
 
@@ -196,6 +196,6 @@ e2e 满跑一次约 62 次调用,会撞 IP 每分钟 150 次的限速,页面会�
 5. `@cloudflare/vitest-plugin` 与 `cloudflare.config.ts` 的配合。
 6. `global_fetch_strictly_public` 兼容性标志的语义。
 7. DO SQLite 的单行大小上限没有查到。入库行超过约 1.9MB 时代码会先丢原始数据再标截断,但真实上限未确认。
-8. 流式请求的字段与选项名、缓存的前缀阈值,来自对 OpenAI 接口的了解,只在 mock 上走通,没有在真实站点上核对。**这是最大的未验证点,需要真实站点校准。**
+8. 流式请求的字段与选项名、缓存的前缀阈值,来自对 OpenAI 接口的了解,只在 mock 上走通,没有在真实站点上核对。`gemini` 协议的字段来自 2026-11-21 对 Google 官方文档与一个开源中转网关源码的核对,同样只在 mock 上走通。**这是最大的未验证点,需要真实站点校准。**
 9. 真实站点上首字时延的表现,尤其是经过缓冲的中转站。
 10. `cf` 与 `@cloudflare/vite-plugin` 都是测试版,以实现时的最新版本说明为准。
