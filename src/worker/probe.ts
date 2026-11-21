@@ -1,4 +1,5 @@
-import type { Effort, FailReason, PlayablePage, ProbeResponse, Protocol, Question, RawCall, StreamProgress } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
+import type { Effort, FailReason, PlayablePage, ProbeResponse, Question, RawCall, StreamProgress } from "../shared/types.ts";
 import { idShape, parseBody, progressReader, readUsage, type TimedText } from "./parse.ts";
 import { redact } from "./redact.ts";
 import { score } from "./scorers.ts";
@@ -65,45 +66,60 @@ const EMPTY_CAPTURE: ProbeCapture = {
 	rawEvents: null,
 };
 
-const REQUEST_BUILDERS: Record<Protocol, (input: ProbeInput) => { path: string; body: object }> = {
-	responses: ({ model, question, effort }) => ({
-		path: "/v1/responses",
-		body: { model, input: question.prompt, stream: true, ...(effort && { reasoning: { effort } }) },
-	}),
-	chat: ({ model, question, effort }) => ({
-		path: "/v1/chat/completions",
-		body: {
-			model,
-			messages: [{ role: "user", content: question.prompt }],
-			stream: true,
-			stream_options: { include_usage: true },
-			...(effort && { reasoning_effort: effort }),
-		},
-	}),
-	anthropic: ({ model, question, effort, limits }) => ({
-		path: "/v1/messages",
-		body: {
-			model,
-			max_tokens: limits.anthropicMaxTokens,
-			messages: [{ role: "user", content: question.prompt }],
-			stream: true,
-			// Unlike the other protocols, the Messages API caches only on request.
-			...(question.kind === "metrics" && { cache_control: { type: "ephemeral" } }),
-			...(effort && { thinking: { type: "adaptive" }, output_config: { effort } }),
-		},
-	}),
+// No key here, so the key cannot reach the path or the body.
+type WireCall = Pick<ProbeInput, "model" | "question" | "effort" | "limits">;
+
+type Wire = {
+	// A question's default effort is tuned for OpenAI reasoning models; on anthropic it would switch on adaptive thinking,
+	// which Claude models before 4.6 reject, so only an effort the caller chose reaches them.
+	questionEffort: boolean;
+	request(call: WireCall): { path: string; body: object };
+	auth(key: string): Record<string, string>;
 };
 
-const AUTH_HEADERS: Record<Protocol, (key: string) => Record<string, string>> = {
-	responses: (key) => ({ Authorization: `Bearer ${key}` }),
-	chat: (key) => ({ Authorization: `Bearer ${key}` }),
-	anthropic: (key) => ({ "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION }),
+const WIRE: Record<Protocol, Wire> = {
+	responses: {
+		questionEffort: true,
+		request: ({ model, question, effort }) => ({
+			path: "/v1/responses",
+			body: { model, input: question.prompt, stream: true, ...(effort && { reasoning: { effort } }) },
+		}),
+		auth: (key) => ({ Authorization: `Bearer ${key}` }),
+	},
+	chat: {
+		questionEffort: true,
+		request: ({ model, question, effort }) => ({
+			path: "/v1/chat/completions",
+			body: {
+				model,
+				messages: [{ role: "user", content: question.prompt }],
+				stream: true,
+				stream_options: { include_usage: true },
+				...(effort && { reasoning_effort: effort }),
+			},
+		}),
+		auth: (key) => ({ Authorization: `Bearer ${key}` }),
+	},
+	anthropic: {
+		questionEffort: false,
+		request: ({ model, question, effort, limits }) => ({
+			path: "/v1/messages",
+			body: {
+				model,
+				max_tokens: limits.anthropicMaxTokens,
+				messages: [{ role: "user", content: question.prompt }],
+				stream: true,
+				// Unlike the other protocols, the Messages API caches only on request.
+				...(question.kind === "metrics" && { cache_control: { type: "ephemeral" } }),
+				...(effort && { thinking: { type: "adaptive" }, output_config: { effort } }),
+			},
+		}),
+		auth: (key) => ({ "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION }),
+	},
 };
 
-// A question's default effort is tuned for OpenAI reasoning models; on anthropic it would switch on adaptive thinking,
-// which Claude models before 4.6 reject, so only an effort the caller chose reaches them.
 export function defaultEffort(question: Question, protocol: Protocol): Effort | null {
-	return protocol === "anthropic" ? null : (question.defaultEffort ?? null);
+	return WIRE[protocol].questionEffort ? (question.defaultEffort ?? null) : null;
 }
 
 const STATUS_REASONS: Partial<Record<number, FailReason>> = {
@@ -243,7 +259,8 @@ function finish(input: ProbeInput, base: ProbeCapture, chunks: TimedText[], { st
 
 // One attempt, no retry: the caller (the browser's live test or a Watch object) drives retries so each attempt is a separate call.
 export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): Promise<ProbeResult> {
-	const { path, body } = REQUEST_BUILDERS[input.protocol](input);
+	const wire = WIRE[input.protocol];
+	const { path, body } = wire.request(input);
 	const start = deps.now();
 	const since = () => deps.now() - start;
 	const response = await deps
@@ -251,7 +268,7 @@ export async function probe(input: ProbeInput, deps: ProbeDeps = DEFAULT_DEPS): 
 			method: "POST",
 			headers: {
 				"User-Agent": UA,
-				...AUTH_HEADERS[input.protocol](input.key),
+				...wire.auth(input.key),
 				"Content-Type": "application/json",
 				Accept: "text/event-stream",
 			},

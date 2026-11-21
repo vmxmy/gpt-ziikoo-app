@@ -1,4 +1,5 @@
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseRequest, type ClaudeCaseResult } from "../shared/claude-cases.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import type {
 	ApiError,
 	CustomQuestion,
@@ -11,7 +12,6 @@ import type {
 	ProbeProgress,
 	ProbeRequest,
 	ProbeResponse,
-	Protocol,
 	QuestionListItem,
 } from "../shared/types.ts";
 import type { BoardAdoptResponse, BoardMoveResponse, BoardOrderResponse, BoardViewResponse, WatchChange, WatchCreateRequest, WatchCreateResponse, WatchUpdateRequest, WatchView } from "../shared/watch.ts";

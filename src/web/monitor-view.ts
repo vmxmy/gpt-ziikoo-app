@@ -1,5 +1,5 @@
 import { MONITOR, type MonitorBucket, type MonitorResponse, type MonitorState } from "../shared/monitor.ts";
-import type { Protocol } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import { matchStrategy, type WatchPerf, type WatchUsage } from "../shared/watch.ts";
 
 export type MonitorView = { kind: "waiting" | "live"; data: MonitorResponse };

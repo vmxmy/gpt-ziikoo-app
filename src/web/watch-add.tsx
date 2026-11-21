@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
-import type { Protocol } from "../shared/types.ts";
+import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS } from "../shared/watch.ts";
 import { ModelField, useModelList } from "./model-field.tsx";
 import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
 import { SecretInput } from "./test-form.tsx";
 import { ChoiceField, DEFAULT_STRATEGY, useWatchStrategy, WatchStrategyFields } from "./watch-strategy.tsx";
-import { protocolForModel, PROTOCOLS, type FieldError, type WatchInput } from "./watch.ts";
+import type { FieldError, WatchInput } from "./watch.ts";
 
 const ERROR_ID = "watch-add-error";
 

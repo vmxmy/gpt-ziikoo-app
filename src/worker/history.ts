@@ -1,5 +1,6 @@
 import { evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
-import type { CallRecord, Protocol, QuestionKind, QuestionMetrics, RawCall, RunView, Stat } from "../shared/types.ts";
+import { RACE_ORDER, type Protocol } from "../shared/protocols.ts";
+import type { CallRecord, QuestionKind, QuestionMetrics, RawCall, RunView, Stat } from "../shared/types.ts";
 
 export const MAX_RUNS = 10;
 export const MAX_CALLS_PER_RUN = 200;
@@ -82,10 +83,6 @@ export function questionMetrics(calls: CallRecord[]): QuestionMetrics {
 		cacheHitRate: prompt > 0 ? cached / prompt : null,
 	};
 }
-
-// The page races responses against chat, or anthropic against chat for a Claude model, and continues with the
-// first of the two when both answer or neither does (design.md). This order puts that first protocol ahead in both races.
-const RACE_ORDER: readonly Protocol[] = ["responses", "anthropic", "chat"];
 
 // When both protocols answer the stage-1 race only the one the page continued with is counted.
 function raceCounted(calls: CallRecord[]): CallRecord[] {

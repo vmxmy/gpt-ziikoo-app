@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateCandy } from "../../src/shared/candy-gen.ts";
-import type { Protocol, QuestionListItem } from "../../src/shared/types.ts";
+import type { QuestionListItem } from "../../src/shared/types.ts";
+import type { Protocol } from "../../src/shared/protocols.ts";
 import { promptUsage } from "../../src/web/prompt-usage.ts";
 import type { Attempt } from "../../src/web/runner.ts";
 

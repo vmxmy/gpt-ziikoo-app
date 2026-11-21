@@ -1,5 +1,6 @@
 import { evaluateQuestion, MAX_ATTEMPTS, STAGES, type LadderCall } from "../shared/ladder.ts";
-import type { ProbeResponse, Protocol } from "../shared/types.ts";
+import type { ProbeResponse } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 
 export type ProbeArgs = {
 	question: string;

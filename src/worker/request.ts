@@ -1,6 +1,7 @@
 import { getQuestion, instantiate, SAMPLE_SEED, watchQuestions } from "../../questions/index.ts";
 import { CLAUDE_CASES, type ClaudeCaseId } from "../shared/claude-cases.ts";
-import type { CustomQuestion, Effort, Protocol, Question } from "../shared/types.ts";
+import { PROTOCOL_MESSAGE, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
+import type { CustomQuestion, Effort, Question } from "../shared/types.ts";
 import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchChange, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
@@ -26,7 +27,6 @@ export type ProbeCommand = {
 export type HistoryCommand = { origin: string; key: string };
 export type ClaudeCaseCommand = HistoryCommand & { host: string; model: string; case: ClaudeCaseId };
 
-const PROTOCOLS: readonly Protocol[] = ["responses", "chat", "anthropic"];
 const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // No character JSON or HTML encoders escape: redact() matches the key literally, so an escaped echo would slip through.
@@ -124,7 +124,7 @@ export function parseProbeRequest(body: unknown): Result<ProbeCommand> {
 	const target = parseTarget(f);
 	if (!target.ok) return target;
 	const { protocol, model, effort, seed, custom, progress = false } = f;
-	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
+	if (!isOneOf(PROTOCOLS, protocol)) return bad(PROTOCOL_MESSAGE);
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return bad("model 必须是 1 到 100 个字符");
 	}
@@ -224,7 +224,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
 	}
-	if (!isOneOf(PROTOCOLS, protocol)) return bad("protocol 必须是 responses、chat 或 anthropic");
+	if (!isOneOf(PROTOCOLS, protocol)) return bad(PROTOCOL_MESSAGE);
 	if (!isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
 	const questions = parseWatchQuestions(f.questions);
 	if (!questions.ok) return questions;

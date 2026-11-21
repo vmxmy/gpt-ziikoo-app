@@ -1,5 +1,5 @@
 import type { MonitorResponse } from "./monitor.ts";
-import type { Protocol } from "./types.ts";
+import type { Protocol } from "./protocols.ts";
 
 export const WATCH_INTERVALS = [1, 5, 10, 30] as const;
 export type WatchIntervalMin = (typeof WATCH_INTERVALS)[number];

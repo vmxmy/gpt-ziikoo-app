@@ -1,7 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { MONITOR, type MonitorBucket, type MonitorState } from "../shared/monitor.ts";
-import type { Protocol } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import type { WatchPerf, WatchUsage } from "../shared/watch.ts";
 import { CHART, chartModel, xOf, xTickIndexes, type Point } from "./chart.ts";
 import {

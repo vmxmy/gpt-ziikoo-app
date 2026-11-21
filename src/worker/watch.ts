@@ -1,7 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { getQuestion, instantiate, watchQuestions } from "../../questions/index.ts";
 import { buildMonitor, type MonitorSample } from "../shared/monitor.ts";
-import type { FailReason, ProbeResponse, Protocol, Question } from "../shared/types.ts";
+import type { FailReason, ProbeResponse, Question } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
 import { addRow, applyMeasure, measureDue, measureRow, summarizePerf, type MeasureRow, type MeasureState } from "./measure.ts";
 import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";

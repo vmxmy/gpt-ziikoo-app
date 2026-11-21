@@ -1,5 +1,6 @@
 import { STAGES, evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
-import type { Protocol, QuestionListItem, QuestionVerdict } from "../shared/types.ts";
+import type { QuestionListItem, QuestionVerdict } from "../shared/types.ts";
+import type { Protocol } from "../shared/protocols.ts";
 import { diagnosis, dotLabel, FAILURE_ADVICE, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
 import { callState, ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
