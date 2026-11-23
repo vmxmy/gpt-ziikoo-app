@@ -56,11 +56,10 @@ function criticalHitRate(s: Scenario, expMultiplier: number): number {
 	return (full - bill(s, s.ref).total / expMultiplier) / span;
 }
 
-function classify(critical: number, expHitRate: number): BreakEven {
-	if (critical < 0) return { kind: "never" };
-	if (critical >= 1) return { kind: "always" };
-	if (critical >= expHitRate) return { kind: "already" };
-	return { kind: "below", hitRate: critical };
+// Branches on which bill is higher, not on the critical rate against the current one: with equal bills, rounding can put the two a hair apart in either direction.
+function classify(critical: number, dearer: boolean): BreakEven {
+	if (dearer) return critical > 1 ? { kind: "always" } : { kind: "already" };
+	return critical < 0 ? { kind: "never" } : { kind: "below", hitRate: critical };
 }
 
 export function calc(s: Scenario): Calc {
@@ -77,7 +76,7 @@ export function calc(s: Scenario): Calc {
 		priceRatio,
 		hitFactor,
 		discountEaten: eaten ? (ratio - priceRatio) / (1 - priceRatio) : null,
-		breakEven: classify(criticalHitRate(s, s.exp.multiplier), s.exp.hitRate),
+		breakEven: classify(criticalHitRate(s, s.exp.multiplier), ratio > 1),
 	};
 }
 

@@ -72,7 +72,7 @@ function Bars({ result }: { result: Calc }) {
 function Curve({ scenario, result }: { scenario: Scenario; result: Calc }) {
 	const { ref, width } = useWidth(CURVE_FALLBACK_WIDTH);
 	const { x, y } = curveMarker(scenario, width);
-	const side = result.ratio <= 1 ? "站点更便宜" : "站点更贵";
+	const side = result.ratio > 1 ? "站点更贵" : "站点不比对照贵";
 	const label = `临界缓存命中率曲线。站点的倍率 ×${scenario.exp.multiplier.toFixed(2)}，缓存命中率 ${pct(scenario.exp.hitRate)}，菱形点是当前设置，${side}`;
 	const plotRight = width - CURVE.right;
 	const axisY = CURVE.height - CURVE.bottom;

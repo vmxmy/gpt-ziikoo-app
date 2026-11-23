@@ -62,7 +62,7 @@ const safety = (b: BreakEven): string => {
 };
 
 function conclusion(s: Scenario, r: Calc): string {
-	const head = `用 ${PRICES.models[s.model].name}，站点标价是对照的 ${pct(r.priceRatio)}`;
+	const head = `用 ${PRICES.models[s.model].name}，站点的倍率是对照的 ${pct(r.priceRatio)}`;
 	const gap = points(s.ref.hitRate) - points(s.exp.hitRate);
 	const cause = gap > 0 ? `，缓存命中率低 ${gap} 个点，账单因此 ${times(r.hitFactor)}` : "";
 	if (r.ratio > 1) return `${head}${cause}，最终比对照贵 ${pct(r.ratio - 1)}。`;
@@ -160,7 +160,7 @@ export function CostView() {
 	return (
 		<section class="panel" aria-labelledby="cost-h">
 			<h2 id="cost-h">折扣核算</h2>
-			<p class="muted small">站点标价打了折，但缓存命中率比对照低几个点，账单还便宜不便宜。本页只在浏览器里计算，不接触站点与密钥。</p>
+			<p class="muted small">站点的倍率比对照低，缓存命中率也比对照低几个点，账单还便宜不便宜。本页只在浏览器里计算，不接触站点与密钥。</p>
 			<div class="cost-controls">
 				<div class="cost-group" role="group" aria-labelledby="cost-usage-h">
 					<h3 id="cost-usage-h">模型与用量</h3>

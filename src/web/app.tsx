@@ -315,7 +315,7 @@ export function App() {
 					</dl>
 				</details>
 				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch" || tab === "cost"} />
-				{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
+				{/* Every pane but the watch board stays mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
 					<main class="grid main-grid">
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
