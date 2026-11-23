@@ -6,6 +6,7 @@ import { calc, DEFAULT_SCENARIO, MODEL_IDS, PRICES, pct, perThousand, type Break
 type Slider = {
 	id: string;
 	label: string;
+	hint?: string;
 	min: number;
 	max: number;
 	step: number;
@@ -34,26 +35,27 @@ const multiplier = (key: ChannelKey): Slider => ({
 	text: times,
 });
 
-const hitRate = (key: ChannelKey, min: number, max: number): Slider => ({
+const hitRate = (key: ChannelKey): Slider => ({
 	id: `${key}-hit`,
 	label: "缓存命中率",
-	min,
-	max,
+	min: 0,
+	max: 100,
 	step: 1,
 	read: (s) => points(s[key].hitRate),
 	write: (s, v) => withChannel(s, key, { hitRate: v / 100 }),
 	text: percent,
 });
 
-const INPUT: Slider = { id: "input", label: "每次输入 token 数", min: 10_000, max: 200_000, step: 5000, read: (s) => s.inputTokens, write: (s, v) => ({ ...s, inputTokens: v }), text: count };
-const OUTPUT: Slider = { id: "output", label: "每次输出 token 数", min: 0, max: 8000, step: 100, read: (s) => s.outputTokens, write: (s, v) => ({ ...s, outputTokens: v }), text: count };
+const INPUT: Slider = { id: "input", label: "输入 token 数", min: 10_000, max: 200_000, step: 5000, read: (s) => s.inputTokens, write: (s, v) => ({ ...s, inputTokens: v }), text: count };
+const OUTPUT: Slider = { id: "output", label: "输出 token 数", min: 0, max: 8000, step: 100, read: (s) => s.outputTokens, write: (s, v) => ({ ...s, outputTokens: v }), text: count };
 const REF_MULTIPLIER = multiplier("ref");
-const EXP_MULTIPLIER = multiplier("exp");
-const REF_HIT = hitRate("ref", 50, 99);
-const EXP_HIT = hitRate("exp", 0, 100);
+const EXP_MULTIPLIER: Slider = { ...multiplier("exp"), hint: "站点标出的" };
+const REF_HIT = hitRate("ref");
+const EXP_HIT: Slider = { ...hitRate("exp"), hint: "你实际得到的" };
+const OFFICIAL_MULTIPLIER = 1;
 const REF_KINDS = [
 	{ id: "official", label: "官方价", official: true },
-	{ id: "custom", label: "自定义", official: false },
+	{ id: "custom", label: "自定义倍率", official: false },
 ];
 
 const safety = (b: BreakEven): string => {
@@ -83,10 +85,15 @@ function breakEvenText(b: BreakEven): string {
 	}
 }
 
-function priceNote(model: ModelId): string {
+function modelPrices(model: ModelId): string {
 	const p = PRICES.models[model];
-	const peak = p.peak ? "这是高峰价，非高峰价减半，比例不变。" : "";
-	return `价格快照 ${PRICES.asOf}，以官网为准。${p.name} 每百万 token：缓存命中 $${p.hit}，未命中输入 $${p.miss}，输出 $${p.out}。${peak}`;
+	return `官方价每百万 token：缓存命中 $${p.hit}，未命中输入 $${p.miss}，输出 $${p.out}。未命中输入的单价是缓存命中的 ${Math.round(p.miss / p.hit)} 倍。`;
+}
+
+function footnote(model: ModelId): string {
+	const p = PRICES.models[model];
+	const peak = p.peak ? `${p.name} 取高峰价，非高峰价减半，比例不变。` : "";
+	return `价格快照 ${PRICES.asOf}，以官网为准。${peak}本页只在浏览器里计算，不接触站点与密钥。`;
 }
 
 type RangeProps = { spec: Slider; scenario: Scenario; onInput: (s: Scenario) => void; onCommit: (s: Scenario) => void };
@@ -100,6 +107,7 @@ function Range({ spec, scenario, onInput, onCommit }: RangeProps) {
 			<output class="num" data-testid={`${id}-value`}>
 				{spec.text(value)}
 			</output>
+			{spec.hint && <span class="cost-field-hint">{spec.hint}</span>}
 			<input
 				id={id}
 				type="range"
@@ -153,17 +161,19 @@ export function CostView() {
 	};
 	const chooseRef = (isOfficial: boolean) => {
 		setOfficial(isOfficial);
-		commit(isOfficial ? withChannel(scenario, "ref", { multiplier: 1 }) : scenario);
+		commit(isOfficial ? withChannel(scenario, "ref", { multiplier: OFFICIAL_MULTIPLIER }) : scenario);
 	};
 	const range = (spec: Slider) => <Range spec={spec} scenario={scenario} onInput={setScenario} onCommit={commit} />;
 
 	return (
 		<section class="panel" aria-labelledby="cost-h">
 			<h2 id="cost-h">折扣核算</h2>
-			<p class="muted small">站点的倍率比对照低，缓存命中率也比对照低几个点，账单还便宜不便宜。本页只在浏览器里计算，不接触站点与密钥。</p>
-			<div class="cost-controls">
-				<div class="cost-group" role="group" aria-labelledby="cost-usage-h">
-					<h3 id="cost-usage-h">模型与用量</h3>
+			<p class="cost-lead">倍率低，账单不一定低。倍率决定单价，缓存命中率决定多少输入按缓存价计费。</p>
+			<div class="cost-premise">
+				<div class="cost-layer" role="group" aria-labelledby="cost-model-h">
+					<h3 id="cost-model-h" class="cost-layer-title">
+						模型<span class="cost-role">按它的官方价计算</span>
+					</h3>
 					<div class="cost-choice" role="radiogroup" aria-label="模型">
 						{MODEL_IDS.map((id) => (
 							<label class="cost-radio" key={id}>
@@ -172,24 +182,52 @@ export function CostView() {
 							</label>
 						))}
 					</div>
-					{range(INPUT)}
-					{range(OUTPUT)}
+					<p class="muted small" data-testid="cost-model-prices">
+						{modelPrices(scenario.model)}
+					</p>
 				</div>
-				<div class="cost-group" role="group" aria-labelledby="cost-ref-h">
-					<h3 id="cost-ref-h">对照</h3>
-					<div class="cost-choice" role="radiogroup" aria-label="对照的名称">
-						{REF_KINDS.map((kind) => (
-							<label class="cost-radio" key={kind.id}>
-								<input type="radio" name="cost-ref-kind" checked={official === kind.official} onChange={() => chooseRef(kind.official)} data-testid={`cost-ref-${kind.id}`} />
-								{kind.label}
-							</label>
-						))}
+				<div class="cost-layer" role="group" aria-labelledby="cost-usage-h">
+					<h3 id="cost-usage-h" class="cost-layer-title">
+						用量假设<span class="cost-role">两边共用，按每次调用计</span>
+					</h3>
+					<div class="cost-usage">
+						{range(INPUT)}
+						{range(OUTPUT)}
 					</div>
-					{!official && range(REF_MULTIPLIER)}
+				</div>
+			</div>
+			<div class="cost-compare">
+				<div class="cost-channel" role="group" aria-labelledby="cost-ref-h">
+					<div class="cost-channel-head">
+						<h3 id="cost-ref-h">
+							对照<span class="cost-role">拿来比的一方</span>
+						</h3>
+						<div class="cost-choice" role="radiogroup" aria-label="对照的倍率">
+							{REF_KINDS.map((kind) => (
+								<label class="cost-radio" key={kind.id}>
+									<input type="radio" name="cost-ref-kind" checked={official === kind.official} onChange={() => chooseRef(kind.official)} data-testid={`cost-ref-${kind.id}`} />
+									{kind.label}
+								</label>
+							))}
+						</div>
+					</div>
+					{official ? (
+						<div class="cost-field">
+							<span>倍率</span>
+							<output class="num">{times(OFFICIAL_MULTIPLIER)}</output>
+							<span class="cost-field-hint">官方价固定为 1</span>
+						</div>
+					) : (
+						range(REF_MULTIPLIER)
+					)}
 					{range(REF_HIT)}
 				</div>
-				<div class="cost-group" role="group" aria-labelledby="cost-exp-h">
-					<h3 id="cost-exp-h">站点</h3>
+				<div class="cost-channel" role="group" aria-labelledby="cost-exp-h">
+					<div class="cost-channel-head">
+						<h3 id="cost-exp-h">
+							站点<span class="cost-role">要核算的一方</span>
+						</h3>
+					</div>
 					{range(EXP_MULTIPLIER)}
 					{range(EXP_HIT)}
 				</div>
@@ -200,7 +238,7 @@ export function CostView() {
 			<Result scenario={scenario} result={result} />
 			<CostCharts scenario={scenario} result={result} />
 			<p class="cost-prices muted small" data-testid="cost-prices">
-				{priceNote(scenario.model)}
+				{footnote(scenario.model)}
 			</p>
 		</section>
 	);
