@@ -4,6 +4,7 @@ import { raceProtocols, type Protocol } from "../shared/protocols.ts";
 import { fetchQuestions, HTML_QUESTION, makeProbe, missingFields, type Target } from "./api.ts";
 import { CustomQuestionForm } from "./custom-question.tsx";
 import { ClaudeTest } from "./claude-test.tsx";
+import { CostView } from "./cost-view.tsx";
 import { ApiDocs } from "./docs.tsx";
 import { History } from "./history.tsx";
 import { HtmlTest } from "./html-test.tsx";
@@ -182,7 +183,7 @@ function SiteHeader({ privacy, onTogglePrivacy }: { privacy: boolean; onTogglePr
 	);
 }
 
-type TabId = "live" | "html" | "watch" | "perf" | "claude";
+type TabId = "live" | "html" | "watch" | "perf" | "claude" | "cost";
 
 // The hash routes between tabs; #live is the default so an unknown hash still lands on the live test.
 function useTab(): [TabId, (tab: TabId) => void] {
@@ -190,6 +191,7 @@ function useTab(): [TabId, (tab: TabId) => void] {
 		if (location.hash === "#html") return "html";
 		if (location.hash === "#perf") return "perf";
 		if (location.hash === "#claude") return "claude";
+		if (location.hash === "#cost") return "cost";
 		return location.hash === "#watch" || location.hash.startsWith("#watch/") ? "watch" : "live";
 	};
 	const [tab, setTab] = useState<TabId>(read);
@@ -210,6 +212,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 		["watch", "持续监测"],
 		["perf", "性能测试"],
 		["claude", "Claude 专项"],
+		["cost", "折扣核算"],
 	];
 	return (
 		<div class="tabs" role="tablist" aria-label="测试方式">
@@ -311,7 +314,7 @@ export function App() {
 						))}
 					</dl>
 				</details>
-				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch"} />
+				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch" || tab === "cost"} />
 				{/* Live, HTML and perf stay mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
 					<main class="grid main-grid">
@@ -330,6 +333,9 @@ export function App() {
 				</div>
 				<div id="claude-pane" role="tabpanel" aria-labelledby="tab-claude" hidden={tab !== "claude"}>
 					<ClaudeTest target={target} models={models} />
+				</div>
+				<div id="cost-pane" role="tabpanel" aria-labelledby="tab-cost" hidden={tab !== "cost"}>
+					<CostView />
 				</div>
 				{tab === "watch" && (
 					<div id="watch-pane" role="tabpanel" aria-labelledby="tab-watch">

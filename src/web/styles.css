@@ -53,6 +53,10 @@
 	--none: #d4d4d8;
 	--info: #2563eb;
 	--series-2: #7e22ce;
+	--cost-hit: #0f766e;
+	--cost-miss: #c2410c;
+	--cost-out: #4f46e5;
+	--cost-curve: #0369a1;
 	--shadow: 0 1px 2px rgb(24 24 27 / 0.04);
 	color-scheme: light dark;
 }
@@ -81,6 +85,10 @@
 		--none: #34373d;
 		--info: #60a5fa;
 		--series-2: #c084fc;
+		--cost-hit: #2dd4bf;
+		--cost-miss: #fb923c;
+		--cost-out: #818cf8;
+		--cost-curve: #38bdf8;
 		--shadow: none;
 	}
 }
@@ -89,7 +97,7 @@
  * 语义表。页面里每个状态词汇(调用点、结论、总评、监测档位、卡片提示)只在这里映射一次到语气,
  * 组件只读 --tone(填充色)和 --tone-text(文字色),不再各自写颜色。新增状态词汇就加进对应一行。
  */
-:is([data-state="ok"], [data-state="operational"], [data-status="passed"], [data-status="all_passed"], [data-verdict="pass"]) {
+:is([data-state="ok"], [data-state="operational"], [data-status="passed"], [data-status="all_passed"], [data-verdict="pass"], [data-cost="cheaper"]) {
 	--tone: var(--ok);
 	--tone-text: var(--ok);
 }
@@ -109,7 +117,7 @@
 	--tone-text: var(--warn-text);
 }
 
-:is([data-state="wrong"], [data-state="down"], [data-status="failed"], [data-kind="bad_key"], [data-kind="rejected"], [data-verdict="fail"]) {
+:is([data-state="wrong"], [data-state="down"], [data-status="failed"], [data-kind="bad_key"], [data-kind="rejected"], [data-verdict="fail"], [data-cost="dearer"]) {
 	--tone: var(--bad);
 	--tone-text: var(--bad);
 }
@@ -234,7 +242,8 @@ a {
 
 .tabs {
 	display: flex;
-	gap: var(--space-2);
+	flex-wrap: wrap;
+	gap: 0 var(--space-2);
 	margin-bottom: var(--space-5);
 	border-bottom: var(--border-width) solid var(--border);
 }
@@ -247,6 +256,7 @@ a {
 	background: none;
 	color: var(--fg-2);
 	font: 600 var(--fs-14) / var(--lh-tight) var(--font-sans);
+	white-space: nowrap;
 	cursor: pointer;
 }
 
