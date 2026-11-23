@@ -1,17 +1,24 @@
 import type { Point } from "./chart.ts";
 
-export type ModelId = "astra" | "dsflash" | "dspro";
-type ModelPrice = { name: string; hit: number; miss: number; out: number; peak: boolean };
+export type ModelId = "astra" | "dsflash" | "dspro" | "opus55";
+type ModelPrice = { name: string; hit: number; miss: number; out: number; asOf: string; note?: string };
 
-export const MODEL_IDS: readonly ModelId[] = ["astra", "dsflash", "dspro"];
+export const MODEL_IDS: readonly ModelId[] = ["astra", "dsflash", "dspro", "opus55"];
 
-// USD per million tokens. A peak price halves off-peak, which leaves every ratio on this page unchanged.
-export const PRICES: { asOf: string; models: Record<ModelId, ModelPrice> } = {
-	asOf: "2026-09",
-	models: {
-		astra: { name: "GPT-6 Astra", hit: 1, miss: 10, out: 50, peak: false },
-		dsflash: { name: "DeepSeek Flash", hit: 0.006, miss: 0.3, out: 1.2, peak: true },
-		dspro: { name: "DeepSeek V4 Pro", hit: 0.044, miss: 1.32, out: 3.96, peak: true },
+const DEEPSEEK_PEAK = "这是高峰价，非高峰价减半，比例不变。";
+
+// USD per million tokens. Off-peak, batch and fast-mode pricing scale a whole row by one factor, which leaves every ratio on this page unchanged, so each model keeps one row.
+export const PRICES: Record<ModelId, ModelPrice> = {
+	astra: { name: "GPT-6 Astra", hit: 1, miss: 10, out: 50, asOf: "2026-09" },
+	dsflash: { name: "DeepSeek Flash", hit: 0.006, miss: 0.3, out: 1.2, asOf: "2026-09", note: DEEPSEEK_PEAK },
+	dspro: { name: "DeepSeek V4 Pro", hit: 0.044, miss: 1.32, out: 3.96, asOf: "2026-09", note: DEEPSEEK_PEAK },
+	opus55: {
+		name: "Claude Opus 5.5",
+		hit: 0.2,
+		miss: 5,
+		out: 20,
+		asOf: "2026-11",
+		note: "未命中输入按 5 分钟缓存写入价计。不写缓存的输入是 $4，1 小时缓存写入是 $8。快速模式、批量和美国数据驻留都是整体倍数，比例不变。",
 	},
 };
 
@@ -40,7 +47,7 @@ export const DEFAULT_SCENARIO: Scenario = {
 const PER_MILLION = 1_000_000;
 
 function bill(s: Scenario, channel: Channel): Cost {
-	const price = PRICES.models[s.model];
+	const price = PRICES[s.model];
 	const scale = channel.multiplier / PER_MILLION;
 	const hit = s.inputTokens * channel.hitRate * price.hit * scale;
 	const miss = s.inputTokens * (1 - channel.hitRate) * price.miss * scale;
@@ -50,7 +57,7 @@ function bill(s: Scenario, channel: Channel): Cost {
 
 // The experiment hit rate at which both bills are equal, for an experiment multiplier. Not clamped.
 function criticalHitRate(s: Scenario, expMultiplier: number): number {
-	const price = PRICES.models[s.model];
+	const price = PRICES[s.model];
 	const full = (s.inputTokens * price.miss + s.outputTokens * price.out) / PER_MILLION;
 	const span = (s.inputTokens * (price.miss - price.hit)) / PER_MILLION;
 	return (full - bill(s, s.ref).total / expMultiplier) / span;

@@ -64,7 +64,7 @@ const safety = (b: BreakEven): string => {
 };
 
 function conclusion(s: Scenario, r: Calc): string {
-	const head = `用 ${PRICES.models[s.model].name}，站点的倍率是对照的 ${pct(r.priceRatio)}`;
+	const head = `用 ${PRICES[s.model].name}，站点的倍率是对照的 ${pct(r.priceRatio)}`;
 	const gap = points(s.ref.hitRate) - points(s.exp.hitRate);
 	const cause = gap > 0 ? `，缓存命中率低 ${gap} 个点，账单因此 ${times(r.hitFactor)}` : "";
 	if (r.ratio > 1) return `${head}${cause}，最终比对照贵 ${pct(r.ratio - 1)}。`;
@@ -86,14 +86,12 @@ function breakEvenText(b: BreakEven): string {
 }
 
 function modelPrices(model: ModelId): string {
-	const p = PRICES.models[model];
-	return `官方价每百万 token：缓存命中 $${p.hit}，未命中输入 $${p.miss}，输出 $${p.out}。未命中输入的单价是缓存命中的 ${Math.round(p.miss / p.hit)} 倍。`;
+	const p = PRICES[model];
+	return `官方价每百万 token：缓存命中 $${p.hit}，未命中输入 $${p.miss}，输出 $${p.out}。未命中输入的单价是缓存命中的 ${Math.round(p.miss / p.hit)} 倍。${p.note ?? ""}`;
 }
 
 function footnote(model: ModelId): string {
-	const p = PRICES.models[model];
-	const peak = p.peak ? `${p.name} 取高峰价，非高峰价减半，比例不变。` : "";
-	return `价格快照 ${PRICES.asOf}，以官网为准。${peak}本页只在浏览器里计算，不接触站点与密钥。`;
+	return `价格快照 ${PRICES[model].asOf}，以官网为准。本页只在浏览器里计算，不接触站点与密钥。`;
 }
 
 type RangeProps = { spec: Slider; scenario: Scenario; onInput: (s: Scenario) => void; onCommit: (s: Scenario) => void };
@@ -178,7 +176,7 @@ export function CostView() {
 						{MODEL_IDS.map((id) => (
 							<label class="cost-radio" key={id}>
 								<input type="radio" name="cost-model" checked={scenario.model === id} onChange={() => commit({ ...scenario, model: id })} data-testid={`cost-model-${id}`} />
-								{PRICES.models[id].name}
+								{PRICES[id].name}
 							</label>
 						))}
 					</div>
