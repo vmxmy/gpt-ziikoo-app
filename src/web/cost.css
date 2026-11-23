@@ -1,0 +1,189 @@
+.cost-controls {
+	display: grid;
+	gap: var(--space-5);
+	margin-top: var(--space-4);
+}
+
+@media (min-width: 720px) {
+	.cost-controls {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+.cost-group {
+	display: grid;
+	align-content: start;
+	gap: var(--space-3);
+	min-width: 0;
+}
+
+.cost-choice {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-4);
+}
+
+.cost-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.cost-field {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+}
+
+.cost-field input[type="range"] {
+	grid-column: 1 / -1;
+	width: 100%;
+}
+
+.cost-result {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+	padding-top: var(--space-5);
+	border-top: var(--border-width) solid var(--border);
+}
+
+.cost-ratio {
+	color: var(--tone-text);
+	font-size: var(--fs-28);
+	font-weight: 650;
+	line-height: var(--lh-tight);
+}
+
+.cost-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: var(--space-4);
+	margin: 0;
+}
+
+.cost-facts > div {
+	padding-top: var(--space-3);
+	border-top: var(--border-width) solid var(--border);
+}
+
+.cost-facts dt {
+	color: var(--fg-2);
+	font-size: var(--fs-13);
+}
+
+.cost-facts dd {
+	margin: 0;
+	font-size: var(--fs-20);
+	font-weight: 600;
+}
+
+.cost-figures {
+	display: grid;
+	gap: var(--space-5) var(--space-6);
+	margin-top: var(--space-5);
+}
+
+@media (min-width: 1040px) {
+	.cost-figures {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.cost-prices {
+	margin-top: var(--space-5);
+}
+
+.cost-figure {
+	display: grid;
+	align-content: start;
+	gap: var(--space-3);
+	max-width: 640px;
+	margin: 0;
+}
+
+.cost-bars {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.cost-bar-row {
+	display: grid;
+	grid-template-columns: 3em minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.cost-bar-row svg {
+	display: block;
+	width: 100%;
+	height: var(--space-5);
+}
+
+.cost-curve-canvas svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+}
+
+.cost-seg {
+	stroke: var(--surface);
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+}
+
+.cost-seg-hit {
+	fill: var(--cost-hit);
+}
+
+.cost-seg-miss {
+	fill: var(--cost-miss);
+}
+
+.cost-seg-out {
+	fill: var(--cost-out);
+}
+
+.cost-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: var(--radius-1);
+}
+
+.cost-swatch-hit {
+	background: var(--cost-hit);
+}
+
+.cost-swatch-miss {
+	background: var(--cost-miss);
+}
+
+.cost-swatch-out {
+	background: var(--cost-out);
+}
+
+.cost-axis-text {
+	fill: var(--fg-3);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.cost-grid {
+	stroke: var(--border);
+	stroke-width: 1;
+}
+
+.cost-curve {
+	fill: none;
+	stroke: var(--cost-curve);
+	stroke-width: 2;
+}
+
+.cost-marker {
+	fill: var(--surface);
+	stroke: var(--fg);
+	stroke-width: 2;
+}

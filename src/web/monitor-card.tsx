@@ -222,7 +222,7 @@ function StatusBar({ t, buckets }: { t: string; buckets: MonitorBucket[] }) {
 	);
 }
 
-function useWidth(fallback: number) {
+export function useWidth(fallback: number) {
 	const ref = useRef<HTMLDivElement>(null);
 	const [width, setWidth] = useState(fallback);
 	useEffect(() => {
