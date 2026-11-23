@@ -197,7 +197,7 @@ export function CostView() {
 				</div>
 			</div>
 			<div class="cost-compare">
-				<div class="cost-channel" role="group" aria-labelledby="cost-ref-h">
+				<div class="cost-channel cost-party-ref" role="group" aria-labelledby="cost-ref-h">
 					<div class="cost-channel-head">
 						<h3 id="cost-ref-h">
 							对照<span class="cost-role">拿来比的一方</span>
@@ -222,7 +222,7 @@ export function CostView() {
 					)}
 					{range(REF_HIT)}
 				</div>
-				<div class="cost-channel" role="group" aria-labelledby="cost-exp-h">
+				<div class="cost-channel cost-party-site" role="group" aria-labelledby="cost-exp-h">
 					<div class="cost-channel-head">
 						<h3 id="cost-exp-h">
 							站点<span class="cost-role">要核算的一方</span>
