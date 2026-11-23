@@ -43,11 +43,35 @@
 	gap: var(--space-2) var(--space-5);
 }
 
+/*
+ * 对照与站点的主次。站点是被核算的一方，用强调色与正文色；对照是基准，退后一层。
+ * 控件栏、堆叠条和图例表共用这一对类，三处的主次保持一致。
+ */
+.cost-party-ref {
+	--lane: var(--fg-3);
+	color: var(--fg-2);
+}
+
+.cost-party-site {
+	--lane: var(--accent);
+	color: var(--fg);
+}
+
 .cost-channel {
 	display: grid;
 	align-content: start;
 	gap: var(--space-3);
 	min-width: 0;
+	padding-left: var(--space-4);
+	border-left: 3px solid var(--lane);
+}
+
+.cost-channel input[type="range"] {
+	accent-color: var(--lane);
+}
+
+.cost-premise input[type="range"] {
+	accent-color: var(--fg-3);
 }
 
 .cost-usage {
@@ -103,6 +127,7 @@
 .cost-field-hint {
 	color: var(--fg-3);
 	font-size: var(--fs-13);
+	line-height: 1;
 }
 
 .cost-field input[type="range"] {
@@ -188,6 +213,14 @@
 	display: block;
 	width: 100%;
 	height: var(--space-5);
+}
+
+.cost-bar-row.cost-party-ref svg {
+	opacity: 0.45;
+}
+
+.cost-bar-row.cost-party-site span {
+	font-weight: 600;
 }
 
 .cost-curve-canvas svg {

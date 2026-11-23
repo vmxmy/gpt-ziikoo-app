@@ -9,16 +9,16 @@ const CURVE_FALLBACK_WIDTH = 480;
 
 function Bars({ result }: { result: Calc }) {
 	const max = Math.max(result.ref.total, result.exp.total);
-	const rows: [string, Cost][] = [
-		["对照", result.ref],
-		["站点", result.exp],
+	const rows: [string, Cost, string][] = [
+		["对照", result.ref, "cost-party-ref"],
+		["站点", result.exp, "cost-party-site"],
 	];
 	const label = `每千次调用的账单，对照 ${perThousand(result.ref.total)}，站点 ${perThousand(result.exp.total)}`;
 	return (
 		<figure class="cost-figure">
 			<div class="cost-bars" role="img" aria-label={label} data-testid="cost-bars">
-				{rows.map(([name, cost]) => (
-					<div class="cost-bar-row" key={name}>
+				{rows.map(([name, cost, party]) => (
+					<div class={`cost-bar-row ${party}`} key={name}>
 						<span class="small">{name}</span>
 						<svg viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true">
 							{barSegments(cost, max).map((seg) => (
@@ -34,8 +34,8 @@ function Bars({ result }: { result: Calc }) {
 					<thead>
 						<tr>
 							<th scope="col">每千次调用</th>
-							{rows.map(([name]) => (
-								<th scope="col" class="num" key={name}>
+							{rows.map(([name, , party]) => (
+								<th scope="col" class={`num ${party}`} key={name}>
 									{name}
 								</th>
 							))}
@@ -47,8 +47,8 @@ function Bars({ result }: { result: Calc }) {
 								<th scope="row">
 									<span class={`cost-swatch cost-swatch-${s}`} aria-hidden="true" /> {SERIES_LABEL[s]}
 								</th>
-								{rows.map(([name, cost]) => (
-									<td class="num" key={name}>
+								{rows.map(([name, cost, party]) => (
+									<td class={`num ${party}`} key={name}>
 										{perThousand(cost[s])} · {pct(cost[s] / cost.total)}
 									</td>
 								))}
@@ -56,8 +56,8 @@ function Bars({ result }: { result: Calc }) {
 						))}
 						<tr>
 							<th scope="row">合计</th>
-							{rows.map(([name, cost]) => (
-								<td class="num" key={name}>
+							{rows.map(([name, cost, party]) => (
+								<td class={`num ${party}`} key={name}>
 									{perThousand(cost.total)}
 								</td>
 							))}
