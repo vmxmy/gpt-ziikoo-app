@@ -14,6 +14,7 @@ import type {
 	ProbeResponse,
 	QuestionListItem,
 } from "../shared/types.ts";
+import type { ReportSaveRequest } from "../shared/reports.ts";
 import type { BoardAdoptResponse, BoardMoveResponse, BoardOrderResponse, BoardViewResponse, WatchChange, WatchCreateRequest, WatchCreateResponse, WatchUpdateRequest, WatchView } from "../shared/watch.ts";
 import { FAILURE_ADVICE, failureAdvice } from "./results.ts";
 import type { Probe, ProbeOutcome } from "./runner.ts";
@@ -35,7 +36,7 @@ async function post(path: string, body: object, signal?: AbortSignal): Promise<R
 }
 
 async function failure(res: Response): Promise<ApiFailure> {
-	const body: Partial<ApiError> = await res.json().catch(() => ({}));
+	const body = (await res.json().catch(() => ({}))) as Partial<ApiError>;
 	const retry = body.retryAfterSec ?? Number(res.headers.get("Retry-After"));
 	const message =
 		res.status === 429 ? (body.error === "too_many_calls" ? (body.message ?? "本轮调用次数已到上限") : "请求过于频繁") : (body.message ?? `接口返回 ${res.status}`);
@@ -179,7 +180,7 @@ export async function createWatch(
 ): Promise<{ ok: true; value: WatchCreateResponse } | { ok: false; error: CreateFailure }> {
 	const res = await post("/api/watch", request);
 	if (res.ok) return { ok: true, value: await res.json() };
-	const body: Partial<CreateFailure> = await res.json().catch(() => ({}));
+	const body = (await res.json().catch(() => ({}))) as Partial<CreateFailure>;
 	return {
 		ok: false,
 		error: { error: body.error ?? "bad_request", message: body.message ?? `接口返回 ${res.status}`, ...(body.field ? { field: body.field } : {}) },
@@ -293,3 +294,16 @@ export async function runClaudeCases(
 export const fetchHistory = (t: Target) => postJson<HistoryResponse>("/api/history", t);
 export const fetchHistoryRaw = (t: Target, runId: string) => postJson<HistoryRawResponse>("/api/history/raw", { ...t, runId });
 export const deleteHistory = (t: Target) => postJson<{ deleted: boolean }>("/api/history/delete", t);
+
+export async function saveReport(
+	payload: ReportSaveRequest,
+): Promise<{ ok: true; id: string } | { ok: false; unauthorized: boolean; message: string }> {
+	const res = await post("/api/reports", payload);
+	if (res.ok) {
+		const data = (await res.json()) as { id: string };
+		return { ok: true, id: data.id };
+	}
+	if (res.status === 401) return { ok: false, unauthorized: true, message: "登录后可归档报告" };
+	const f = await failure(res);
+	return { ok: false, unauthorized: false, message: f.message };
+}

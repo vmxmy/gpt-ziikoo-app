@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useState } from "react";
 import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import {
 	checkCustom,
@@ -23,25 +23,25 @@ const EXPECTED_ERROR_ID = "custom-q-expected-error";
 
 function ResultView({ result, protocol }: { result: CustomResult; protocol: Protocol }) {
 	return (
-		<div class="custom-q-result" data-testid="custom-q-result">
+		<div className="custom-q-result" data-testid="custom-q-result">
 			<p>
-				<span class="custom-q-verdict" data-state={result.state} data-testid="custom-q-verdict">
+				<span className="custom-q-verdict" data-state={result.state} data-testid="custom-q-verdict">
 					{result.label}
 				</span>{" "}
-				<span class="muted small">协议 {protocol}</span>
+				<span className="muted small">协议 {protocol}</span>
 			</p>
 			{result.state === "fail" ? (
 				<p data-testid="custom-q-reason">{result.reason}</p>
 			) : (
-				<dl class="custom-q-fields">
+				<dl className="custom-q-fields">
 					<dt>评分说明</dt>
 					<dd data-testid="custom-q-note">{result.response.note}</dd>
 					<dt>总耗时</dt>
-					<dd class="num">{ms(result.response.totalMs)}</dd>
+					<dd className="num">{ms(result.response.totalMs)}</dd>
 					<dt>推理 token 数</dt>
-					<dd class="num">{result.response.reasoningTokens ?? "—"}</dd>
+					<dd className="num">{result.response.reasoningTokens ?? "—"}</dd>
 					<dt>回答片段</dt>
-					<dd class="answer" data-testid="custom-q-answer">
+					<dd className="answer" data-testid="custom-q-answer">
 						{result.response.answer}
 					</dd>
 				</dl>
@@ -52,9 +52,9 @@ function ResultView({ result, protocol }: { result: CustomResult; protocol: Prot
 
 function ScorerFields({ draft, error, onEdit }: { draft: CustomDraft; error: string; onEdit: (patch: Partial<CustomDraft>) => void }) {
 	return (
-		<div class="custom-q-scorer">
-			<label class="field">
-				<span class="field-label">评分规则</span>
+		<div className="custom-q-scorer">
+			<label className="field">
+				<span className="field-label">评分规则</span>
 				<select
 					value={draft.scorerType}
 					onChange={(e) => onEdit({ scorerType: e.currentTarget.value === "contains" ? "contains" : "yes_no", contains: "" })}
@@ -68,26 +68,26 @@ function ScorerFields({ draft, error, onEdit }: { draft: CustomDraft; error: str
 				</select>
 			</label>
 			{draft.scorerType === "yes_no" ? (
-				<label class="field">
-					<span class="field-label">标准答案</span>
+				<label className="field">
+					<span className="field-label">标准答案</span>
 					<select value={draft.yesNo} onChange={(e) => onEdit({ yesNo: e.currentTarget.value === "NO" ? "NO" : "YES" })} data-testid="custom-q-yes-no">
 						<option value="YES">YES</option>
 						<option value="NO">NO</option>
 					</select>
 				</label>
 			) : (
-				<label class="field">
-					<span class="field-label">子串（区分大小写，最多 {MAX_CUSTOM_EXPECTED} 个字符）</span>
+				<label className="field">
+					<span className="field-label">子串（区分大小写，最多 {MAX_CUSTOM_EXPECTED} 个字符）</span>
 					<input
-						autocomplete="off"
-						spellcheck={false}
-						onInput={(e) => onEdit({ contains: e.currentTarget.value })}
+						autoComplete="off"
+						spellCheck={false}
+						onChange={(e) => onEdit({ contains: e.currentTarget.value })}
 						aria-invalid={error !== "" || undefined}
 						aria-describedby={error !== "" ? EXPECTED_ERROR_ID : undefined}
 						data-testid="custom-q-contains"
 					/>
 					{error !== "" && (
-						<p class="field-error" id={EXPECTED_ERROR_ID} role="alert" data-testid="custom-q-expected-error">
+						<p className="field-error" id={EXPECTED_ERROR_ID} role="alert" data-testid="custom-q-expected-error">
 							{error}
 						</p>
 					)}
@@ -120,31 +120,31 @@ export function CustomQuestionForm({ target, model }: { target: Target; model: s
 	};
 
 	return (
-		<div class="custom-q" data-testid="custom-q">
-			<p class="muted small">用自己的题面和评分规则，对上面的站点调用一次。不计入分关，不进历史。不要在题面里写密钥。完整回答不保存，刷新页面即失。</p>
-			<label class="field">
-				<span class="field-label">题面</span>
+		<div className="custom-q" data-testid="custom-q">
+			<p className="muted small">用自己的题面和评分规则，对上面的站点调用一次。不计入分关，不进历史。不要在题面里写密钥。完整回答不保存，刷新页面即失。</p>
+			<label className="field">
+				<span className="field-label">题面</span>
 				{/* Uncontrolled on purpose, like the contains input: no value prop, so neither becomes a DOM attribute. */}
 				<textarea
 					rows={5}
-					spellcheck={false}
-					onInput={(e) => edit({ prompt: e.currentTarget.value })}
+					spellCheck={false}
+					onChange={(e) => edit({ prompt: e.currentTarget.value })}
 					aria-invalid={promptError !== "" || undefined}
 					aria-describedby={promptError !== "" ? PROMPT_ERROR_ID : undefined}
 					data-testid="custom-q-prompt"
 				/>
-				<span class="muted small num" data-testid="custom-q-prompt-count">
+				<span className="muted small num" data-testid="custom-q-prompt-count">
 					{codePoints(draft.prompt)}/{MAX_CUSTOM_PROMPT}
 				</span>
 				{promptError !== "" && (
-					<p class="field-error" id={PROMPT_ERROR_ID} role="alert" data-testid="custom-q-prompt-error">
+					<p className="field-error" id={PROMPT_ERROR_ID} role="alert" data-testid="custom-q-prompt-error">
 						{promptError}
 					</p>
 				)}
 			</label>
 			<ScorerFields draft={draft} error={fieldError("expected")} onEdit={edit} />
-			<label class="field">
-				<span class="field-label">协议</span>
+			<label className="field">
+				<span className="field-label">协议</span>
 				<select value={protocol} onChange={(e) => setProtocol(PROTOCOLS.find((p) => p === e.currentTarget.value) ?? "responses")} data-testid="custom-q-protocol">
 					{PROTOCOLS.map((p) => (
 						<option value={p} key={p}>
@@ -154,14 +154,14 @@ export function CustomQuestionForm({ target, model }: { target: Target; model: s
 				</select>
 			</label>
 			{formError && (
-				<p class="field-error" role="alert" data-testid="custom-q-form-error">
+				<p className="field-error" role="alert" data-testid="custom-q-form-error">
 					{formError}
 				</p>
 			)}
-			<div class="actions">
+			<div className="actions">
 				<button
 					type="button"
-					class="btn btn-secondary"
+					className="btn btn-secondary"
 					disabled={!check.ok || status.kind === "sending"}
 					onClick={() => void send()}
 					data-testid="custom-q-run"

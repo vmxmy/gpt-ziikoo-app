@@ -20,6 +20,7 @@
 | POST | `/api/history` | 读取最近几轮的判定与指标 |
 | POST | `/api/history/raw` | 读取一轮全部调用的原始数据 |
 | POST | `/api/history/delete` | 删除这个站点与密钥的全部历史 |
+| POST | `/api/reports` | 归档一轮脱敏后的测试摘要（需要登录） |
 | POST | `/api/watch` | 建立持续监测 |
 | POST | `/api/watch/view` | 读取一个持续监测 |
 | POST | `/api/watch/state` | 暂停或继续持续监测 |
@@ -298,3 +299,9 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - `anthropic` 协议的请求体带 `max_tokens`，思考 token 也计入。HTML 题不带 `runId` 时是 128000，其余调用是 32000。输出上限低于 128K 的模型（如 Haiku 4.5）在前一种调用上会被站点返回 400。
 - `gemini` 协议的请求体恒带 `maxOutputTokens: 65536`，思考 token 也计入。
 - 每个站点与密钥保存最近 10 轮，闲置 90 天后自动删除。
+
+## POST /api/reports
+
+需要登录后调用（未登录返回 401）。将一轮测试的脱敏数值摘要归档到当前账号下。
+
+请求体 `{ "host", "model", "protocol", "overall", "summary": { "totalCalls", "passedCalls", "failedCalls", "p50Ms"?, "ttftP50Ms"?, "note"? } }`。只保存主机名、模型、协议、总评与数值指标，拒绝密钥格式字符串与超长原文（`note` 最多 200 个字符）。成功返回 201 `{ "id", "createdAt" }`。

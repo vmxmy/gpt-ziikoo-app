@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "react";
 import type { GeneratorId, QuestionListItem } from "../shared/types.ts";
 import { raceProtocols, type Protocol } from "../shared/protocols.ts";
 import { fetchQuestions, HTML_QUESTION, makeProbe, missingFields, type Target } from "./api.ts";
@@ -16,6 +16,7 @@ import { Results } from "./result-view.tsx";
 import { runLadder, type RunSnapshot } from "./runner.ts";
 import { TargetPanel, TestForm } from "./test-form.tsx";
 import { WatchBoard } from "./watch-board.tsx";
+import { parseSite } from "./watch.ts";
 
 const PRIVACY = [
 	["密钥", "实时测试不保存密钥。密钥只在每次测试时转发给你填写的站点。持续监测在你同意后加密保存密钥，仅用于服务器定时调用。"],
@@ -48,7 +49,7 @@ function QuestionRow(props: { q: QuestionListItem; checked: boolean; model: stri
 	const generated = q.generator !== undefined;
 	const noun = generated ? "示例题面" : "题面";
 	return (
-		<li class={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
+		<li className={checked ? "question is-selected" : "question"} data-testid={`question-${q.id}`}>
 			<input
 				id={`q-${q.id}`}
 				type="checkbox"
@@ -56,30 +57,30 @@ function QuestionRow(props: { q: QuestionListItem; checked: boolean; model: stri
 				onChange={onToggle}
 				data-testid={`question-${q.id}-toggle`}
 			/>
-			<div class="question-body">
-				<label class="question-head" for={`q-${q.id}`}>
-					<span class="question-title">{q.title}</span>
-					<span class="tag">{KIND_LABEL[q.kind]}</span>
-					{generated && <span class="tag">每轮随机生成</span>}
-					<span class="mono muted">v{q.version}</span>
-					{q.calibratedModels.length > 0 && !calibrated && <span class="tag tag-warn">此模型未校准，结果仅供参考</span>}
+			<div className="question-body">
+				<label className="question-head" htmlFor={`q-${q.id}`}>
+					<span className="question-title">{q.title}</span>
+					<span className="tag">{KIND_LABEL[q.kind]}</span>
+					{generated && <span className="tag">每轮随机生成</span>}
+					<span className="mono muted">v{q.version}</span>
+					{q.calibratedModels.length > 0 && !calibrated && <span className="tag tag-warn">此模型未校准，结果仅供参考</span>}
 				</label>
 				<p>{q.measures}</p>
-				<button type="button" class="btn-text" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={`question-${q.id}-prompt-toggle`}>
+				<button type="button" className="btn-text" aria-expanded={open} onClick={() => setOpen(!open)} data-testid={`question-${q.id}-prompt-toggle`}>
 					{open ? `收起${noun}` : `查看${noun}`}
 				</button>
 				{open && (
 					<>
-						<pre class="prompt" data-testid={`question-${q.id}-prompt`}>
+						<pre className="prompt" data-testid={`question-${q.id}-prompt`}>
 							{q.prompt}
 						</pre>
-						<p class="muted small">标准答案：{q.expectedLabel}。</p>
-						{q.generator && <p class="muted small">{GENERATOR_HINT[q.generator]}</p>}
-						<div class="question-actions">
-							<button type="button" class="btn-text" onClick={doCopy} data-testid={`question-${q.id}-copy`}>
+						<p className="muted small">标准答案：{q.expectedLabel}。</p>
+						{q.generator && <p className="muted small">{GENERATOR_HINT[q.generator]}</p>}
+						<div className="question-actions">
+							<button type="button" className="btn-text" onClick={doCopy} data-testid={`question-${q.id}-copy`}>
 								复制{noun}
 							</button>
-							<span class="muted small" role="status" data-testid={`question-${q.id}-copy-status`}>
+							<span className="muted small" role="status" data-testid={`question-${q.id}-copy-status`}>
 								{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请手动选中" : ""}
 							</span>
 						</div>
@@ -126,13 +127,13 @@ type QuestionsProps = {
 function QuestionsSection({ questions, loadError, selected, model, target, onToggle }: QuestionsProps) {
 	const [customOpen, setCustomOpen] = useState(false);
 	return (
-		<section class="block col-12" aria-labelledby="questions-h">
-			<div class="section-head">
+		<section className="block col-12" aria-labelledby="questions-h">
+			<div className="section-head">
 				<h2 id="questions-h">选题</h2>
-				<div class="section-tools">
+				<div className="section-tools">
 					<button
 						type="button"
-						class="btn btn-secondary"
+						className="btn btn-secondary"
 						aria-expanded={customOpen}
 						onClick={() => setCustomOpen(!customOpen)}
 						data-testid="custom-q-toggle"
@@ -141,12 +142,12 @@ function QuestionsSection({ questions, loadError, selected, model, target, onTog
 					</button>
 				</div>
 			</div>
-			{loadError && <p class="warn">{loadError}</p>}
-			{questions === null && !loadError && <p class="muted">题目加载中…</p>}
+			{loadError && <p className="warn">{loadError}</p>}
+			{questions === null && !loadError && <p className="muted">题目加载中…</p>}
 			{questions !== null && questions.some((q) => !q.calibratedModels.includes(model.trim())) && (
-				<p class="muted small">题目尚未按当前模型校准，结果仅供参考。</p>
+				<p className="muted small">题目尚未按当前模型校准，结果仅供参考。</p>
 			)}
-			<ul class="questions">
+			<ul className="questions">
 				{(questions ?? []).map((q) => (
 					<QuestionRow
 						key={q.id}
@@ -164,21 +165,26 @@ function QuestionsSection({ questions, loadError, selected, model, target, onTog
 
 function SiteHeader({ privacy, onTogglePrivacy }: { privacy: boolean; onTogglePrivacy: () => void }) {
 	return (
-		<header class="site-header">
+		<header className="site-header">
 			<div>
 				<h1>GPT 降智测试</h1>
-				<p class="lead">用固定题目调用你的站点，检查它返回的是不是你购买的 GPT 模型，有没有换成较弱的模型。</p>
+				<p className="lead">用固定题目调用你的站点，检查它返回的是不是你购买的 GPT 模型，有没有换成较弱的模型。</p>
 			</div>
-			<button
-				type="button"
-				class="btn btn-secondary"
-				aria-pressed={privacy}
-				title="开启时隐藏站点地址与别名，只改变页面显示"
-				onClick={onTogglePrivacy}
-				data-testid="privacy-toggle"
-			>
-				{privacy ? "隐私模式：开" : "隐私模式：关"}
-			</button>
+			<div className="section-tools">
+				<nav className="site-nav" aria-label="页面导航">
+					<a href="/reports">报告归档</a>
+				</nav>
+				<button
+					type="button"
+					className="btn btn-secondary"
+					aria-pressed={privacy}
+					title="开启时隐藏站点地址与别名，只改变页面显示"
+					onClick={onTogglePrivacy}
+					data-testid="privacy-toggle"
+				>
+					{privacy ? "隐私模式：开" : "隐私模式：关"}
+				</button>
+			</div>
 		</header>
 	);
 }
@@ -215,7 +221,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 		["cost", "折扣核算"],
 	];
 	return (
-		<div class="tabs" role="tablist" aria-label="测试方式">
+		<div className="tabs" role="tablist" aria-label="测试方式">
 			{tabs.map(([id, label]) => (
 				<button
 					type="button"
@@ -223,7 +229,7 @@ function Tabs({ tab, onSwitch }: { tab: TabId; onSwitch: (tab: TabId) => void })
 					id={`tab-${id}`}
 					aria-selected={tab === id}
 					aria-controls={`${id}-pane`}
-					class={tab === id ? "tab is-active" : "tab"}
+					className={tab === id ? "tab is-active" : "tab"}
 					onClick={() => onSwitch(id)}
 					data-testid={`tab-${id}`}
 					key={id}
@@ -241,6 +247,8 @@ function useLadderRun({ target, model, questions, selected }: RunInput) {
 	const [run, setRun] = useState<RunSnapshot | null>(null);
 	const [runQuestions, setRunQuestions] = useState<QuestionListItem[]>([]);
 	const [runSeed, setRunSeed] = useState(0);
+	const [runHost, setRunHost] = useState("");
+	const [runModel, setRunModel] = useState("");
 	const [formError, setFormError] = useState("");
 	const ctrl = useRef<AbortController | null>(null);
 	const running = run !== null && !run.finished;
@@ -263,8 +271,11 @@ function useLadderRun({ target, model, questions, selected }: RunInput) {
 		const controller = new AbortController();
 		ctrl.current = controller;
 		const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+		const parsedSite = parseSite(target.site);
 		setRunQuestions(chosen);
 		setRunSeed(seed);
+		setRunHost(parsedSite.ok ? parsedSite.host : "");
+		setRunModel(model.trim());
 		runLadder({
 			runId: crypto.randomUUID(),
 			questions: chosen.map((q) => q.id),
@@ -275,7 +286,7 @@ function useLadderRun({ target, model, questions, selected }: RunInput) {
 			onUpdate: setRun,
 		}).catch((err: unknown) => setFormError(err instanceof Error ? err.message : "测试中断"));
 	};
-	return { run, runQuestions, runSeed, running, formError, start, cancel: () => ctrl.current?.abort() };
+	return { run, runQuestions, runSeed, runHost, runModel, running, formError, start, cancel: () => ctrl.current?.abort() };
 }
 
 export function App() {
@@ -300,10 +311,10 @@ export function App() {
 
 	return (
 		<PrivacyContext.Provider value={privacy}>
-			<div class="container">
+			<div className="container">
 				<SiteHeader privacy={privacy} onTogglePrivacy={togglePrivacy} />
 				<Tabs tab={tab} onSwitch={switchTab} />
-				<details class="privacy" hidden={tab !== "live"}>
+				<details className="privacy" hidden={tab !== "live"}>
 					<summary>实时测试不保存密钥，只在每次调用时转发给站点。请使用有限额的密钥。详情</summary>
 					<dl>
 						{PRIVACY.map(([term, text]) => (
@@ -317,9 +328,19 @@ export function App() {
 				<TargetPanel site={site} setSite={setSite} setKey={setKey} hidden={tab === "watch" || tab === "cost"} />
 				{/* Every pane but the watch board stays mounted while hidden, so a test in progress survives a tab switch; the watch board polls, so it mounts only when shown. */}
 				<div id="live-pane" role="tabpanel" aria-labelledby="tab-live" hidden={tab !== "live"}>
-					<main class="grid main-grid">
+					<main className="grid main-grid">
 						<TestForm {...formProps} onStart={() => r.start()} onCancel={r.cancel} />
-						{r.run && <Results run={r.run} running={r.running} questions={r.runQuestions} seed={r.runSeed} onRerun={r.start} />}
+						{r.run && (
+							<Results
+								run={r.run}
+								running={r.running}
+								questions={r.runQuestions}
+								seed={r.runSeed}
+								host={r.runHost}
+								model={r.runModel}
+								onRerun={r.start}
+							/>
+						)}
 						<QuestionsSection questions={q.questions} loadError={q.loadError} selected={q.selected} model={model} target={target} onToggle={q.toggle} />
 						<History target={target} />
 						<ApiDocs />
@@ -342,7 +363,7 @@ export function App() {
 						<WatchBoard />
 					</div>
 				)}
-				<footer class="site-footer">
+				<footer className="site-footer">
 					<span>GPT 降智测试</span>
 					<span>实时测试不保存密钥 · 结果只代表测试当时的站点表现</span>
 				</footer>

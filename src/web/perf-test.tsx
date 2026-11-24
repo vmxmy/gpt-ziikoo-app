@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useRef, useState } from "preact/hooks";
+import { useRef, useState } from "react";
 import { GENERATORS } from "../shared/generators.ts";
 import { PERF_DURATIONS, PERF_QPS, sendOffsets, summarizeLoad, type PerfConfig, type PerfCriterion, type PerfSample, type PerfStats, type PerfSummary } from "../shared/perf.ts";
 import type { ProbeResponse } from "../shared/types.ts";
@@ -182,7 +182,7 @@ function reportHtml(d: Done): string {
 
 function PairTable({ testId, head, rows }: { testId: string; head: [string, string]; rows: [string, string][] }) {
 	return (
-		<div class="table-wrap">
+		<div className="table-wrap">
 			<table data-testid={testId}>
 				<thead>
 					<tr>
@@ -194,7 +194,7 @@ function PairTable({ testId, head, rows }: { testId: string; head: [string, stri
 					{rows.map(([label, value]) => (
 						<tr key={label}>
 							<td>{label}</td>
-							<td class="num">{value}</td>
+							<td className="num">{value}</td>
 						</tr>
 					))}
 				</tbody>
@@ -208,23 +208,23 @@ function PerfResult(done: Done) {
 	const d = { ...done, host: siteLabel(done.host, privacy) };
 	const { summary } = d;
 	return (
-		<div class="perf-result" data-testid="perf-result">
-			<p class="perf-title">
+		<div className="perf-result" data-testid="perf-result">
+			<p className="perf-title">
 				<span>
 					{d.host} · {d.model} · {stamp(d.at)}
 				</span>{" "}
-				<span class="perf-verdict" data-verdict={summary.verdict} data-testid="perf-verdict">
+				<span className="perf-verdict" data-verdict={summary.verdict} data-testid="perf-verdict">
 					{verdictWord(summary)}
 				</span>
 			</p>
 			<h3>五项达标</h3>
-			<div class="table-wrap">
+			<div className="table-wrap">
 				<table data-testid="perf-criteria">
 					<thead>
 						<tr>
 							<th>项目</th>
 							<th>标准</th>
-							<th class="num">实测</th>
+							<th className="num">实测</th>
 							<th>结论</th>
 							<th>说明</th>
 						</tr>
@@ -234,9 +234,9 @@ function PerfResult(done: Done) {
 							<tr key={c.id} data-testid={`perf-criterion-${c.id}`}>
 								<td>{CRITERION_TEXT[c.id].label}</td>
 								<td>{CRITERION_TEXT[c.id].rule}</td>
-								<td class="num">{CRITERION_TEXT[c.id].value(c.value)}</td>
+								<td className="num">{CRITERION_TEXT[c.id].value(c.value)}</td>
 								<td>
-									<span class="perf-verdict" data-verdict={c.verdict}>
+									<span className="perf-verdict" data-verdict={c.verdict}>
 										{VERDICT_TEXT[c.verdict]}
 									</span>
 								</td>
@@ -252,8 +252,8 @@ function PerfResult(done: Done) {
 			<PairTable testId="perf-conditions" head={["条件", "内容"]} rows={conditionRows(d)} />
 			<h3>结论</h3>
 			<p data-testid="perf-conclusion">{conclusion(summary)}</p>
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" onClick={() => downloadReport(reportHtml(d), reportFileName(fileHost(done.host, privacy), d.model, "qps_bench"))} data-testid="perf-download">
+			<div className="actions">
+				<button type="button" className="btn btn-secondary" onClick={() => downloadReport(reportHtml(d), reportFileName(fileHost(done.host, privacy), d.model, "qps_bench"))} data-testid="perf-download">
 					下载报告
 				</button>
 			</div>
@@ -263,7 +263,7 @@ function PerfResult(done: Done) {
 
 function PerfProgress({ warming, counts }: { warming: boolean; counts: Counts }) {
 	return (
-		<p class="perf-counts num" role="status" data-testid="perf-counts">
+		<p className="perf-counts num" role="status" data-testid="perf-counts">
 			{warming ? "预热中，等第 1 次调用返回" : `已发 ${counts.sent} · 已返回 ${counts.returned} · 失败 ${counts.failed}`}
 		</p>
 	);
@@ -303,13 +303,13 @@ export function PerfTest({ target, models }: { target: Target; models: ModelList
 	};
 
 	return (
-		<section class="panel" aria-labelledby="perf-h">
+		<section className="panel" aria-labelledby="perf-h">
 			<h2 id="perf-h">性能测试</h2>
-			<p class="muted small">
+			<p className="muted small">
 				按固定 QPS 连续调用站点，核对缓存命中率、有效成功率、首字耗时、每 token 耗时与累计 TPM 五项门槛。每轮先发 1 次预热并等它返回，再按固定间隔发出，不等前一次返回。只调用站点，不进历史，刷新页面即失。密钥不保存，只在调用时转发给站点。
 			</p>
 			<form
-				class="grid perf-form"
+				className="grid perf-form"
 				onSubmit={(e) => {
 					e.preventDefault();
 					void start();
@@ -319,35 +319,35 @@ export function PerfTest({ target, models }: { target: Target; models: ModelList
 				<ChoiceField label="协议" testId="perf-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} class="col-6 col-lg-2" />
 				<ChoiceField label="QPS" testId="perf-qps" value={qps} options={PERF_QPS} text={String} onChange={setQps} class="col-6 col-lg-2" />
 				<ChoiceField label="时长" testId="perf-duration" value={durationSec} options={PERF_DURATIONS} text={(d) => `${d} 秒`} onChange={setDurationSec} class="col-6 col-lg-2" />
-				<div class="actions col-12 col-md-6 col-lg-4">
+				<div className="actions col-12 col-md-6 col-lg-4">
 					{status.kind === "running" ? (
-						<button key="cancel" type="button" class="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="perf-cancel">
+						<button key="cancel" type="button" className="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="perf-cancel">
 							取消
 						</button>
 					) : (
-						<button key="run" type="submit" class="btn btn-primary" data-testid="perf-run">
+						<button key="run" type="submit" className="btn btn-primary" data-testid="perf-run">
 							开始测试
 						</button>
 					)}
 				</div>
-				<p class="muted small col-12" data-testid="perf-cost">
+				<p className="muted small col-12" data-testid="perf-cost">
 					本次调用 {calls + 1} 次（{calls} 次加 1 次预热），按题面估算约 {count(Math.round(((calls + 1) * SAMPLE_PROMPT_CHARS) / CHARS_PER_TOKEN))} 个输入 token，站点额外加的输入不算在内。
 				</p>
 				{formError && (
-					<p class="field-error" role="alert" data-testid="perf-form-error">
+					<p className="field-error" role="alert" data-testid="perf-form-error">
 						{formError}
 					</p>
 				)}
 			</form>
 			{status.kind === "running" && <PerfProgress warming={status.warming} counts={status.counts} />}
 			<div aria-live="polite">
-				{status.kind === "cancelled" && <p class="warn">已取消。</p>}
+				{status.kind === "cancelled" && <p className="warn">已取消。</p>}
 				{status.kind === "limited" && (
-					<p class="perf-verdict" data-kind="rate_limited" data-testid="perf-limited">
+					<p className="perf-verdict" data-kind="rate_limited" data-testid="perf-limited">
 						本站限速，结果无效
 					</p>
 				)}
-				{status.kind === "stopped" && <p class="warn">已停止：{status.message}</p>}
+				{status.kind === "stopped" && <p className="warn">已停止：{status.message}</p>}
 				{status.kind === "done" && <PerfResult {...status} />}
 			</div>
 		</section>

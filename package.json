@@ -12,13 +12,16 @@
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.64.1",
-		"@preact/preset-vite": "^2.10.6",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0",
 		"typescript": "^7.0.2",
 		"vite": "^8.3.4",
 		"vitest": "^5.0.5"
 	},
 	"dependencies": {
-		"preact": "^11.0.1",
+		"@void/react": "1.11.0",
+		"react": "^19.3.1",
+		"react-dom": "^19.3.1",
 		"void": "1.11.0"
 	}
 }

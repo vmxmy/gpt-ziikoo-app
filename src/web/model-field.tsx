@@ -1,5 +1,4 @@
-import type { TargetedEvent } from "preact";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { ApiFailure, fetchModels, type Target } from "./api.ts";
 import { FAILURE_ADVICE } from "./results.ts";
 
@@ -69,7 +68,7 @@ export function ModelField({ value, onInput, list, testId, invalid, describedBy,
 		input.current?.focus();
 	};
 
-	const onKeyDown = (e: TargetedEvent<HTMLInputElement, KeyboardEvent>) => {
+	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if (e.key === "ArrowDown") {
 			e.preventDefault();
 			if (options.length === 0) return;
@@ -94,34 +93,34 @@ export function ModelField({ value, onInput, list, testId, invalid, describedBy,
 
 	const status =
 		list.kind === "idle" ? (
-			<p class="muted small" role="status" data-testid={`${testId}-status`}>
+			<p className="muted small" role="status" data-testid={`${testId}-status`}>
 				填写站点与密钥后自动加载模型列表
 			</p>
 		) : list.kind === "loading" ? (
-			<p class="muted small" role="status" data-testid={`${testId}-status`}>
+			<p className="muted small" role="status" data-testid={`${testId}-status`}>
 				正在加载模型列表…
 			</p>
 		) : list.kind === "ready" ? (
-			<p class="muted small" role="status" data-testid={`${testId}-status`}>
+			<p className="muted small" role="status" data-testid={`${testId}-status`}>
 				{models.length > 0 ? `${models.length} 个模型，可从列表选择` : "站点没有返回模型列表"}
 			</p>
 		) : (
-			<p class="warn small" data-testid={`${testId}-status`}>
+			<p className="warn small" data-testid={`${testId}-status`}>
 				{list.message}
 			</p>
 		);
 
 	return (
-		<div class={cellClass ? `field combo ${cellClass}` : "field combo"}>
-			<label class="field-label" for={inputId}>
+		<div className={cellClass ? `field combo ${cellClass}` : "field combo"}>
+			<label className="field-label" htmlFor={inputId}>
 				模型
 			</label>
-			<div class="affix">
+			<div className="affix">
 				<input
 					ref={input}
 					id={inputId}
 					value={value}
-					onInput={(e) => {
+					onChange={(e) => {
 						onInput(e.currentTarget.value);
 						if (list.kind === "ready") setOpen(true);
 					}}
@@ -134,29 +133,30 @@ export function ModelField({ value, onInput, list, testId, invalid, describedBy,
 					aria-activedescendant={activeId}
 					aria-invalid={invalid || undefined}
 					aria-describedby={invalid ? describedBy : undefined}
-					autocomplete="off"
+					autoComplete="off"
 					disabled={disabled}
 					data-testid={testId}
 				/>
 				<button
 					type="button"
-					class="combo-toggle"
+					className="combo-toggle"
 					aria-label="展开模型列表"
 					data-testid={`${testId}-toggle`}
 					disabled={disabled || list.kind !== "ready"}
 					onClick={() => setOpen(!open)}
 				>
 					<svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
-						<path d="M0 2 L4 6 L8 2" fill="none" stroke="currentColor" stroke-width="1.5" />
+						<path d="M0 2 L4 6 L8 2" fill="none" stroke="currentColor" strokeWidth="1.5" />
 					</svg>
 				</button>
 			</div>
 			{open &&
 				list.kind === "ready" &&
 				options.length > 0 && (
-					<ul role="listbox" id={listId} class="combo-list" data-testid={`${testId}-list`}>
+					<ul role="listbox" id={listId} className="combo-list" data-testid={`${testId}-list`}>
 						{options.map((id, i) => (
 							<li
+								key={id}
 								role="option"
 								id={`${listId}-${i}`}
 								aria-selected={i === activeIndex}
