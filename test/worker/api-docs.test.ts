@@ -1,5 +1,8 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import config from "../../void.config.ts?raw";
+import headersFile from "../../public/_headers?raw";
 import doc from "../../public/api.md?raw";
 import { MAX_ATTEMPTS, STAGES } from "../../src/shared/ladder.ts";
 import { BOARD_MAX_WATCHES, WATCH_INTERVALS, WATCH_MAX_TOTAL } from "../../src/shared/watch.ts";
@@ -16,11 +19,56 @@ function limiter(name: string): string {
 	return `每 ${match![2]} 秒 ${match![1]} 次`;
 }
 
+function listRouteFiles(dir: string): string[] {
+	const out: string[] = [];
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const full = join(dir, entry.name);
+		if (entry.isDirectory()) out.push(...listRouteFiles(full));
+		else if (entry.name.endsWith(".ts") && entry.name !== "[...path].ts") out.push(full);
+	}
+	return out.sort();
+}
+
+function fileToRoutePath(routesApiRoot: string, file: string): string {
+	const rel = relative(routesApiRoot, file).replace(/\\/g, "/").replace(/\.ts$/, "");
+	return rel.endsWith("/index") ? `/api/${rel.slice(0, -"/index".length)}` : `/api/${rel}`;
+}
+
 describe("public/api.md", () => {
 	it("lists every route the worker serves", () => {
 		const routes = [...worker.matchAll(/"(\/api\/[^"]+)": \{ (GET|POST):/g)].map(([, path, method]) => `| ${method} | \`${path}\` |`);
 		expect(routes.length).toBeGreaterThan(0);
 		expect(routes.filter((row) => !doc.includes(row))).toEqual([]);
+	});
+
+	it("matches routes/api/ file routes with src/worker/index.ts ROUTES", () => {
+		const expected = [...worker.matchAll(/"(\/api\/[^"]+)": \{ (GET|POST):/g)]
+			.map(([, path, method]) => `${method} ${path}`)
+			.sort();
+		const routesApiRoot = join(process.cwd(), "routes/api");
+		const actual = listRouteFiles(routesApiRoot)
+			.flatMap((file) => {
+				const src = readFileSync(file, "utf8");
+				const path = fileToRoutePath(routesApiRoot, file);
+				return [...src.matchAll(/export const (GET|POST)\b/g)].map(([, method]) => `${method} ${path}`);
+			})
+			.sort();
+		expect(actual).toEqual(expected);
+	});
+
+	it("keeps /api/* no-store and /api/frame sandbox CSP after /* in public/_headers", () => {
+		const rootIdx = headersFile.indexOf("/*");
+		const apiIdx = headersFile.indexOf("\n/api/*\n");
+		const frameIdx = headersFile.indexOf("\n/api/frame\n");
+		expect(rootIdx).toBeGreaterThanOrEqual(0);
+		expect(apiIdx).toBeGreaterThan(rootIdx);
+		expect(frameIdx).toBeGreaterThan(apiIdx);
+		const apiBlock = headersFile.slice(apiIdx, frameIdx);
+		const frameBlock = headersFile.slice(frameIdx);
+		expect(apiBlock).toContain("Cache-Control: no-store");
+		expect(frameBlock).toContain("sandbox allow-scripts");
+		expect(frameBlock).toContain("default-src 'none'");
+		expect(frameBlock).toContain("Cache-Control: no-store");
 	});
 
 	it("states the numbers the code enforces", () => {
