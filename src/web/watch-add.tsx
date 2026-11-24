@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
-import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS } from "../shared/watch.ts";
+import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS, WATCH_MAX_EMAIL } from "../shared/watch.ts";
 import { ModelField, useModelList } from "./model-field.tsx";
 import { privateInputClass, usePrivacy } from "./privacy.ts";
 import { DEFAULT_MODEL, normalizeKey } from "./results.ts";
@@ -53,6 +53,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 	// State only feeds the model-list target; the submit still reads the ref, and the key never enters storage or logs.
 	const [key, setKey] = useState("");
 	const [alias, setAlias] = useState("");
+	const [alertEmail, setAlertEmail] = useState("");
 	const [model, setModel] = useState(DEFAULT_MODEL);
 	const [protocol, setProtocol] = useState<Protocol>("responses");
 	const models = useModelList({ site: site.trim(), key });
@@ -82,6 +83,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			intervalMin: strategy.intervalMin,
 			questions: strategy.questions.picked,
 			measure: strategy.measure,
+			alertEmail,
 			consent,
 		});
 		setBusy(false);
@@ -130,6 +132,22 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			/>
 			<FieldMessage error={error} field="model" />
 			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
+			<label class="field col-12 col-md-6 col-lg-4">
+				<span class="field-label">告警邮箱（可选）</span>
+				<input
+					type="email"
+					maxLength={WATCH_MAX_EMAIL}
+					placeholder="name@example.com"
+					autocomplete="off"
+					value={alertEmail}
+					onInput={(e) => setAlertEmail(e.currentTarget.value)}
+					class={privateInputClass(privacy)}
+					data-testid="watch-add-email"
+					{...invalid(error, "alertEmail")}
+				/>
+				<p class="muted small">邮箱在服务端加密保存，仅用于故障与恢复告警；支持直接回复邮件发送 pause、resume 或 recheck。</p>
+				<FieldMessage error={error} field="alertEmail" />
+			</label>
 			<WatchStrategyFields testPrefix="watch-add" strategy={strategy}>
 				<FieldMessage error={error} field="questions" />
 			</WatchStrategyFields>

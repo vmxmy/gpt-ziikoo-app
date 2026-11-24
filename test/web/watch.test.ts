@@ -32,6 +32,14 @@ describe("parseWatchInput", () => {
 		expect(parseWatchInput(input({ model: " " }))).toMatchObject({ ok: false, error: { field: "model" } });
 		expect(parseWatchInput(input({ consent: false }))).toMatchObject({ ok: false, error: { field: "consent" } });
 		expect(parseWatchInput(input({ questions: [] }))).toMatchObject({ ok: false, error: { field: "questions" } });
+		expect(parseWatchInput(input({ alertEmail: "bad-email" }))).toMatchObject({ ok: false, error: { field: "alertEmail" } });
+	});
+
+	it("includes normalized alertEmail when provided", () => {
+		expect(parseWatchInput(input({ alertEmail: " User@Example.com " }))).toMatchObject({
+			ok: true,
+			request: { alertEmail: "user@example.com" },
+		});
 	});
 });
 
@@ -51,6 +59,21 @@ describe("parseWatchEdit", () => {
 
 	it("asks for at least one question", () => {
 		expect(parseWatchEdit({ questions: [], intervalMin: 5, measure: false }, { intervalMin: 5, measure: false })).toEqual({ ok: false, error: { field: "questions", message: "请至少选一道题" } });
+	});
+
+	it("handles optional alertEmail update and clear", () => {
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 5, measure: false, alertEmail: " New@Example.com " }, { intervalMin: 5, measure: false })).toEqual({
+			ok: true,
+			change: { questions: ["ciallo"], alertEmail: "new@example.com" },
+		});
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 5, measure: false, clearAlertEmail: true }, { intervalMin: 5, measure: false })).toEqual({
+			ok: true,
+			change: { questions: ["ciallo"], alertEmail: null },
+		});
+		expect(parseWatchEdit({ questions: ["ciallo"], intervalMin: 5, measure: false, alertEmail: "invalid" }, { intervalMin: 5, measure: false })).toMatchObject({
+			ok: false,
+			error: { field: "alertEmail" },
+		});
 	});
 });
 

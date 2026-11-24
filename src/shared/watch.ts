@@ -6,7 +6,11 @@ export type WatchIntervalMin = (typeof WATCH_INTERVALS)[number];
 export const WATCH_MAX_TOTAL = 200;
 export const WATCH_IDLE_DAYS = 7;
 export const WATCH_MAX_ALIAS = 40;
+export const WATCH_MAX_EMAIL = 254;
 export const BOARD_MAX_WATCHES = 30;
+
+const ALERT_EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+export const isValidAlertEmail = (value: string): boolean => value.length > 0 && value.length <= WATCH_MAX_EMAIL && ALERT_EMAIL_RE.test(value);
 
 export const isWatchInterval = (v: unknown): v is WatchIntervalMin => WATCH_INTERVALS.some((i) => i === v);
 
@@ -56,10 +60,11 @@ export type WatchCreateRequest = {
 	consent: true;
 	board?: string;
 	measure?: boolean;
+	alertEmail?: string;
 };
 export type WatchTokenRequest = { token: string };
 export type WatchStateRequest = { token: string; action: "pause" | "resume" };
-export type WatchChange = { questions?: string[]; intervalMin?: WatchIntervalMin; measure?: boolean };
+export type WatchChange = { questions?: string[]; intervalMin?: WatchIntervalMin; measure?: boolean; alertEmail?: string | null };
 export type WatchUpdateRequest = { token: string } & WatchChange;
 export type BoardViewRequest = { board: string };
 export type BoardAdoptRequest = { board?: string; tokens: string[] };
@@ -104,6 +109,7 @@ export type WatchView = {
 	// Null while measurement is off.
 	perf: WatchPerf | null;
 	liveTopic?: string;
+	hasAlertEmail?: boolean;
 };
 export type WatchLiveEvent = { kind: "update"; view: WatchView } | { kind: "deleted" };
 export type WatchCreateResponse = { board: string; token: string; watch: WatchView };

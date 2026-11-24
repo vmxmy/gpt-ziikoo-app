@@ -1,5 +1,5 @@
 import type { Protocol } from "../shared/protocols.ts";
-import { isWatchInterval, WATCH_MAX_ALIAS, type WatchChange, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
+import { isValidAlertEmail, isWatchInterval, WATCH_MAX_ALIAS, type WatchChange, type WatchCreateRequest, type WatchIntervalMin, type WatchStatus } from "../shared/watch.ts";
 import { HIDDEN_SITE } from "./privacy.ts";
 import { normalizeKey } from "./results.ts";
 
@@ -53,7 +53,7 @@ export function sortRows<T>(rows: readonly T[], value: (row: T) => string | numb
 		.map(({ row }) => row);
 }
 
-export type FieldError = { field: "site" | "key" | "model" | "questions" | "consent" | "form"; message: string };
+export type FieldError = { field: "site" | "key" | "model" | "questions" | "alertEmail" | "consent" | "form"; message: string };
 
 export type WatchInput = {
 	site: string;
@@ -64,6 +64,7 @@ export type WatchInput = {
 	intervalMin: WatchIntervalMin;
 	questions: string[];
 	measure: boolean;
+	alertEmail?: string;
 	consent: boolean;
 };
 
@@ -77,6 +78,10 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 	const model = input.model.trim();
 	if (model === "") return { ok: false, error: { field: "model", message: "请输入模型" } };
 	if (input.questions.length === 0) return { ok: false, error: { field: "questions", message: "请至少选一道题" } };
+	const alertEmail = (input.alertEmail ?? "").trim();
+	if (alertEmail !== "" && !isValidAlertEmail(alertEmail)) {
+		return { ok: false, error: { field: "alertEmail", message: "请输入有效的邮箱地址" } };
+	}
 	if (!input.consent) return { ok: false, error: { field: "consent", message: "请先勾选同意，再添加持续监测" } };
 	return {
 		ok: true,
@@ -91,6 +96,7 @@ export function parseWatchInput(input: WatchInput, board?: string): WatchDraft {
 			consent: true,
 			...(board ? { board } : {}),
 			...(input.measure ? { measure: true } : {}),
+			...(alertEmail !== "" ? { alertEmail: alertEmail.toLowerCase() } : {}),
 		},
 	};
 }
@@ -99,16 +105,27 @@ export type WatchEditDraft = { ok: true; change: WatchChange } | { ok: false; er
 
 // The interval goes out only when it changed, so a watch on a retired interval keeps it through a question edit.
 export function parseWatchEdit(
-	{ questions, intervalMin, measure }: { questions: string[]; intervalMin: number; measure: boolean },
+	{
+		questions,
+		intervalMin,
+		measure,
+		alertEmail,
+		clearAlertEmail,
+	}: { questions: string[]; intervalMin: number; measure: boolean; alertEmail?: string; clearAlertEmail?: boolean },
 	current: { intervalMin: number; measure: boolean },
 ): WatchEditDraft {
 	if (questions.length === 0) return { ok: false, error: { field: "questions", message: "请至少选一道题" } };
+	const trimmedEmail = (alertEmail ?? "").trim();
+	if (!clearAlertEmail && trimmedEmail !== "" && !isValidAlertEmail(trimmedEmail)) {
+		return { ok: false, error: { field: "alertEmail", message: "请输入有效的邮箱地址" } };
+	}
 	return {
 		ok: true,
 		change: {
 			questions,
 			...(intervalMin !== current.intervalMin && isWatchInterval(intervalMin) && { intervalMin }),
 			...(measure !== current.measure && { measure }),
+			...(clearAlertEmail ? { alertEmail: null } : trimmedEmail !== "" ? { alertEmail: trimmedEmail.toLowerCase() } : {}),
 		},
 	};
 }

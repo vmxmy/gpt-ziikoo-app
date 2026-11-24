@@ -28,6 +28,13 @@ describe("parseWatchCreate questions", () => {
 	it.each([[[]], [["pelican-svg"]], [["nope"]], ["thibault"]])("rejects questions %j", (questions) => {
 		expect(parseWatchCreate({ ...body, questions })).toEqual({ ok: false, message: "questions 必须是非空数组，只能含 thibault、candy、candy-var、ciallo" });
 	});
+
+	it("validates and normalizes optional alertEmail", () => {
+		expect(parseWatchCreate({ ...body, alertEmail: "  User@Example.COM " })).toMatchObject({ ok: true, value: { alertEmail: "user@example.com" } });
+		expect(parseWatchCreate({ ...body, alertEmail: "   " })).toMatchObject({ ok: true });
+		expect(parseWatchCreate({ ...body, alertEmail: "not-an-email" })).toEqual({ ok: false, message: "alertEmail 格式不合法" });
+		expect(parseWatchCreate({ ...body, alertEmail: `${"a".repeat(250)}@b.com` })).toEqual({ ok: false, message: "alertEmail 格式不合法" });
+	});
 });
 
 describe("parseWatchUpdate", () => {
@@ -44,6 +51,13 @@ describe("parseWatchUpdate", () => {
 	it("carries the measurement switch and rejects anything but a boolean", () => {
 		expect(parseWatchUpdate({ token, measure: false })).toEqual({ ok: true, value: { token, change: { measure: false } } });
 		expect(parseWatchUpdate({ token, measure: "on" })).toEqual({ ok: false, message: "measure 必须是 true 或 false" });
+	});
+
+	it("handles alertEmail updates, clearing, and validation", () => {
+		expect(parseWatchUpdate({ token, alertEmail: "Ops@Example.COM" })).toEqual({ ok: true, value: { token, change: { alertEmail: "ops@example.com" } } });
+		expect(parseWatchUpdate({ token, alertEmail: null })).toEqual({ ok: true, value: { token, change: { alertEmail: null } } });
+		expect(parseWatchUpdate({ token, alertEmail: "" })).toEqual({ ok: true, value: { token, change: { alertEmail: null } } });
+		expect(parseWatchUpdate({ token, alertEmail: "bad" })).toEqual({ ok: false, message: "alertEmail 格式不合法" });
 	});
 
 	it("rejects an interval that is no longer offered", () => {

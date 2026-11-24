@@ -5,6 +5,7 @@ import type { FailReason, ProbeResponse, Question } from "../shared/types.ts";
 import type { Protocol } from "../shared/protocols.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
 import { addRow, applyMeasure, measureDue, measureRow, summarizePerf, type MeasureRow, type MeasureState } from "./measure.ts";
+import { evaluateAlert, replyAddress, sendAlertEmail, type AlertKind, type AlertOutcome, type AlertState, type EmailCommand } from "./email-alerts.ts";
 import { hmacHex } from "./hmac.ts";
 import { liveTopic, publishWatchEvent } from "./live.ts";
 import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";
@@ -74,6 +75,8 @@ type WatchState = {
 	usage?: WatchUsage;
 	// Absent while measurement is off.
 	measure?: MeasureState;
+	sealedAlertEmail?: Sealed;
+	alertState?: AlertState;
 };
 
 export type WatchPlan = { kind: "purge" } | { kind: "sleep"; until: number } | { kind: "probe"; nextAt: number };
@@ -196,6 +199,45 @@ export async function measureCalls(env: Pick<Env, "HOST_LIMITER">, state: ProbeT
 const STATE_KEY = "state";
 
 export type WatchCreateOutcome = { kind: "created"; watch: WatchView } | { kind: "unauthorized" };
+export type EmailCommandResult = { ok: true; replyText: string } | { ok: false };
+
+function watchLabel(state: Pick<WatchState, "alias" | "host">): string {
+	return state.alias ? `${state.alias}（${state.host}）` : state.host;
+}
+
+const REPLY_HELP = [
+	"如需操作，可直接回复本邮件（首行填写指令）：",
+	"- pause / 暂停：暂停持续监测",
+	"- resume / 继续：恢复持续监测",
+	"- recheck / 重测：立即执行一次检测",
+].join("\n");
+
+function alertMessage(
+	state: Pick<WatchState, "alias" | "host" | "model" | "protocol">,
+	kind: AlertKind,
+	failures: number,
+	response: ProbeResponse,
+): { subject: string; text: string } {
+	const label = watchLabel(state);
+	const head = `站点：${label}\n模型：${state.model}（${state.protocol}）`;
+	if (kind === "recovered") {
+		return {
+			subject: `[恢复] ${label} 已恢复正常`,
+			text: `${head}\n状态：站点已恢复正常响应。\n\n${REPLY_HELP}`,
+		};
+	}
+	if (kind === "bad_key") {
+		return {
+			subject: `[告警] ${label} 密钥被站点拒绝`,
+			text: `${head}\n状态：站点返回未授权（unauthorized），请检查密钥是否有效（连续 ${UNAUTHORIZED_LIMIT} 次未授权将自动停止监测）。\n\n${REPLY_HELP}`,
+		};
+	}
+	const detail = response.ok ? "未知错误" : `${response.reason}${response.httpStatus ? ` HTTP ${response.httpStatus}` : ""}`;
+	return {
+		subject: `[告警] ${label} 连续检测失败`,
+		text: `${head}\n状态：连续 ${failures} 次检测失败（原因：${detail}）。\n\n${REPLY_HELP}`,
+	};
+}
 
 // Holds one watch: the sealed key, its schedule and a day of samples. The name is an HMAC of the token,
 // so only the holder of the token can reach it; a missing object and a wrong token look the same.
@@ -223,7 +265,7 @@ export class Watch extends DurableObject<Env> {
 		const monitor = buildMonitor(this.samples(now), now, host, intervalMin * 60);
 		const questions = watchRotation(state.questions).map((q) => q.id);
 		const topic = this.env.PEPPER ? await liveTopic(this.env.PEPPER, state.id) : undefined;
-		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null, perf: state.measure ? summarizePerf(state.measure, state.seq, intervalMin, now) : null, liveTopic: topic };
+		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null, perf: state.measure ? summarizePerf(state.measure, state.seq, intervalMin, now) : null, liveTopic: topic, hasAlertEmail: Boolean(state.sealedAlertEmail) };
 	}
 
 	private async save(state: WatchState, alarmAt: number): Promise<void> {
@@ -249,6 +291,7 @@ export class Watch extends DurableObject<Env> {
 			unauthorized: 0,
 			sealedKey: await seal(this.env.WATCH_ENC_KEY, cmd.key),
 			measure: applyMeasure(undefined, cmd.measure),
+			...(cmd.alertEmail ? { sealedAlertEmail: await seal(this.env.WATCH_ENC_KEY, cmd.alertEmail.toLowerCase()) } : {}),
 		};
 		const round = await probeRound(this.env, { ...state, seq: 0 }, cmd.key);
 		if (round && !round.response.ok && round.response.reason === "unauthorized") return { kind: "unauthorized" };
@@ -286,12 +329,61 @@ export class Watch extends DurableObject<Env> {
 	async update(change: WatchChange, now: number): Promise<WatchView | null> {
 		const state = await this.state();
 		if (!state) return null;
-		const { measure, ...schedule } = change;
+		const { measure, alertEmail, ...schedule } = change;
 		const next: WatchState = { ...state, ...schedule, measure: applyMeasure(state.measure, measure), expiresAt: now + IDLE_MS };
+		if (alertEmail === null || alertEmail === "") {
+			delete next.sealedAlertEmail;
+			delete next.alertState;
+		} else if (typeof alertEmail === "string") {
+			const trimmed = alertEmail.trim().toLowerCase();
+			if (trimmed === "") {
+				delete next.sealedAlertEmail;
+				delete next.alertState;
+			} else {
+				next.sealedAlertEmail = await seal(this.env.WATCH_ENC_KEY, trimmed);
+				delete next.alertState;
+			}
+		}
 		await this.save(next, alarmAfterUpdate(next, await this.ctx.storage.getAlarm(), now));
 		const view = await this.toView(next, now);
 		await publishWatchEvent(this.env, next.id, { kind: "update", view });
 		return view;
+	}
+
+	async handleEmailCommand(sender: string, command: EmailCommand | null, now: number): Promise<EmailCommandResult> {
+		const state = await this.state();
+		if (!state?.sealedAlertEmail) return { ok: false };
+		let expectedEmail: string;
+		try {
+			expectedEmail = (await unseal(this.env.WATCH_ENC_KEY, state.sealedAlertEmail)).trim().toLowerCase();
+		} catch {
+			return { ok: false };
+		}
+		if (sender.trim().toLowerCase() !== expectedEmail) return { ok: false };
+		if (!command) {
+			return { ok: true, replyText: "未识别的指令。请直接回复本邮件并在首行填写：pause（暂停）、resume（继续）或 recheck（立即检测）。" };
+		}
+		const label = watchLabel(state);
+		const expiresAt = now + IDLE_MS;
+		if (command === "pause") {
+			const next: WatchState = { ...state, expiresAt, status: { kind: "paused" } };
+			await this.save(next, expiresAt);
+			await publishWatchEvent(this.env, next.id, { kind: "update", view: await this.toView(next, now) });
+			return { ok: true, replyText: `已暂停 ${label} 的持续监测。回复 resume 可恢复监测。` };
+		}
+		if (command === "resume") {
+			const next: WatchState = { ...state, expiresAt, status: { kind: "running" }, unauthorized: 0 };
+			await this.save(next, now);
+			await publishWatchEvent(this.env, next.id, { kind: "update", view: await this.toView(next, now) });
+			return { ok: true, replyText: `已恢复 ${label} 的持续监测，将立即开始检测。` };
+		}
+		if (state.status.kind === "paused") {
+			return { ok: true, replyText: `当前 ${label} 已暂停，未执行检测。回复 resume 可恢复监测。` };
+		}
+		const next: WatchState = { ...state, expiresAt, status: { kind: "running" }, unauthorized: 0 };
+		await this.save(next, now);
+		await publishWatchEvent(this.env, next.id, { kind: "update", view: await this.toView(next, now) });
+		return { ok: true, replyText: `已触发 ${label} 立即重新检测。` };
 	}
 
 	async deleteAll(): Promise<void> {
@@ -322,13 +414,35 @@ export class Watch extends DurableObject<Env> {
 			latest.status.kind === "running" && unauthorized >= UNAUTHORIZED_LIMIT ? { kind: "bad_key" } : latest.status;
 		// Stamped at the end of the round: a hung site holds a round for minutes, and a start time would read as stale.
 		this.addSample(toSample(Date.now(), round.question, round.response));
-		const next: WatchState = { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) };
+		let next: WatchState = { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) };
 		await this.ctx.storage.put(STATE_KEY, next);
+		if (next.sealedAlertEmail) {
+			next = await this.notifyAlert(next, round.response);
+		}
 		await this.runMeasure(next, key, round.attempts.length === 1 && round.response.ok);
 		const finalState = await this.state();
 		if (finalState) {
 			await publishWatchEvent(this.env, finalState.id, { kind: "update", view: await this.toView(finalState, Date.now()) });
 		}
+	}
+
+	private async notifyAlert(state: WatchState, response: ProbeResponse): Promise<WatchState> {
+		if (!state.sealedAlertEmail) return state;
+		const alertOutcome: AlertOutcome = response.ok ? "ok" : response.reason === "unauthorized" ? "bad_key" : "fail";
+		const { next: alertState, send } = evaluateAlert(state.alertState, alertOutcome, Date.now());
+		if (send !== null) {
+			try {
+				const to = await unseal(this.env.WATCH_ENC_KEY, state.sealedAlertEmail);
+				const replyTo = this.env.PEPPER ? await replyAddress(this.env.PEPPER, state.id) : undefined;
+				const { subject, text } = alertMessage(state, send, alertState.failures, response);
+				await sendAlertEmail(this.env, { to, replyTo, subject, text, host: state.host, kind: send });
+			} catch {
+				/* alert failure must never break Watch.alarm */
+			}
+		}
+		const updated: WatchState = { ...state, alertState };
+		await this.ctx.storage.put(STATE_KEY, updated);
+		return updated;
 	}
 
 	private async runMeasure(state: WatchState, key: string, firstTry: boolean): Promise<void> {
