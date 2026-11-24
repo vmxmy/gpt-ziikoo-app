@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "source": {
+    "name": "gpt-ziikoo-void",
+    "workers_dev": false,
+    "preview_urls": false,
+    "routes": [
+      {
+        "pattern": "gpt-void.ziikoo.app",
+        "custom_domain": true
+      }
+    ],
+    "ratelimits": [
+      {
+        "name": "IP_LIMITER",
+        "namespace_id": "7101",
+        "simple": {
+          "limit": 150,
+          "period": 60
+        }
+      },
+      {
+        "name": "HOST_LIMITER",
+        "namespace_id": "7102",
+        "simple": {
+          "limit": 120,
+          "period": 60
+        }
+      }
+    ],
+    "observability": {
+      "enabled": true,
+      "logs": {
+        "enabled": true,
+        "invocation_logs": false,
+        "head_sampling_rate": 1
+      }
+    }
+  },
+  "resolved": {
+    "name": "gpt-ziikoo-void",
+    "workers_dev": false,
+    "preview_urls": false,
+    "routes": [
+      {
+        "pattern": "gpt-void.ziikoo.app",
+        "custom_domain": true
+      }
+    ],
+    "ratelimits": [
+      {
+        "name": "IP_LIMITER",
+        "namespace_id": "7101",
+        "simple": {
+          "limit": 150,
+          "period": 60
+        }
+      },
+      {
+        "name": "HOST_LIMITER",
+        "namespace_id": "7102",
+        "simple": {
+          "limit": 120,
+          "period": 60
+        }
+      }
+    ],
+    "observability": {
+      "enabled": true,
+      "logs": {
+        "enabled": true,
+        "invocation_logs": false,
+        "head_sampling_rate": 1
+      }
+    },
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "BOARD",
+          "class_name": "BoardDurableObject"
+        },
+        {
+          "name": "TARGET",
+          "class_name": "TargetDurableObject"
+        },
+        {
+          "name": "WATCH_REGISTRY",
+          "class_name": "WatchRegistryDurableObject"
+        },
+        {
+          "name": "WATCH",
+          "class_name": "WatchDurableObject"
+        }
+      ]
+    },
+    "migrations": [
+      {
+        "tag": "void-durable-board-v1",
+        "new_sqlite_classes": [
+          "BoardDurableObject"
+        ]
+      },
+      {
+        "tag": "void-durable-target-v1",
+        "new_sqlite_classes": [
+          "TargetDurableObject"
+        ]
+      },
+      {
+        "tag": "void-durable-watch-registry-v1",
+        "new_sqlite_classes": [
+          "WatchRegistryDurableObject"
+        ]
+      },
+      {
+        "tag": "void-durable-watch-v1",
+        "new_sqlite_classes": [
+          "WatchDurableObject"
+        ]
+      }
+    ]
+  },
+  "text": "{\n  \"name\": \"gpt-ziikoo-void\",\n  \"workers_dev\": false,\n  \"preview_urls\": false,\n  \"routes\": [\n    {\n      \"pattern\": \"gpt-void.ziikoo.app\",\n      \"custom_domain\": true\n    }\n  ],\n  \"ratelimits\": [\n    {\n      \"name\": \"IP_LIMITER\",\n      \"namespace_id\": \"7101\",\n      \"simple\": {\n        \"limit\": 150,\n        \"period\": 60\n      }\n    },\n    {\n      \"name\": \"HOST_LIMITER\",\n      \"namespace_id\": \"7102\",\n      \"simple\": {\n        \"limit\": 120,\n        \"period\": 60\n      }\n    }\n  ],\n  \"observability\": {\n    \"enabled\": true,\n    \"logs\": {\n      \"enabled\": true,\n      \"invocation_logs\": false,\n      \"head_sampling_rate\": 1\n    }\n  },\n  \"durable_objects\": {\n    \"bindings\": [\n      {\n        \"name\": \"BOARD\",\n        \"class_name\": \"BoardDurableObject\"\n      },\n      {\n        \"name\": \"TARGET\",\n        \"class_name\": \"TargetDurableObject\"\n      },\n      {\n        \"name\": \"WATCH_REGISTRY\",\n        \"class_name\": \"WatchRegistryDurableObject\"\n      },\n      {\n        \"name\": \"WATCH\",\n        \"class_name\": \"WatchDurableObject\"\n      }\n    ]\n  },\n  \"migrations\": [\n    {\n      \"tag\": \"void-durable-board-v1\",\n      \"new_sqlite_classes\": [\n        \"BoardDurableObject\"\n      ]\n    },\n    {\n      \"tag\": \"void-durable-target-v1\",\n      \"new_sqlite_classes\": [\n        \"TargetDurableObject\"\n      ]\n    },\n    {\n      \"tag\": \"void-durable-watch-registry-v1\",\n      \"new_sqlite_classes\": [\n        \"WatchRegistryDurableObject\"\n      ]\n    },\n    {\n      \"tag\": \"void-durable-watch-v1\",\n      \"new_sqlite_classes\": [\n        \"WatchDurableObject\"\n      ]\n    }\n  ]\n}\n"
+}

@@ -15,18 +15,20 @@ function harness(ipAllowed: boolean, hostAllowed = false) {
 	const ip = limiter(ipAllowed);
 	const host = limiter(hostAllowed);
 	const reached = { target: false };
-	const env = { PEPPER: "pepper-for-tests", IP_LIMITER: ip, HOST_LIMITER: host };
-	const ctx = {
-		waitUntil: () => {},
-		exports: {
-			Target: {
-				idFromName: (name: string) => name,
-				get: () => {
-					reached.target = true;
-					throw new Error("Target must not be reached");
-				},
+	const env = {
+		PEPPER: "pepper-for-tests",
+		IP_LIMITER: ip,
+		HOST_LIMITER: host,
+		TARGET: {
+			idFromName: (name: string) => name,
+			get: () => {
+				reached.target = true;
+				throw new Error("Target must not be reached");
 			},
 		},
+	};
+	const ctx = {
+		waitUntil: () => {},
 	};
 	// Only the bindings these routes touch are faked; the generated Env and ExecutionContext types are far wider.
 	const call = (path: string, body: object) =>
@@ -108,21 +110,23 @@ describe("frame host", () => {
 describe("watch create", () => {
 	function watchHarness(reserved: string) {
 		const reached = { watch: false };
-		const env = { PEPPER: "pepper-for-tests", IP_LIMITER: limiter(true), HOST_LIMITER: limiter(true) };
+		const env = {
+			PEPPER: "pepper-for-tests",
+			IP_LIMITER: limiter(true),
+			HOST_LIMITER: limiter(true),
+			WATCH: {
+				idFromName: (name: string) => name,
+				get: () => ({
+					create: async () => {
+						reached.watch = true;
+						throw new Error("Watch must not be reached");
+					},
+				}),
+			},
+			WATCH_REGISTRY: { idFromName: (name: string) => name, get: () => ({ reserve: async () => reserved }) },
+		};
 		const ctx = {
 			waitUntil: () => {},
-			exports: {
-				Watch: {
-					idFromName: (name: string) => name,
-					get: () => ({
-						create: async () => {
-							reached.watch = true;
-							throw new Error("Watch must not be reached");
-						},
-					}),
-				},
-				WatchRegistry: { idFromName: (name: string) => name, get: () => ({ reserve: async () => reserved }) },
-			},
 		};
 		const call = (body: object) =>
 			worker.fetch(

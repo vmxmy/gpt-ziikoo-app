@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import config from "../../cloudflare.config.ts?raw";
+import config from "../../void.config.ts?raw";
 import doc from "../../public/api.md?raw";
 import { MAX_ATTEMPTS, STAGES } from "../../src/shared/ladder.ts";
 import { BOARD_MAX_WATCHES, WATCH_INTERVALS, WATCH_MAX_TOTAL } from "../../src/shared/watch.ts";
@@ -11,7 +11,7 @@ import { DEFAULT_LIMITS, LONG_ANSWER_LIMITS, MAX_BODY_BYTES } from "../../src/wo
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function limiter(name: string): string {
-	const match = new RegExp(`${name}: .*limit: (\\d+), period: (\\d+)`).exec(config);
+	const match = new RegExp(`name: "${name}".*limit: (\\d+), period: (\\d+)`).exec(config);
 	expect(match, name).not.toBeNull();
 	return `每 ${match![2]} 秒 ${match![1]} 次`;
 }

@@ -41,7 +41,8 @@ export { Board } from "./board.ts";
 export { Target } from "./target.ts";
 export { Watch, WatchRegistry } from "./watch.ts";
 
-type Handler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
+export type WorkerCtx = Pick<ExecutionContext, "waitUntil">;
+export type WorkerHandler = (request: Request, env: Env, ctx: WorkerCtx) => Promise<Response>;
 
 const API_HEADERS = {
 	"Content-Type": "application/json",
@@ -67,9 +68,9 @@ async function readJson(request: Request): Promise<unknown> {
 	}
 }
 
-async function targetStub(ctx: ExecutionContext, env: Env, { origin, key }: HistoryCommand) {
+async function targetStub(env: Env, { origin, key }: HistoryCommand) {
 	const id = await objectId(env.PEPPER, origin, key);
-	return ctx.exports.Target.get(ctx.exports.Target.idFromName(id));
+	return env.TARGET.get(env.TARGET.idFromName(id));
 }
 
 const clientIp = (request: Request) => request.headers.get("CF-Connecting-IP") ?? "unknown";
@@ -78,16 +79,16 @@ async function ipAllowed(request: Request, env: Env): Promise<boolean> {
 	return (await env.IP_LIMITER.limit({ key: clientIp(request) })).success;
 }
 
-async function watchStub(ctx: ExecutionContext, env: Env, token: string) {
+async function watchStub(env: Env, token: string) {
 	const id = await watchId(env.PEPPER, token);
-	return { id, stub: ctx.exports.Watch.get(ctx.exports.Watch.idFromName(id)) };
+	return { id, stub: env.WATCH.get(env.WATCH.idFromName(id)) };
 }
 
-const registryStub = (ctx: ExecutionContext) => ctx.exports.WatchRegistry.get(ctx.exports.WatchRegistry.idFromName("global"));
+const registryStub = (env: Env) => env.WATCH_REGISTRY.get(env.WATCH_REGISTRY.idFromName("global"));
 
-async function boardStub(ctx: ExecutionContext, env: Env, board: string) {
+async function boardStub(env: Env, board: string) {
 	const id = await hmacHex(env.PEPPER, `board\n${board}`);
-	return ctx.exports.Board.get(ctx.exports.Board.idFromName(id));
+	return env.BOARD.get(env.BOARD.idFromName(id));
 }
 
 function rateLimited(): Response {
@@ -143,13 +144,13 @@ function progressStream(cmd: ProbeCommand, settle: (result: ProbeResult) => Prob
 	return new Response(body, { headers: { ...API_HEADERS, "Content-Type": "application/x-ndjson" } });
 }
 
-const handleProbe: Handler = async (request, env, ctx) => {
+export const handleProbe: WorkerHandler = async (request, env, ctx) => {
 	const parsed = parseProbeRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	const cmd = parsed.value;
 	if (!(await ipAllowed(request, env)) || !(await env.HOST_LIMITER.limit({ key: cmd.host })).success) return rateLimited();
 	const { run } = cmd;
-	const stub = run ? await targetStub(ctx, env, cmd) : null;
+	const stub = run ? await targetStub(env, cmd) : null;
 	// Checked before the upstream call so a full run stops spending the caller's quota; record() re-checks.
 	if (run && stub && (await stub.callCount(run.runId)) >= MAX_CALLS_PER_RUN) {
 		return apiError(429, { error: "too_many_calls", message: `每轮最多 ${MAX_CALLS_PER_RUN} 次调用` });
@@ -164,12 +165,12 @@ const handleProbe: Handler = async (request, env, ctx) => {
 	return json(settle(await probe(cmd)));
 };
 
-const handleQuestions: Handler = async () => {
+export const handleQuestions: WorkerHandler = async () => {
 	const questions: Omit<Question, "scorer">[] = activeQuestions().map(({ scorer, ...rest }) => rest);
 	return json(questions);
 };
 
-const handleClaudeCase: Handler = async (request, env) => {
+export const handleClaudeCase: WorkerHandler = async (request, env) => {
 	if (!(await ipAllowed(request, env))) return rateLimited();
 	const parsed = parseClaudeCaseRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
@@ -188,7 +189,7 @@ const handleClaudeCase: Handler = async (request, env) => {
 	}
 };
 
-const handleModels: Handler = async (request, env) => {
+export const handleModels: WorkerHandler = async (request, env) => {
 	const parsed = parseHistoryRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	const { origin, host, key } = parsed.value;
@@ -198,27 +199,27 @@ const handleModels: Handler = async (request, env) => {
 	return json(result);
 };
 
-const handleHistory: Handler = async (request, env, ctx) => {
+export const handleHistory: WorkerHandler = async (request, env) => {
 	const parsed = parseHistoryRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const stub = await targetStub(ctx, env, parsed.value);
+	const stub = await targetStub(env, parsed.value);
 	return json({ runs: await stub.history() } satisfies HistoryResponse);
 };
 
-const handleHistoryRaw: Handler = async (request, env, ctx) => {
+export const handleHistoryRaw: WorkerHandler = async (request, env) => {
 	const parsed = parseHistoryRawRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const stub = await targetStub(ctx, env, parsed.value);
+	const stub = await targetStub(env, parsed.value);
 	return new Response(await stub.raw(parsed.value.runId), { headers: API_HEADERS });
 };
 
-const handleHistoryDelete: Handler = async (request, env, ctx) => {
+export const handleHistoryDelete: WorkerHandler = async (request, env) => {
 	const parsed = parseHistoryRequest(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const stub = await targetStub(ctx, env, parsed.value);
+	const stub = await targetStub(env, parsed.value);
 	await stub.deleteAll();
 	return json({ deleted: true } satisfies HistoryDeleteResponse);
 };
@@ -228,7 +229,7 @@ const LIMIT_MESSAGES = {
 	board_limit: `一个看板最多 ${BOARD_MAX_WATCHES} 个持续监测`,
 } as const;
 
-const handleWatchCreate: Handler = async (request, env, ctx) => {
+export const handleWatchCreate: WorkerHandler = async (request, env) => {
 	const parsed = parseWatchCreate(await readJson(request));
 	if (!parsed.ok) {
 		const { message, field } = parsed;
@@ -239,7 +240,7 @@ const handleWatchCreate: Handler = async (request, env, ctx) => {
 	const now = Date.now();
 	let board = cmd.board;
 	if (board) {
-		const boardStubInst = await boardStub(ctx, env, board);
+		const boardStubInst = await boardStub(env, board);
 		const existing = await boardStubInst.list(board, now);
 		if (existing.length > 0 && existing.length >= BOARD_MAX_WATCHES) {
 			return json({ error: "watch_limit", message: LIMIT_MESSAGES.board_limit } satisfies WatchCreateError, 429);
@@ -248,8 +249,8 @@ const handleWatchCreate: Handler = async (request, env, ctx) => {
 	}
 	if (!board) board = newBoardCode();
 	const token = newToken();
-	const { id, stub } = await watchStub(ctx, env, token);
-	const registry = registryStub(ctx);
+	const { id, stub } = await watchStub(env, token);
+	const registry = registryStub(env);
 	const reserved = await registry.reserve(id, await ipHash(env.PEPPER, clientIp(request)), cmd.host, now);
 	if (reserved !== "ok") return json({ error: "watch_limit", message: LIMIT_MESSAGES[reserved] } satisfies WatchCreateError, 429);
 	const created = await stub.create(cmd, id, now);
@@ -257,70 +258,70 @@ const handleWatchCreate: Handler = async (request, env, ctx) => {
 		await registry.release(id);
 		return json({ error: "bad_request", message: "站点拒绝了这个密钥", field: "key" } satisfies WatchCreateError, 400);
 	}
-	const boardStubInst = await boardStub(ctx, env, board);
+	const boardStubInst = await boardStub(env, board);
 	await boardStubInst.add(board, [token], now);
 	return json({ board, token, watch: created.watch } satisfies WatchCreateResponse);
 };
 
-const handleWatchView: Handler = async (request, env, ctx) => {
+export const handleWatchView: WorkerHandler = async (request, env) => {
 	const parsed = parseWatchToken(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const { id, stub } = await watchStub(ctx, env, parsed.value);
+	const { id, stub } = await watchStub(env, parsed.value);
 	const watch = await stub.view(Date.now());
 	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
-	await registryStub(ctx).touch(id, watch.expiresAt);
+	await registryStub(env).touch(id, watch.expiresAt);
 	return json(watch);
 };
 
-const handleWatchState: Handler = async (request, env, ctx) => {
+export const handleWatchState: WorkerHandler = async (request, env) => {
 	const parsed = parseWatchState(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const { id, stub } = await watchStub(ctx, env, parsed.value.token);
+	const { id, stub } = await watchStub(env, parsed.value.token);
 	const watch = await stub.setState(parsed.value.action, Date.now());
 	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
-	await registryStub(ctx).touch(id, watch.expiresAt);
+	await registryStub(env).touch(id, watch.expiresAt);
 	return json(watch);
 };
 
-const handleWatchUpdate: Handler = async (request, env, ctx) => {
+export const handleWatchUpdate: WorkerHandler = async (request, env) => {
 	const parsed = parseWatchUpdate(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const { id, stub } = await watchStub(ctx, env, parsed.value.token);
+	const { id, stub } = await watchStub(env, parsed.value.token);
 	const watch = await stub.update(parsed.value.change, Date.now());
 	if (!watch) return apiError(404, { error: "not_found", message: "监测不存在或已过期" });
-	await registryStub(ctx).touch(id, watch.expiresAt);
+	await registryStub(env).touch(id, watch.expiresAt);
 	return json(watch);
 };
 
-const handleWatchDelete: Handler = async (request, env, ctx) => {
+export const handleWatchDelete: WorkerHandler = async (request, env) => {
 	const parsed = parseWatchToken(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
-	const { id, stub } = await watchStub(ctx, env, parsed.value);
+	const { id, stub } = await watchStub(env, parsed.value);
 	await stub.deleteAll();
-	await registryStub(ctx).release(id);
+	await registryStub(env).release(id);
 	return json({ deleted: true } satisfies WatchDeleteResponse);
 };
 
-async function fetchWatchView(ctx: ExecutionContext, env: Env, token: string, now: number): Promise<WatchView | null> {
-	const { id, stub } = await watchStub(ctx, env, token);
+async function fetchWatchView(env: Env, token: string, now: number): Promise<WatchView | null> {
+	const { id, stub } = await watchStub(env, token);
 	const watch = await stub.view(now);
-	if (watch) await registryStub(ctx).touch(id, watch.expiresAt);
+	if (watch) await registryStub(env).touch(id, watch.expiresAt);
 	return watch;
 }
 
-const handleBoardView: Handler = async (request, env, ctx) => {
+export const handleBoardView: WorkerHandler = async (request, env, ctx) => {
 	const parsed = parseBoardView(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
 	const board = parsed.value;
 	const now = Date.now();
-	const boardStubInst = await boardStub(ctx, env, board);
+	const boardStubInst = await boardStub(env, board);
 	const tokens = await boardStubInst.list(board, now);
-	const results = await Promise.allSettled(tokens.map((token) => fetchWatchView(ctx, env, token, now)));
+	const results = await Promise.allSettled(tokens.map((token) => fetchWatchView(env, token, now)));
 	const watches: { token: string; watch: WatchView | null }[] = [];
 	const toRemove: string[] = [];
 	for (let i = 0; i < tokens.length; i++) {
@@ -340,7 +341,7 @@ const handleBoardView: Handler = async (request, env, ctx) => {
 	return json({ watches } satisfies BoardViewResponse);
 };
 
-const handleBoardAdopt: Handler = async (request, env, ctx) => {
+export const handleBoardAdopt: WorkerHandler = async (request, env) => {
 	const parsed = parseBoardAdopt(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
@@ -348,46 +349,46 @@ const handleBoardAdopt: Handler = async (request, env, ctx) => {
 	const now = Date.now();
 	const valid: string[] = [];
 	for (const token of tokens) {
-		const view = await fetchWatchView(ctx, env, token, now).catch(() => null);
+		const view = await fetchWatchView(env, token, now).catch(() => null);
 		if (view) valid.push(token);
 	}
 	if (valid.length === 0) return json({ board: null } satisfies BoardAdoptResponse);
-	const board = inputBoard && (await (await boardStub(ctx, env, inputBoard)).list(inputBoard, now)).length > 0 ? inputBoard : newBoardCode();
-	const boardStubInst = await boardStub(ctx, env, board);
+	const board = inputBoard && (await (await boardStub(env, inputBoard)).list(inputBoard, now)).length > 0 ? inputBoard : newBoardCode();
+	const boardStubInst = await boardStub(env, board);
 	const result = await boardStubInst.add(board, valid, now);
 	if (result === "full") return json({ error: "watch_limit", message: LIMIT_MESSAGES.board_limit } satisfies WatchCreateError, 429);
 	return json({ board } satisfies BoardAdoptResponse);
 };
 
-const handleBoardMove: Handler = async (request, env, ctx) => {
+export const handleBoardMove: WorkerHandler = async (request, env) => {
 	const parsed = parseBoardMove(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
 	const { from, into: inputInto } = parsed.value;
 	if (from === inputInto) return json({ board: from } satisfies BoardMoveResponse);
 	const now = Date.now();
-	const fromStub = await boardStub(ctx, env, from);
+	const fromStub = await boardStub(env, from);
 	const fromTokens = await fromStub.list(from, now);
 	if (fromTokens.length === 0) return apiError(404, { error: "not_found", message: "看板不存在或已过期" });
 	const into = inputInto ?? newBoardCode();
 	if (inputInto) {
-		const intoStub = await boardStub(ctx, env, inputInto);
+		const intoStub = await boardStub(env, inputInto);
 		const intoTokens = await intoStub.list(inputInto, now);
 		if (intoTokens.length === 0) return apiError(404, { error: "not_found", message: "看板不存在或已过期" });
 	}
-	const intoStub = await boardStub(ctx, env, into);
+	const intoStub = await boardStub(env, into);
 	const result = await intoStub.add(into, fromTokens, now);
 	if (result === "full") return json({ error: "watch_limit", message: LIMIT_MESSAGES.board_limit } satisfies WatchCreateError, 429);
 	await fromStub.deleteAll();
 	return json({ board: into } satisfies BoardMoveResponse);
 };
 
-const handleBoardOrder: Handler = async (request, env, ctx) => {
+export const handleBoardOrder: WorkerHandler = async (request, env) => {
 	const parsed = parseBoardOrder(await readJson(request));
 	if (!parsed.ok) return apiError(400, { error: "bad_request", message: parsed.message });
 	if (!(await ipAllowed(request, env))) return rateLimited();
 	const { board, tokens } = parsed.value;
-	const stub = await boardStub(ctx, env, board);
+	const stub = await boardStub(env, board);
 	const result = await stub.reorder(board, tokens, Date.now());
 	if (result === "stale") return apiError(409, { error: "stale", message: "看板已变化，请刷新后重试" });
 	return json({ tokens } satisfies BoardOrderResponse);
@@ -413,9 +414,9 @@ const FRAME_HEADERS = {
 	"Referrer-Policy": "no-referrer",
 };
 
-const handleFrame: Handler = async () => new Response(FRAME_HTML, { headers: FRAME_HEADERS });
+export const handleFrame: WorkerHandler = async () => new Response(FRAME_HTML, { headers: FRAME_HEADERS });
 
-const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
+export const ROUTES: Record<string, Partial<Record<string, WorkerHandler>>> = {
 	"/api/frame": { GET: handleFrame },
 	"/api/questions": { GET: handleQuestions },
 	"/api/probe": { POST: handleProbe },
@@ -434,6 +435,14 @@ const ROUTES: Record<string, Partial<Record<string, Handler>>> = {
 	"/api/board/move": { POST: handleBoardMove },
 	"/api/board/order": { POST: handleBoardOrder },
 };
+
+export function handleApiFallback(request: Request): Response {
+	const route = ROUTES[new URL(request.url).pathname];
+	if (route) {
+		return apiError(405, { error: "bad_request", message: "方法不允许" }, { Allow: Object.keys(route).join(", ") });
+	}
+	return apiError(404, { error: "not_found", message: "未知接口" });
+}
 
 export default {
 	async fetch(request, env, ctx) {
