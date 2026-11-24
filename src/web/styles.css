@@ -588,3 +588,24 @@ a {
 		transition: none;
 	}
 }
+
+.auth-oauth {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+}
+
+.auth-form {
+	margin-top: var(--space-4);
+}
+
+.auth-email-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+.auth-email-row input {
+	flex: 1 1 240px;
+}

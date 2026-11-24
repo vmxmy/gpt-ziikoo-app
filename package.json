@@ -20,6 +20,7 @@
 	},
 	"dependencies": {
 		"@void/react": "1.11.0",
+		"better-auth": "1.7.27",
 		"react": "^19.3.1",
 		"react-dom": "^19.3.1",
 		"void": "1.11.0"
