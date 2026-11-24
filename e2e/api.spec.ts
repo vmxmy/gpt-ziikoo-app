@@ -17,7 +17,8 @@ test("POST /api/probe 拒绝非法目标与参数", async ({ request }) => {
 	const valid = { site: UNREACHABLE_SITE, key: `sk-e2e-${"a".repeat(24)}`, protocol: "responses", model: "mock-good", question: "thibault" };
 	const cases: Record<string, object> = {
 		"http 站点": { ...valid, site: "http://relay.example.invalid" },
-		"IP 站点": { ...valid, site: "https://1.2.3.4" },
+		"私网 IP 站点": { ...valid, site: "https://10.0.0.1" },
+		"元数据 IP 站点": { ...valid, site: "https://169.254.169.254" },
 		localhost: { ...valid, site: "https://localhost" },
 		过短密钥: { ...valid, key: "sk-1" },
 		"非法 runId": { ...valid, runId: "not-a-uuid", stage: 1, seq: 1 },
