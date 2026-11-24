@@ -5,7 +5,7 @@
 # 本脚本在 agent-gate-heavy.flock 持有期间运行：不要在这里调用 gate.sh / gate.test.sh / orca-factory selftest，这类检查写进 spec 的 CHECK。
 set -Eeuo pipefail
 
-echo "== typecheck"      # two tsconfigs (worker, web); `cf workers types` regenerates .cloudflare/types first
+echo "== typecheck"      # delegates to package.json (cf workers types + worker/web tsconfigs, or void prepare + tsc after migration)
 pnpm typecheck
 
 echo "== test"
@@ -14,5 +14,13 @@ pnpm test
 echo "== build"
 pnpm build
 
-echo "== deploy-dry-run" # sends no API request and needs no credentials (docs/architecture.md「发布」)
-pnpm exec cf deploy --dry-run --prebuilt --mode production
+if [[ -f cloudflare.config.ts ]]; then
+  echo "== deploy-dry-run" # sends no API request and needs no credentials (docs/architecture.md「发布」)
+  pnpm exec cf deploy --dry-run --prebuilt --mode production
+elif [[ -f void.config.ts ]]; then
+  echo "== void-info"      # offline resource & lock check; sends no API request and needs no credentials
+  pnpm exec void info
+else
+  echo "gate.project.sh: neither cloudflare.config.ts nor void.config.ts found" >&2
+  exit 1
+fi
