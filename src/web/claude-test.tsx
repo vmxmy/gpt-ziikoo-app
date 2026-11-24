@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useRef, useState } from "preact/hooks";
+import { useRef, useState } from "react";
 import { CLAUDE_CASES, type ClaudeCaseId, type ClaudeCaseResult } from "../shared/claude-cases.ts";
 import { missingFields, runClaudeCases, type Target } from "./api.ts";
 import { buildClaudeReport, caseCounts, caseRows, CASE_STATE_LABEL, claudeCaseTitle, summarizeClaude, type CaseRow, type CaseState, type ClaudeReport } from "./claude-report.ts";
@@ -14,16 +14,16 @@ const tone = (state: CaseState) => (state === "running" ? { "data-state": "pendi
 
 function CaseOverview({ rows }: { rows: CaseRow[] }) {
 	return (
-		<div class="claude-overview">
-			<ol class="claude-strip" aria-hidden="true" data-testid="claude-strip">
+		<div className="claude-overview">
+			<ol className="claude-strip" aria-hidden="true" data-testid="claude-strip">
 				{rows.map((row) => (
 					<li key={row.id} {...tone(row.state)} title={`${row.id} ${row.title}：${CASE_STATE_LABEL[row.state]}`} data-testid={`claude-strip-${row.id}`}>
-						<span class="claude-strip-bar" />
-						<span class="claude-strip-id">{row.id}</span>
+						<span className="claude-strip-bar" />
+						<span className="claude-strip-id">{row.id}</span>
 					</li>
 				))}
 			</ol>
-			<ul class="claude-counts" data-testid="claude-counts">
+			<ul className="claude-counts" data-testid="claude-counts">
 				{caseCounts(rows).map(([state, count]) => <li key={state} {...tone(state)}>{CASE_STATE_LABEL[state]} {count}</li>)}
 			</ul>
 		</div>
@@ -34,26 +34,26 @@ function ClaudeSummary({ run }: { run: ClaudeReport }) {
 	const privacy = usePrivacy();
 	const summary = summarizeClaude(run.results);
 	return (
-		<div class="claude-report" data-testid="claude-result">
+		<div className="claude-report" data-testid="claude-result">
 			<h3>结论</h3>
 			<p>
-				<span class="claude-verdict" data-verdict={summary.usable ? "pass" : "fail"} data-testid="claude-verdict">{summary.usable ? "可用" : "不可用"}</span>
+				<span className="claude-verdict" data-verdict={summary.usable ? "pass" : "fail"} data-testid="claude-verdict">{summary.usable ? "可用" : "不可用"}</span>
 				{` · 通过 ${summary.passed} / ${CLAUDE_CASES.length}`}
 			</p>
 			<p>必须上游修改项：{summary.requiredChanges.map(claudeCaseTitle).join("、") || "无"}</p>
 			<h3>不通过清单</h3>
 			{summary.failures.length > 0 ? <ul>{summary.failures.map((result) => <li key={result.id}>{claudeCaseTitle(result)}：{result.note}</li>)}</ul> : <p>无</p>}
 			<h3>来源判断</h3>
-			<p class="muted small">按 source 汇总，仅供参考，不能据此确认模型身份。</p>
+			<p className="muted small">按 source 汇总，仅供参考，不能据此确认模型身份。</p>
 			{summary.sources.length > 0 ? <ul>{summary.sources.map(({ source, count }) => <li key={source}>{source}：{count} 个用例</li>)}</ul> : <p>无来源信息</p>}
 			<h3>Request ID</h3>
-			<div class="table-wrap">
+			<div className="table-wrap">
 				<table data-testid="claude-requests">
 					<thead><tr><th>用例</th><th>调用</th><th>状态码</th><th>Request ID</th><th>耗时 ms</th></tr></thead>
 					<tbody>{summary.calls.map((call) => <tr key={`${call.id}-${call.index}`}><td>{call.id}</td><td>{call.index}</td><td>{call.status ?? "—"}</td><td>{call.requestId ?? "—"}</td><td>{call.ms}</td></tr>)}</tbody>
 				</table>
 			</div>
-			<button type="button" class="btn" data-testid="claude-download" onClick={() => downloadReport(buildClaudeReport({ ...run, host: siteLabel(run.host, privacy) }), reportFileName(fileHost(run.host, privacy), run.model, "claude_protocol"))}>下载报告</button>
+			<button type="button" className="btn" data-testid="claude-download" onClick={() => downloadReport(buildClaudeReport({ ...run, host: siteLabel(run.host, privacy) }), reportFileName(fileHost(run.host, privacy), run.model, "claude_protocol"))}>下载报告</button>
 		</div>
 	);
 }
@@ -102,29 +102,29 @@ export function ClaudeTest({ target, models }: { target: Target; models: ModelLi
 	};
 
 	return (
-		<section class="panel" aria-labelledby="claude-h">
+		<section className="panel" aria-labelledby="claude-h">
 			<h2 id="claude-h">Claude 专项</h2>
-			<p class="muted small">协议固定为 anthropic，依次执行 13 个用例，同一时刻只执行一个。批量接口不向站点发请求。密钥仅在调用时转发，结果不保存，刷新页面即失。</p>
-			<form class="grid claude-form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
+			<p className="muted small">协议固定为 anthropic，依次执行 13 个用例，同一时刻只执行一个。批量接口不向站点发请求。密钥仅在调用时转发，结果不保存，刷新页面即失。</p>
+			<form className="grid claude-form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
 				<ModelField value={model} onInput={setModel} list={models} testId="claude-model" class="col-12 col-lg-4" disabled={running} />
-				<div class="actions col-12">
-					<button type="submit" class="btn" disabled={running} data-testid="claude-run">{running ? "正在测试…" : "开始测试"}</button>
-					{running && <button type="button" class="btn" data-testid="claude-cancel" onClick={() => controller.current?.abort()}>取消</button>}
+				<div className="actions col-12">
+					<button type="submit" className="btn" disabled={running} data-testid="claude-run">{running ? "正在测试…" : "开始测试"}</button>
+					{running && <button type="button" className="btn" data-testid="claude-cancel" onClick={() => controller.current?.abort()}>取消</button>}
 				</div>
 			</form>
 			<div aria-live="polite">
-				{error && <p class="warn" role="alert" data-testid="claude-error">{error}</p>}
-				{cancelled && <p class="warn" data-testid="claude-cancelled">已取消，未完成的用例不计入结论。</p>}
+				{error && <p className="warn" role="alert" data-testid="claude-error">{error}</p>}
+				{cancelled && <p className="warn" data-testid="claude-cancelled">已取消，未完成的用例不计入结论。</p>}
 				{current && <p data-testid="claude-progress">正在执行 {current.id} {current.title} · 已完成 {results.length} / {CLAUDE_CASES.length}</p>}
 			</div>
 			<CaseOverview rows={rows} />
-			<div class="table-wrap claude-matrix">
+			<div className="table-wrap claude-matrix">
 				<table data-testid="claude-matrix">
 					<thead><tr><th>用例</th><th>结论</th><th>做了什么</th><th>通过标准</th><th>说明与回答预览</th></tr></thead>
 					<tbody>{rows.map((row) => (
 						<tr key={row.id} data-active={row.state === "running" || undefined} data-testid={`claude-case-${row.id}`}>
 							<th scope="row">{row.id} {row.title}</th>
-							<td><span class="claude-verdict" {...tone(row.state)} data-testid={`claude-verdict-${row.id}`}>{CASE_STATE_LABEL[row.state]}</span></td>
+							<td><span className="claude-verdict" {...tone(row.state)} data-testid={`claude-verdict-${row.id}`}>{CASE_STATE_LABEL[row.state]}</span></td>
 							<td>{row.does}</td><td>{row.expect}</td>
 							<td>{row.result?.note}{row.result?.preview && <p>{row.result.preview}</p>}</td>
 						</tr>

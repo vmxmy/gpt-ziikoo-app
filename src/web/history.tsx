@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState } from "react";
 import type { RunView } from "../shared/types.ts";
 import { deleteHistory, fetchHistory, fetchHistoryRaw, type Target } from "./api.ts";
 import { ms, OVERALL_LABEL, VERDICT_LABEL } from "./results.ts";
@@ -17,17 +17,17 @@ function download(name: string, data: unknown) {
 function HistoryRun({ run: r, busy, onRaw }: { run: RunView; busy: boolean; onRaw: (runId: string) => void }) {
 	return (
 		<li data-testid="history-run">
-			<p class="history-head">
+			<p className="history-head">
 				<strong>{OVERALL_LABEL[r.overall]}</strong>
-				<span class="muted num">{time(r.startedAt)}</span>
-				<span class="mono muted">
+				<span className="muted num">{time(r.startedAt)}</span>
+				<span className="mono muted">
 					{r.model} · {r.protocol}
 				</span>
 			</p>
-			<ul class="history-questions">
+			<ul className="history-questions">
 				{r.questions.map((q) => (
 					<li key={q.id}>
-						<span class="mono">
+						<span className="mono">
 							{q.id} v{q.version}
 						</span>
 						：{q.verdict ? `${VERDICT_LABEL[q.verdict.status]} ${q.verdict.correct}/${q.verdict.total}` : "仅度量"}
@@ -36,7 +36,7 @@ function HistoryRun({ run: r, busy, onRaw }: { run: RunView; busy: boolean; onRa
 					</li>
 				))}
 			</ul>
-			<button type="button" class="btn-text" disabled={busy} onClick={() => onRaw(r.runId)} data-testid="history-raw-button">
+			<button type="button" className="btn-text" disabled={busy} onClick={() => onRaw(r.runId)} data-testid="history-raw-button">
 				下载原始数据
 			</button>
 		</li>
@@ -68,21 +68,21 @@ export function History({ target }: { target: Target }) {
 	};
 
 	return (
-		<section class="block col-12" id="history" aria-labelledby="history-h" data-testid="history-section">
+		<section className="block col-12" id="history" aria-labelledby="history-h" data-testid="history-section">
 			<h2 id="history-h">历史</h2>
-			<p class="muted">用上面填写的站点与密钥取回最近 10 轮。</p>
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" disabled={!ready || busy} onClick={load}>
+			<p className="muted">用上面填写的站点与密钥取回最近 10 轮。</p>
+			<div className="actions">
+				<button type="button" className="btn btn-secondary" disabled={!ready || busy} onClick={load}>
 					查看历史
 				</button>
-				<button type="button" class="btn btn-danger" disabled={!ready || busy} onClick={remove} data-testid="history-delete-button">
+				<button type="button" className="btn btn-danger" disabled={!ready || busy} onClick={remove} data-testid="history-delete-button">
 					删除全部历史
 				</button>
 			</div>
 			{message && <p role="status">{message}</p>}
-			{runs?.length === 0 && <p class="muted" data-testid="history-empty">暂无历史</p>}
+			{runs?.length === 0 && <p className="muted" data-testid="history-empty">暂无历史</p>}
 			{runs && runs.length > 0 && (
-				<ul class="history">
+				<ul className="history">
 					{runs.map((r) => (
 						<HistoryRun key={r.runId} run={r} busy={busy} onRaw={raw} />
 					))}

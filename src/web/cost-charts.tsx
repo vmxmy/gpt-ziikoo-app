@@ -15,27 +15,27 @@ function Bars({ result }: { result: Calc }) {
 	];
 	const label = `每千次调用的账单，对照 ${perThousand(result.ref.total)}，站点 ${perThousand(result.exp.total)}`;
 	return (
-		<figure class="cost-figure">
-			<div class="cost-bars" role="img" aria-label={label} data-testid="cost-bars">
+		<figure className="cost-figure">
+			<div className="cost-bars" role="img" aria-label={label} data-testid="cost-bars">
 				{rows.map(([name, cost, party]) => (
-					<div class={`cost-bar-row ${party}`} key={name}>
-						<span class="small">{name}</span>
+					<div className={`cost-bar-row ${party}`} key={name}>
+						<span className="small">{name}</span>
 						<svg viewBox="0 0 100 1" preserveAspectRatio="none" aria-hidden="true">
 							{barSegments(cost, max).map((seg) => (
-								<rect key={seg.series} class={`cost-seg cost-seg-${seg.series}`} x={seg.start * 100} y="0" width={seg.share * 100} height="1" />
+								<rect key={seg.series} className={`cost-seg cost-seg-${seg.series}`} x={seg.start * 100} y="0" width={seg.share * 100} height="1" />
 							))}
 						</svg>
 					</div>
 				))}
 			</div>
-			<figcaption class="muted small">两根条同刻度，较长的一根占满宽度。</figcaption>
-			<div class="table-wrap">
+			<figcaption className="muted small">两根条同刻度，较长的一根占满宽度。</figcaption>
+			<div className="table-wrap">
 				<table data-testid="cost-legend">
 					<thead>
 						<tr>
 							<th scope="col">每千次调用</th>
 							{rows.map(([name, , party]) => (
-								<th scope="col" class={`num ${party}`} key={name}>
+								<th scope="col" className={`num ${party}`} key={name}>
 									{name}
 								</th>
 							))}
@@ -45,10 +45,10 @@ function Bars({ result }: { result: Calc }) {
 						{SERIES.map((s) => (
 							<tr key={s}>
 								<th scope="row">
-									<span class={`cost-swatch cost-swatch-${s}`} aria-hidden="true" /> {SERIES_LABEL[s]}
+									<span className={`cost-swatch cost-swatch-${s}`} aria-hidden="true" /> {SERIES_LABEL[s]}
 								</th>
 								{rows.map(([name, cost, party]) => (
-									<td class={`num ${party}`} key={name}>
+									<td className={`num ${party}`} key={name}>
 										{perThousand(cost[s])} · {pct(cost[s] / cost.total)}
 									</td>
 								))}
@@ -57,7 +57,7 @@ function Bars({ result }: { result: Calc }) {
 						<tr>
 							<th scope="row">合计</th>
 							{rows.map(([name, cost, party]) => (
-								<td class={`num ${party}`} key={name}>
+								<td className={`num ${party}`} key={name}>
 									{perThousand(cost.total)}
 								</td>
 							))}
@@ -77,34 +77,34 @@ function Curve({ scenario, result }: { scenario: Scenario; result: Calc }) {
 	const plotRight = width - CURVE.right;
 	const axisY = CURVE.height - CURVE.bottom;
 	return (
-		<figure class="cost-figure">
-			<div ref={ref} class="cost-curve-canvas">
+		<figure className="cost-figure">
+			<div ref={ref} className="cost-curve-canvas">
 				<svg viewBox={`0 0 ${width} ${CURVE.height}`} role="img" aria-label={label} data-testid="cost-curve">
 					{HIT_TICKS.map((t) => (
 						<g key={t}>
-							<line class="cost-grid" x1={CURVE.left} x2={plotRight} y1={curveY(t)} y2={curveY(t)} />
-							<text class="cost-axis-text" text-anchor="end" x={CURVE.left - 6} y={curveY(t) + 4}>
+							<line className="cost-grid" x1={CURVE.left} x2={plotRight} y1={curveY(t)} y2={curveY(t)} />
+							<text className="cost-axis-text" textAnchor="end" x={CURVE.left - 6} y={curveY(t) + 4}>
 								{pct(t)}
 							</text>
 						</g>
 					))}
 					{MULTIPLIER_TICKS.map((m) => (
-						<text key={m} class="cost-axis-text" text-anchor="middle" x={curveX(m, width)} y={axisY + 18}>
+						<text key={m} className="cost-axis-text" textAnchor="middle" x={curveX(m, width)} y={axisY + 18}>
 							{m}
 						</text>
 					))}
-					<path class="cost-curve" d={curvePath(scenario, width)} />
-					<path class="cost-marker" d={`M${x},${y - MARKER_RADIUS}L${x + MARKER_RADIUS},${y}L${x},${y + MARKER_RADIUS}L${x - MARKER_RADIUS},${y}Z`} />
+					<path className="cost-curve" d={curvePath(scenario, width)} />
+					<path className="cost-marker" d={`M${x},${y - MARKER_RADIUS}L${x + MARKER_RADIUS},${y}L${x},${y + MARKER_RADIUS}L${x - MARKER_RADIUS},${y}Z`} />
 				</svg>
 			</div>
-			<figcaption class="muted small">横轴是站点的倍率（对数刻度），纵轴是临界缓存命中率，只画当前模型一条线。菱形点是当前设置，点在线上方表示站点更便宜，下方表示更贵。</figcaption>
+			<figcaption className="muted small">横轴是站点的倍率（对数刻度），纵轴是临界缓存命中率，只画当前模型一条线。菱形点是当前设置，点在线上方表示站点更便宜，下方表示更贵。</figcaption>
 		</figure>
 	);
 }
 
 export function CostCharts({ scenario, result }: { scenario: Scenario; result: Calc }) {
 	return (
-		<div class="cost-figures">
+		<div className="cost-figures">
 			<Bars result={result} />
 			<Curve scenario={scenario} result={result} />
 		</div>

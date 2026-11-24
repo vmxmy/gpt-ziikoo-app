@@ -1,5 +1,4 @@
-import { Fragment } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { generatePelican } from "../shared/pelican-gen.ts";
 import type { Effort, PageEnding, ProbeProgress } from "../shared/types.ts";
 import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
@@ -38,7 +37,7 @@ const ENDING_WARNING: Record<Exclude<PageEnding, "closed">, string> = {
 function AnimationFrame({ html }: { html: string }) {
 	return (
 		<iframe
-			class="animation-frame"
+			className="animation-frame"
 			sandbox="allow-scripts"
 			src="/api/frame"
 			title="动画"
@@ -77,38 +76,38 @@ function HtmlProgress({ startedAt, timeoutMs, chars, reasoning, heardAt }: Sendi
 	const left = timeoutMs === null ? null : Math.max(0, timeoutMs - elapsed);
 	const spent = timeoutMs === null ? 0 : Math.min(1, elapsed / timeoutMs);
 	return (
-		<div class="html-progress" data-testid="html-progress">
-			<div class="countdown" role="timer" aria-label="剩余时间">
+		<div className="html-progress" data-testid="html-progress">
+			<div className="countdown" role="timer" aria-label="剩余时间">
 				<svg viewBox="0 0 60 60" aria-hidden="true">
-					<circle class="countdown-track" cx="30" cy="30" r={RING_RADIUS} />
+					<circle className="countdown-track" cx="30" cy="30" r={RING_RADIUS} />
 					<circle
-						class="countdown-bar"
+						className="countdown-bar"
 						cx="30"
 						cy="30"
 						r={RING_RADIUS}
 						transform="rotate(-90 30 30)"
-						stroke-dasharray={RING_LENGTH}
-						stroke-dashoffset={RING_LENGTH * spent}
+						strokeDasharray={RING_LENGTH}
+						strokeDashoffset={RING_LENGTH * spent}
 					/>
 				</svg>
-				<span class="countdown-text num" data-testid="html-countdown">
+				<span className="countdown-text num" data-testid="html-countdown">
 					{left === null ? "--:--" : clock(Math.ceil(left / 1000))}
 				</span>
 			</div>
-			<div class="html-progress-text">
+			<div className="html-progress-text">
 				<p role="status" data-testid="html-stage">
 					{stageText(chars, reasoning)}
 				</p>
-				<p class="muted small num" data-testid="html-received">
+				<p className="muted small num" data-testid="html-received">
 					已用 {clock(Math.floor(elapsed / 1000))}
 					{chars ? ` · 已收到 ${chars.toLocaleString("zh-CN")} 个字符` : ""}
 				</p>
 				{heardAt !== null && (
-					<p class="muted small num" data-testid="html-heartbeat">
+					<p className="muted small num" data-testid="html-heartbeat">
 						{heardText(heardAt, now)}
 					</p>
 				)}
-				<p class="muted small">倒计时到 0 时还没写完，本次按超时算失败。</p>
+				<p className="muted small">倒计时到 0 时还没写完，本次按超时算失败。</p>
 			</div>
 		</div>
 	);
@@ -131,23 +130,23 @@ function ArtifactActions({ html, fileName }: { html: string; fileName: string })
 	};
 	return (
 		<>
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" onClick={() => setPlaying(true)} data-testid="html-play">
+			<div className="actions">
+				<button type="button" className="btn btn-secondary" onClick={() => setPlaying(true)} data-testid="html-play">
 					播放动画
 				</button>
-				<button type="button" class="btn-text" onClick={doCopy} data-testid="html-copy">
+				<button type="button" className="btn-text" onClick={doCopy} data-testid="html-copy">
 					复制 HTML
 				</button>
-				<button type="button" class="btn-text" onClick={() => downloadReport(html, fileName)} data-testid="html-download">
+				<button type="button" className="btn-text" onClick={() => downloadReport(html, fileName)} data-testid="html-download">
 					下载 HTML
 				</button>
-				<span class="muted small" role="status">
+				<span className="muted small" role="status">
 					{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请在下面手动选中" : ""}
 				</span>
 			</div>
 			<details>
-				<summary class="small">查看 HTML</summary>
-				<pre class="prompt html-source" data-testid="html-source">
+				<summary className="small">查看 HTML</summary>
+				<pre className="prompt html-source" data-testid="html-source">
 					{html}
 				</pre>
 			</details>
@@ -168,19 +167,19 @@ function PromptBlock({ prompt }: { prompt: string }) {
 		);
 	};
 	return (
-		<div class="html-prompt-block">
-			<div class="html-prompt-head">
-				<span class="field-label">本次题面</span>
-				<button type="button" class="icon-btn" aria-label="复制题面" title="复制题面" onClick={doCopy} data-testid="html-prompt-copy">
+		<div className="html-prompt-block">
+			<div className="html-prompt-head">
+				<span className="field-label">本次题面</span>
+				<button type="button" className="icon-btn" aria-label="复制题面" title="复制题面" onClick={doCopy} data-testid="html-prompt-copy">
 					<svg viewBox="0 0 16 16" aria-hidden="true">
-						<path class="icon-stroke" d="M6 5.5h6.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1zM2.5 10.5v-7a1 1 0 0 1 1-1h7" />
+						<path className="icon-stroke" d="M6 5.5h6.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1zM2.5 10.5v-7a1 1 0 0 1 1-1h7" />
 					</svg>
 				</button>
-				<span class="muted small" role="status" data-testid="html-prompt-copy-status">
+				<span className="muted small" role="status" data-testid="html-prompt-copy-status">
 					{copy === "copied" ? "已复制" : copy === "failed" ? "复制失败，请在下面手动选中" : ""}
 				</span>
 			</div>
-			<pre class="prompt" data-testid="html-shown-prompt">
+			<pre className="prompt" data-testid="html-shown-prompt">
 				{prompt}
 			</pre>
 		</div>
@@ -200,28 +199,28 @@ function tokenFields(reasoning: number | null, output: number | null): [string, 
 // No verdict: the user judges the page by playing it, so only a failed call gets a state badge.
 function HtmlResult({ result, protocol, effort, fileName }: Done) {
 	return (
-		<div class="html-result" data-testid="html-result">
-			<p class="muted small">
+		<div className="html-result" data-testid="html-result">
+			<p className="muted small">
 				协议 {protocol} · 推理强度 {effortText(effort)}
 			</p>
 			{result.state === "fail" ? (
 				<p>
-					<span class="html-verdict" data-state="fail">
+					<span className="html-verdict" data-state="fail">
 						{result.label}
 					</span>{" "}
 					<span data-testid="html-reason">{result.reason}</span>
 				</p>
 			) : (
 				<>
-					<dl class="html-fields">
+					<dl className="html-fields">
 						<dt>总耗时</dt>
-						<dd class="num">{ms(result.response.totalMs)}</dd>
+						<dd className="num">{ms(result.response.totalMs)}</dd>
 						<dt>首字耗时</dt>
-						<dd class="num">{ms(result.response.ttftMs)}</dd>
+						<dd className="num">{ms(result.response.ttftMs)}</dd>
 						{tokenFields(result.response.reasoningTokens, result.response.outputTokens).map(([label, value]) => (
 							<Fragment key={label}>
 								<dt>{label}</dt>
-								<dd class="num">{value ?? "—"}</dd>
+								<dd className="num">{value ?? "—"}</dd>
 							</Fragment>
 						))}
 						{!result.response.artifact && (
@@ -234,14 +233,14 @@ function HtmlResult({ result, protocol, effort, fileName }: Done) {
 					{result.response.artifact ? (
 						<>
 							{result.response.artifact.ending !== "closed" && (
-								<p class="warn" data-testid="html-unfinished">
+								<p className="warn" data-testid="html-unfinished">
 									{ENDING_WARNING[result.response.artifact.ending]}
 								</p>
 							)}
 							<ArtifactActions html={result.response.artifact.html} fileName={fileName} />
 						</>
 					) : (
-						<p class="warn" data-testid="html-no-page">
+						<p className="warn" data-testid="html-no-page">
 							回答里没有 HTML 页面，不能播放。
 						</p>
 					)}
@@ -289,14 +288,14 @@ export function HtmlTest({ target, models }: { target: Target; models: ModelList
 	};
 
 	return (
-		<section class="panel" aria-labelledby="html-h">
+		<section className="panel" aria-labelledby="html-h">
 			<h2 id="html-h">HTML 生成</h2>
-			<p class="muted small">
+			<p className="muted small">
 				让模型直接写一个 HTML 页面，在沙箱里播放，由你看效果判断，本站不判对错。每次随机抽一种鸟和一个场景，让模型用 SVG
 				画这只鸟在这个场景里骑自行车的 2D 动画。回答里没有 HTML 页面时不能播放，只显示回答片段。只调用一次站点，不计入分关，不进历史，刷新页面即失。密钥不保存，只在这次调用时转发给站点。
 			</p>
 			<form
-				class="grid html-form"
+				className="grid html-form"
 				onSubmit={(e) => {
 					e.preventDefault();
 					void send();
@@ -306,19 +305,19 @@ export function HtmlTest({ target, models }: { target: Target; models: ModelList
 				<ChoiceField label="推理强度" testId="html-effort" value={effort} options={EFFORTS} text={effortText} onChange={setEffort} class="col-6 col-lg-2" />
 				{/* From 720px up the button sits beside the model field, where the open model list cannot cover it. */}
 				<ModelField value={model} onInput={chooseModel} list={models} testId="html-model" class="col-12 col-md-6 col-lg-4" />
-				<div class="actions col-12 col-md-6 col-lg-4">
+				<div className="actions col-12 col-md-6 col-lg-4">
 					{status.kind === "sending" ? (
-						<button key="cancel" type="button" class="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="html-cancel">
+						<button key="cancel" type="button" className="btn btn-secondary" onClick={() => ctrl.current?.abort()} data-testid="html-cancel">
 							取消
 						</button>
 					) : (
-						<button key="run" type="submit" class="btn btn-primary" data-testid="html-run">
+						<button key="run" type="submit" className="btn btn-primary" data-testid="html-run">
 							生成一次
 						</button>
 					)}
 				</div>
 				{formError && (
-					<p class="field-error" role="alert" data-testid="html-form-error">
+					<p className="field-error" role="alert" data-testid="html-form-error">
 						{formError}
 					</p>
 				)}
@@ -326,7 +325,7 @@ export function HtmlTest({ target, models }: { target: Target; models: ModelList
 			{(status.kind === "sending" || status.kind === "done") && <PromptBlock key={status.prompt} prompt={status.prompt} />}
 			{status.kind === "sending" && <HtmlProgress {...status} />}
 			<div aria-live="polite">
-				{status.kind === "cancelled" && <p class="warn">已取消。</p>}
+				{status.kind === "cancelled" && <p className="warn">已取消。</p>}
 				{status.kind === "done" && <HtmlResult {...status} />}
 			</div>
 		</section>

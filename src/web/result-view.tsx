@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import { STAGES, evaluateQuestion, summarizeRun } from "../shared/ladder.ts";
-import type { QuestionListItem, QuestionVerdict } from "../shared/types.ts";
 import type { Protocol } from "../shared/protocols.ts";
-import { diagnosis, dotLabel, FAILURE_ADVICE, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
+import type { ReportSummary } from "../shared/reports.ts";
+import type { QuestionListItem, QuestionVerdict } from "../shared/types.ts";
+import { saveReport } from "./api.ts";
 import { promptUsage, TARGETED_RATIO, type UsageFinding } from "./prompt-usage.ts";
+import { diagnosis, dotLabel, FAILURE_ADVICE, numberCheck, ms, OVERALL_LABEL, resultText, VERDICT_LABEL } from "./results.ts";
 import { callState, ladderCalls, type Attempt, type RunSnapshot } from "./runner.ts";
 
 const DOT_LEGEND = [
@@ -12,21 +15,45 @@ const DOT_LEGEND = [
 	["pending", "进行中"],
 ] as const;
 
+function median(values: number[]): number | undefined {
+	if (values.length === 0) return undefined;
+	const sorted = [...values].sort((a, b) => a - b);
+	return Math.round(sorted[Math.floor(sorted.length / 2)]!);
+}
+
+function buildReportSummary(attempts: Attempt[], protocol: Protocol | null, totalQuestions: number, passedQuestions: number): ReportSummary {
+	const done = attempts.filter((a) => a.done && (protocol === null || a.protocol === protocol));
+	const passedCalls = done.filter((a) => a.response?.ok && a.response.correct === true).length;
+	const failedCalls = done.filter((a) => !a.response?.ok || a.response.correct === false).length;
+	const totalMs = done.flatMap((a) => (a.response?.ok ? [a.response.totalMs] : []));
+	const ttftMs = done.flatMap((a) => (a.response?.ok && a.response.ttftMs !== null ? [a.response.ttftMs] : []));
+	const p50Ms = median(totalMs);
+	const ttftP50Ms = median(ttftMs);
+	return {
+		totalCalls: done.length,
+		passedCalls,
+		failedCalls,
+		...(p50Ms !== undefined && { p50Ms }),
+		...(ttftP50Ms !== undefined && { ttftP50Ms }),
+		note: `共 ${totalQuestions} 题，通过 ${passedQuestions} 题`,
+	};
+}
+
 function Ladder({ id, attempts }: { id: string; attempts: Attempt[] }) {
 	return (
-		<ol class="stages" data-testid={`lane-${id}`}>
+		<ol className="stages" data-testid={`lane-${id}`}>
 			{STAGES.map((s, i) => {
 				const inStage = attempts.filter((a) => a.stage === i + 1);
 				const correct = inStage.filter((a) => callState(a) === "ok").length;
 				return (
-					<li class="stage" data-testid={`stage-${i + 1}`} key={i}>
-						<span class="stage-name">
-							第 {i + 1} 关 <span class="muted">需 {s.need}/{s.calls}</span>
+					<li className="stage" data-testid={`stage-${i + 1}`} key={i}>
+						<span className="stage-name">
+							第 {i + 1} 关 <span className="muted">需 {s.need}/{s.calls}</span>
 						</span>
-						<span class="dots">
+						<span className="dots">
 							{inStage.map((a) => (
 								<span
-									class="call-dot"
+									className="call-dot"
 									data-testid="call-dot"
 									data-state={callState(a)}
 									role="img"
@@ -36,7 +63,7 @@ function Ladder({ id, attempts }: { id: string; attempts: Attempt[] }) {
 								/>
 							))}
 						</span>
-						<span class="stage-count num">答对 {correct}</span>
+						<span className="stage-count num">答对 {correct}</span>
 					</li>
 				);
 			})}
@@ -51,14 +78,14 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 	const showNumberCheck = attempts.some((a) => numberCheck(a.response) !== "");
 	const columns = [...DETAIL_COLUMNS, ...(showNumberCheck ? ["数字核对"] : [])];
 	return (
-		<details class="detail">
+		<details className="detail">
 			<summary>逐次明细</summary>
-			<div class="table-wrap table-scroll">
+			<div className="table-wrap table-scroll">
 				<table data-testid={`detail-table-${id}`}>
 					<thead>
 						<tr>
 							{columns.map((label) => (
-								<th key={label} class={NUMERIC_COLUMNS.has(label) ? "num" : undefined}>
+								<th key={label} className={NUMERIC_COLUMNS.has(label) ? "num" : undefined}>
 									{label}
 								</th>
 							))}
@@ -70,21 +97,21 @@ function DetailTable({ id, attempts }: { id: string; attempts: Attempt[] }) {
 							const failure = !a.response?.ok ? (a.response ? FAILURE_ADVICE[a.response.reason].reason : "连不上本站接口") : null;
 							return (
 								<tr key={`${a.stage}-${a.seq}-${a.attempt}`}>
-									<td class="num" data-label="关">{a.stage}</td>
-									<td class="num" data-label="序号">{a.seq}</td>
-									<td class="num" data-label="尝试">{a.attempt}</td>
+									<td className="num" data-label="关">{a.stage}</td>
+									<td className="num" data-label="序号">{a.seq}</td>
+									<td className="num" data-label="尝试">{a.attempt}</td>
 									<td data-label="结果">{resultText(a)}</td>
 									{failure === null ? (
 										<>
-											<td class="num" data-label="推理 token 数">{r?.reasoningTokens ?? "—"}</td>
-											<td class="mono" data-label="响应 ID 形态">{r?.idShape ?? "—"}</td>
-											<td class="num" data-label="首字耗时">{ms(r?.ttftMs)}</td>
-											<td class="num" data-label="总耗时">{ms(r?.totalMs)}</td>
-											<td class="answer" data-label="回答片段">{r?.answer ?? ""}</td>
-											{showNumberCheck && <td class="num" data-label="数字核对">{numberCheck(a.response)}</td>}
+											<td className="num" data-label="推理 token 数">{r?.reasoningTokens ?? "—"}</td>
+											<td className="mono" data-label="响应 ID 形态">{r?.idShape ?? "—"}</td>
+											<td className="num" data-label="首字耗时">{ms(r?.ttftMs)}</td>
+											<td className="num" data-label="总耗时">{ms(r?.totalMs)}</td>
+											<td className="answer" data-label="回答片段">{r?.answer ?? ""}</td>
+											{showNumberCheck && <td className="num" data-label="数字核对">{numberCheck(a.response)}</td>}
 										</>
 									) : (
-										<td colspan={columns.length - 4} data-label="原因">{failure}</td>
+										<td colSpan={columns.length - 4} data-label="原因">{failure}</td>
 									)}
 								</tr>
 							);
@@ -101,10 +128,10 @@ function QuestionResult(props: { q: QuestionListItem; v: QuestionVerdict; attemp
 	// The lane keeps every probe of the question, including the stage-1 protocol race whose extra dot the e2e counts.
 	const done = props.attempts.filter((a) => a.done && (protocol === null || a.protocol === protocol));
 	return (
-		<article class="verdict" data-testid={`verdict-${q.id}`} data-status={v.status}>
-			<header class="verdict-head">
+		<article className="verdict" data-testid={`verdict-${q.id}`} data-status={v.status}>
+			<header className="verdict-head">
 				<h3>{q.title}</h3>
-				<span class="pill" data-status={v.status}>
+				<span className="pill" data-status={v.status}>
 					{running && v.status === "incomplete" ? "进行中" : VERDICT_LABEL[v.status]}
 				</span>
 			</header>
@@ -124,98 +151,159 @@ function UsageCheck(props: { run: RunSnapshot; questions: QuestionListItem[]; se
 	const { rows, findings } = promptUsage(props.run.attempts, props.questions, props.seed, props.run.protocol);
 	if (rows.every((r) => r.medianTokens === null)) return null;
 	return (
-		<details class="verdict usage-check" data-testid="usage-check">
+		<details className="verdict usage-check" data-testid="usage-check">
 			<summary>输入用量核对（参考）</summary>
-			<div class="table-wrap">
+			<div className="table-wrap">
 				<table>
 					<thead>
 						<tr>
 							<th>题</th>
-							<th class="num">调用</th>
-							<th class="num">输入字数</th>
-							<th class="num">输入 token 数中位数</th>
-							<th class="num">每字 token</th>
+							<th className="num">调用</th>
+							<th className="num">输入字数</th>
+							<th className="num">输入 token 数中位数</th>
+							<th className="num">每字 token</th>
 						</tr>
 					</thead>
 					<tbody>
 						{rows.map((r) => (
 							<tr key={r.question}>
 								<td>{r.title}</td>
-								<td class="num">{r.calls}</td>
-								<td class="num">{r.chars}</td>
-								<td class="num">{r.medianTokens ?? "—"}</td>
-								<td class="num">{r.perChar === null ? "—" : r.perChar.toFixed(2)}</td>
+								<td className="num">{r.calls}</td>
+								<td className="num">{r.chars}</td>
+								<td className="num">{r.medianTokens ?? "—"}</td>
+								<td className="num">{r.perChar === null ? "—" : r.perChar.toFixed(2)}</td>
 							</tr>
 						))}
 					</tbody>
 				</table>
 			</div>
 			{findings.map((f) => (
-				<p class="warn" key={f.kind} data-testid={`usage-finding-${f.kind}`}>
+				<p className="warn" key={f.kind} data-testid={`usage-finding-${f.kind}`}>
 					{findingText(f)}
 				</p>
 			))}
-			<p class="muted">参考指标，没有用真实站点校准。</p>
+			<p className="muted">参考指标，没有用真实站点校准。</p>
 		</details>
 	);
 }
+
+type ArchiveState =
+	| { kind: "idle" }
+	| { kind: "saving" }
+	| { kind: "saved" }
+	| { kind: "unauth" }
+	| { kind: "error"; message: string };
 
 export function Results(props: {
 	run: RunSnapshot;
 	running: boolean;
 	questions: QuestionListItem[];
 	seed: number;
+	host?: string;
+	model?: string;
 	onRerun: (protocol?: Protocol) => void;
 }) {
-	const { run, running, questions, seed, onRerun } = props;
+	const { run, running, questions, seed, host, model, onRerun } = props;
+	const [archive, setArchive] = useState<ArchiveState>({ kind: "idle" });
+	useEffect(() => {
+		setArchive({ kind: "idle" });
+	}, [run.runId]);
+
 	const verdicts = questions.map((q) => ({ q, v: evaluateQuestion(ladderCalls(run.attempts, q.id, run.protocol)) }));
 	const overall = summarizeRun(verdicts.map(({ v }) => v.status));
 	const passed = verdicts.filter(({ v }) => v.status === "passed").length;
 	const other = run.race.find((p) => p !== run.protocol) ?? run.race[0];
+	const canArchive = run.finished && Boolean(host) && Boolean(model) && run.protocol !== null;
+
+	const archiveReport = async () => {
+		if (!host || !model || !run.protocol) return;
+		setArchive({ kind: "saving" });
+		try {
+			const res = await saveReport({
+				host,
+				model,
+				protocol: run.protocol,
+				overall,
+				summary: buildReportSummary(run.attempts, run.protocol, verdicts.length, passed),
+			});
+			if (res.ok) setArchive({ kind: "saved" });
+			else if (res.unauthorized) setArchive({ kind: "unauth" });
+			else setArchive({ kind: "error", message: res.message });
+		} catch (err) {
+			setArchive({ kind: "error", message: err instanceof Error ? err.message : "归档失败" });
+		}
+	};
+
 	return (
-		<section class="panel col-12" id="results" aria-labelledby="result-h">
-			<div class="section-head">
+		<section className="panel col-12" id="results" aria-labelledby="result-h">
+			<div className="section-head">
 				<h2 id="result-h">结果</h2>
-				<ul class="dot-legend" aria-label="图例">
+				<ul className="dot-legend" aria-label="图例">
 					{DOT_LEGEND.map(([state, label]) => (
 						<li key={state}>
-							<span class="call-dot" data-state={state} aria-hidden="true" />
+							<span className="call-dot" data-state={state} aria-hidden="true" />
 							{label}
 						</li>
 					))}
 				</ul>
 			</div>
-			<p class="muted" aria-live="polite">
+			<p className="muted" aria-live="polite">
 				{running ? `进行中${run.protocol ? `，协议 ${run.protocol}` : "，正在确认协议"}` : "已结束"}
 			</p>
 			{run.finished && (
-				<div class="overall" data-testid="overall-result" data-status={overall}>
-					<div class="overall-main">
-						<span class="overall-eyebrow">总评：</span><strong class="overall-label">{OVERALL_LABEL[overall]}</strong>
-						{run.protocol && <span class="muted">（协议 {run.protocol}）</span>}{" "}
-						<p class="muted">共 {verdicts.length} 题，通过 {passed} 题。</p>
+				<div className="overall" data-testid="overall-result" data-status={overall}>
+					<div className="overall-main">
+						<span className="overall-eyebrow">总评：</span><strong className="overall-label">{OVERALL_LABEL[overall]}</strong>
+						{run.protocol && <span className="muted">（协议 {run.protocol}）</span>}{" "}
+						<p className="muted">共 {verdicts.length} 题，通过 {passed} 题。</p>
 					</div>
-					<div class="actions">
-						<button type="button" class="btn btn-secondary" onClick={() => onRerun()}>
+					<div className="actions">
+						<button type="button" className="btn btn-secondary" onClick={() => onRerun()}>
 							重新测试
 						</button>
 						{run.protocol && (
-							<button type="button" class="btn btn-secondary" onClick={() => onRerun(other)}>
+							<button type="button" className="btn btn-secondary" onClick={() => onRerun(other)}>
 								也测另一协议（{other}）
+							</button>
+						)}
+						{canArchive && (
+							<button
+								type="button"
+								className="btn btn-secondary"
+								disabled={archive.kind === "saving" || archive.kind === "saved"}
+								onClick={() => void archiveReport()}
+								data-testid="archive-report-button"
+							>
+								{archive.kind === "saving" ? "归档中…" : archive.kind === "saved" ? "已归档" : "归档报告"}
 							</button>
 						)}
 					</div>
 				</div>
 			)}
-			{run.cancelled && <p class="warn">已取消。</p>}
+			{archive.kind === "saved" && (
+				<p className="muted small" role="status" data-testid="archive-report-status">
+					已归档脱敏摘要。<a href="/reports">查看报告归档</a>
+				</p>
+			)}
+			{archive.kind === "unauth" && (
+				<p className="muted small" role="status" data-testid="archive-report-status">
+					登录后可归档报告。<a href="/reports">前往登录</a>
+				</p>
+			)}
+			{archive.kind === "error" && (
+				<p className="warn small" role="alert" data-testid="archive-report-status">
+					{archive.message}
+				</p>
+			)}
+			{run.cancelled && <p className="warn">已取消。</p>}
 			{run.stop && (
-				<p class="warn" role="alert">
+				<p className="warn" role="alert">
 					{run.stop.message}
 					{run.stop.retryAfterSec ? `，请 ${run.stop.retryAfterSec} 秒后再试。` : "。"}
 				</p>
 			)}
 			{run.finished && (
-				<p class="notice" data-testid="snapshot-notice">
+				<p className="notice" data-testid="snapshot-notice">
 					结果只代表此刻。同一站点一天内的结果会变化。耗时从本站服务器测到站点，不是从你的电脑测到站点。如果站点限制区域，结果会与你的电脑上的结果不同。
 				</p>
 			)}

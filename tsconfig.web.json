@@ -1,5 +1,14 @@
 {
 	"extends": "./tsconfig.base.json",
-	"compilerOptions": { "lib": ["es2024", "dom", "dom.iterable"], "jsx": "react-jsx", "jsxImportSource": "preact", "types": [] },
-	"include": ["src/web", "src/shared", "test/web", "e2e"]
+	"compilerOptions": {
+		"lib": ["es2024", "dom", "dom.iterable"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+		"types": ["void/env"],
+		"paths": {
+			"void/routes": ["./.void/routes.d.ts"]
+		}
+	},
+	"include": ["src/web", "src/shared", "pages", "test/web", "e2e", "src/worker/env.d.ts"],
+	"exclude": ["pages/**/*.server.ts"]
 }

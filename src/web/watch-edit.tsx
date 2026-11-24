@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState } from "react";
 import { WATCH_MAX_EMAIL, type WatchChange, type WatchView } from "../shared/watch.ts";
 import { useWatchStrategy, WatchStrategyFields } from "./watch-strategy.tsx";
 import { parseWatchEdit } from "./watch.ts";
@@ -33,7 +33,7 @@ export function WatchEditForm({ testPrefix: t, view, onSave, onClose }: Props) {
 
 	return (
 		<form
-			class="watch-edit grid"
+			className="watch-edit grid"
 			data-testid={`${t}-edit-form`}
 			onSubmit={(e) => {
 				e.preventDefault();
@@ -41,23 +41,23 @@ export function WatchEditForm({ testPrefix: t, view, onSave, onClose }: Props) {
 			}}
 		>
 			<WatchStrategyFields testPrefix={t} strategy={strategy} />
-			<label class="field col-12">
-				<span class="field-label">告警邮箱（可选）</span>
+			<label className="field col-12">
+				<span className="field-label">告警邮箱（可选）</span>
 				<input
 					type="email"
 					maxLength={WATCH_MAX_EMAIL}
 					placeholder={view.hasAlertEmail ? "已加密保存，输入新邮箱可替换" : "name@example.com"}
-					autocomplete="off"
+					autoComplete="off"
 					disabled={clearEmail}
 					value={alertEmail}
-					onInput={(e) => setAlertEmail(e.currentTarget.value)}
+					onChange={(e) => setAlertEmail(e.currentTarget.value)}
 					data-testid={`${t}-edit-email`}
 				/>
-				<p class="muted small">邮箱在服务端加密保存，不回显原文；支持直接回复邮件发送 pause、resume 或 recheck。</p>
+				<p className="muted small">邮箱在服务端加密保存，不回显原文；支持直接回复邮件发送 pause、resume 或 recheck。</p>
 			</label>
 			{view.hasAlertEmail && (
-				<div class="field col-12">
-					<label class="consent-row">
+				<div className="field col-12">
+					<label className="consent-row">
 						<input
 							type="checkbox"
 							checked={clearEmail}
@@ -69,15 +69,15 @@ export function WatchEditForm({ testPrefix: t, view, onSave, onClose }: Props) {
 				</div>
 			)}
 			{error && (
-				<p class="field-error" role="alert" data-testid={`${t}-edit-error`}>
+				<p className="field-error" role="alert" data-testid={`${t}-edit-error`}>
 					{error}
 				</p>
 			)}
-			<div class="actions">
-				<button type="button" class="btn btn-secondary" onClick={onClose}>
+			<div className="actions">
+				<button type="button" className="btn btn-secondary" onClick={onClose}>
 					取消
 				</button>
-				<button type="submit" class="btn btn-primary" disabled={busy || strategy.questions.questions === null} data-testid={`${t}-edit-save`}>
+				<button type="submit" className="btn btn-primary" disabled={busy || strategy.questions.questions === null} data-testid={`${t}-edit-save`}>
 					{busy ? "正在保存…" : "保存"}
 				</button>
 			</div>

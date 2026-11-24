@@ -430,6 +430,9 @@ const FRAME_HEADERS = {
 
 export const handleFrame: WorkerHandler = async () => new Response(FRAME_HTML, { headers: FRAME_HEADERS });
 
+export const handleReportSave: WorkerHandler = async () =>
+	apiError(501, { error: "bad_request", message: "仅支持 Void 运行时" });
+
 export const ROUTES: Record<string, Partial<Record<string, WorkerHandler>>> = {
 	"/api/frame": { GET: handleFrame },
 	"/api/questions": { GET: handleQuestions },
@@ -439,6 +442,7 @@ export const ROUTES: Record<string, Partial<Record<string, WorkerHandler>>> = {
 	"/api/history": { POST: handleHistory },
 	"/api/history/raw": { POST: handleHistoryRaw },
 	"/api/history/delete": { POST: handleHistoryDelete },
+	"/api/reports": { POST: handleReportSave },
 	"/api/watch": { POST: handleWatchCreate },
 	"/api/watch/view": { POST: handleWatchView },
 	"/api/watch/state": { POST: handleWatchState },

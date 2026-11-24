@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1795536390298,
+      "tag": "20261124160630_fantastic_wolverine",
+      "breakpoints": true
+    }
+  ]
+}

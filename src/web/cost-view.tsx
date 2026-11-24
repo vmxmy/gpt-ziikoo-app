@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState } from "react";
 import { CostCharts } from "./cost-charts.tsx";
 import "./cost.css";
 import { calc, DEFAULT_SCENARIO, MODEL_IDS, PRICES, pct, perThousand, type BreakEven, type Calc, type Channel, type ModelId, type Scenario } from "./cost.ts";
@@ -94,18 +94,18 @@ function footnote(model: ModelId): string {
 	return `价格快照 ${PRICES[model].asOf}，以官网为准。本页只在浏览器里计算，不接触站点与密钥。`;
 }
 
-type RangeProps = { spec: Slider; scenario: Scenario; onInput: (s: Scenario) => void; onCommit: (s: Scenario) => void };
+type RangeProps = { spec: Slider; scenario: Scenario; onCommit: (s: Scenario) => void };
 
-function Range({ spec, scenario, onInput, onCommit }: RangeProps) {
+function Range({ spec, scenario, onCommit }: RangeProps) {
 	const id = `cost-${spec.id}`;
 	const value = spec.read(scenario);
 	return (
-		<div class="cost-field">
-			<label for={id}>{spec.label}</label>
-			<output class="num" data-testid={`${id}-value`}>
+		<div className="cost-field">
+			<label htmlFor={id}>{spec.label}</label>
+			<output className="num" data-testid={`${id}-value`}>
 				{spec.text(value)}
 			</output>
-			{spec.hint && <span class="cost-field-hint">{spec.hint}</span>}
+			{spec.hint && <span className="cost-field-hint">{spec.hint}</span>}
 			<input
 				id={id}
 				type="range"
@@ -113,7 +113,6 @@ function Range({ spec, scenario, onInput, onCommit }: RangeProps) {
 				max={spec.max}
 				step={spec.step}
 				value={value}
-				onInput={(e) => onInput(spec.write(scenario, e.currentTarget.valueAsNumber))}
 				onChange={(e) => onCommit(spec.write(scenario, e.currentTarget.valueAsNumber))}
 				data-testid={id}
 			/>
@@ -128,15 +127,15 @@ function Result({ scenario, result }: { scenario: Scenario; result: Calc }) {
 		["临界缓存命中率", breakEvenText(result.breakEven), "cost-breakeven"],
 	];
 	return (
-		<div class="cost-result" data-testid="cost-result">
-			<p class="cost-ratio" data-cost={result.ratio <= 1 ? "cheaper" : "dearer"} data-testid="cost-ratio">
+		<div className="cost-result" data-testid="cost-result">
+			<p className="cost-ratio" data-cost={result.ratio <= 1 ? "cheaper" : "dearer"} data-testid="cost-ratio">
 				{pct(result.ratio)}
 			</p>
-			<p class="muted small">
+			<p className="muted small">
 				站点账单占对照账单的比例。每千次调用，对照 {perThousand(result.ref.total)}，站点 {perThousand(result.exp.total)}。
 			</p>
 			<p data-testid="cost-conclusion">{conclusion(scenario, result)}</p>
-			<dl class="cost-facts">
+			<dl className="cost-facts">
 				{facts.map(([term, text, testId]) => (
 					<div key={testId}>
 						<dt>{term}</dt>
@@ -161,48 +160,48 @@ export function CostView() {
 		setOfficial(isOfficial);
 		commit(isOfficial ? withChannel(scenario, "ref", { multiplier: OFFICIAL_MULTIPLIER }) : scenario);
 	};
-	const range = (spec: Slider) => <Range spec={spec} scenario={scenario} onInput={setScenario} onCommit={commit} />;
+	const range = (spec: Slider) => <Range spec={spec} scenario={scenario} onCommit={commit} />;
 
 	return (
-		<section class="panel" aria-labelledby="cost-h">
+		<section className="panel" aria-labelledby="cost-h">
 			<h2 id="cost-h">折扣核算</h2>
-			<p class="cost-lead">倍率低，账单不一定低。倍率决定单价，缓存命中率决定多少输入按缓存价计费。</p>
-			<div class="cost-premise">
-				<div class="cost-layer" role="group" aria-labelledby="cost-model-h">
-					<h3 id="cost-model-h" class="cost-layer-title">
-						模型<span class="cost-role">按它的官方价计算</span>
+			<p className="cost-lead">倍率低，账单不一定低。倍率决定单价，缓存命中率决定多少输入按缓存价计费。</p>
+			<div className="cost-premise">
+				<div className="cost-layer" role="group" aria-labelledby="cost-model-h">
+					<h3 id="cost-model-h" className="cost-layer-title">
+						模型<span className="cost-role">按它的官方价计算</span>
 					</h3>
-					<div class="cost-choice" role="radiogroup" aria-label="模型">
+					<div className="cost-choice" role="radiogroup" aria-label="模型">
 						{MODEL_IDS.map((id) => (
-							<label class="cost-radio" key={id}>
+							<label className="cost-radio" key={id}>
 								<input type="radio" name="cost-model" checked={scenario.model === id} onChange={() => commit({ ...scenario, model: id })} data-testid={`cost-model-${id}`} />
 								{PRICES[id].name}
 							</label>
 						))}
 					</div>
-					<p class="muted small" data-testid="cost-model-prices">
+					<p className="muted small" data-testid="cost-model-prices">
 						{modelPrices(scenario.model)}
 					</p>
 				</div>
-				<div class="cost-layer" role="group" aria-labelledby="cost-usage-h">
-					<h3 id="cost-usage-h" class="cost-layer-title">
-						用量假设<span class="cost-role">两边共用，按每次调用计</span>
+				<div className="cost-layer" role="group" aria-labelledby="cost-usage-h">
+					<h3 id="cost-usage-h" className="cost-layer-title">
+						用量假设<span className="cost-role">两边共用，按每次调用计</span>
 					</h3>
-					<div class="cost-usage">
+					<div className="cost-usage">
 						{range(INPUT)}
 						{range(OUTPUT)}
 					</div>
 				</div>
 			</div>
-			<div class="cost-compare">
-				<div class="cost-channel cost-party-ref" role="group" aria-labelledby="cost-ref-h">
-					<div class="cost-channel-head">
+			<div className="cost-compare">
+				<div className="cost-channel cost-party-ref" role="group" aria-labelledby="cost-ref-h">
+					<div className="cost-channel-head">
 						<h3 id="cost-ref-h">
-							对照<span class="cost-role">拿来比的一方</span>
+							对照<span className="cost-role">拿来比的一方</span>
 						</h3>
-						<div class="cost-choice" role="radiogroup" aria-label="对照的倍率">
+						<div className="cost-choice" role="radiogroup" aria-label="对照的倍率">
 							{REF_KINDS.map((kind) => (
-								<label class="cost-radio" key={kind.id}>
+								<label className="cost-radio" key={kind.id}>
 									<input type="radio" name="cost-ref-kind" checked={official === kind.official} onChange={() => chooseRef(kind.official)} data-testid={`cost-ref-${kind.id}`} />
 									{kind.label}
 								</label>
@@ -210,32 +209,32 @@ export function CostView() {
 						</div>
 					</div>
 					{official ? (
-						<div class="cost-field">
+						<div className="cost-field">
 							<span>倍率</span>
-							<output class="num">{times(OFFICIAL_MULTIPLIER)}</output>
-							<span class="cost-field-hint">官方价固定为 1</span>
+							<output className="num">{times(OFFICIAL_MULTIPLIER)}</output>
+							<span className="cost-field-hint">官方价固定为 1</span>
 						</div>
 					) : (
 						range(REF_MULTIPLIER)
 					)}
 					{range(REF_HIT)}
 				</div>
-				<div class="cost-channel cost-party-site" role="group" aria-labelledby="cost-exp-h">
-					<div class="cost-channel-head">
+				<div className="cost-channel cost-party-site" role="group" aria-labelledby="cost-exp-h">
+					<div className="cost-channel-head">
 						<h3 id="cost-exp-h">
-							站点<span class="cost-role">要核算的一方</span>
+							站点<span className="cost-role">要核算的一方</span>
 						</h3>
 					</div>
 					{range(EXP_MULTIPLIER)}
 					{range(EXP_HIT)}
 				</div>
 			</div>
-			<p class="sr-only" role="status" data-testid="cost-status">
+			<p className="sr-only" role="status" data-testid="cost-status">
 				{announced}
 			</p>
 			<Result scenario={scenario} result={result} />
 			<CostCharts scenario={scenario} result={result} />
-			<p class="cost-prices muted small" data-testid="cost-prices">
+			<p className="cost-prices muted small" data-testid="cost-prices">
 				{footnote(scenario.model)}
 			</p>
 		</section>

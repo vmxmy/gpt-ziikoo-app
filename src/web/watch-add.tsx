@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import type { RefObject } from "preact";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { protocolForModel, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_ALIAS, WATCH_MAX_EMAIL } from "../shared/watch.ts";
 import { ModelField, useModelList } from "./model-field.tsx";
@@ -14,7 +13,7 @@ const ERROR_ID = "watch-add-error";
 function FieldMessage({ error, field }: { error: FieldError | null; field: FieldError["field"] }) {
 	if (error?.field !== field) return null;
 	return (
-		<p class="field-error" id={ERROR_ID} role="alert" data-testid="watch-add-error">
+		<p className="field-error" id={ERROR_ID} role="alert" data-testid="watch-add-error">
 			{error.message}
 		</p>
 	);
@@ -26,17 +25,17 @@ const invalid = (error: FieldError | null, field: FieldError["field"]) =>
 function SiteField(props: { inputRef: RefObject<HTMLInputElement | null>; value: string; onInput: (v: string) => void; error: FieldError | null }) {
 	const privacy = usePrivacy();
 	return (
-		<label class="field col-12 col-md-6 col-lg-4">
-			<span class="field-label">站点地址</span>
+		<label className="field col-12 col-md-6 col-lg-4">
+			<span className="field-label">站点地址</span>
 			<input
 				ref={props.inputRef}
 				type="text"
 				inputMode="url"
-				autocomplete="username"
+				autoComplete="username"
 				placeholder="https://example.com"
 				value={props.value}
-				onInput={(e) => props.onInput(e.currentTarget.value)}
-				class={privateInputClass(privacy)}
+				onChange={(e) => props.onInput(e.currentTarget.value)}
+				className={privateInputClass(privacy)}
 				data-testid="watch-add-site"
 				{...invalid(props.error, "site")}
 			/>
@@ -64,7 +63,9 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 	const siteInput = useRef<HTMLInputElement>(null);
 	const keyInput = useRef<HTMLInputElement>(null);
 
-	useEffect(() => siteInput.current?.focus(), []);
+	useEffect(() => {
+		siteInput.current?.focus();
+	}, []);
 
 	const chooseModel = (next: string) => {
 		setModel(next);
@@ -94,7 +95,7 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 
 	return (
 		<form
-			class="panel add-form grid"
+			className="panel add-form grid"
 			id="watch-add"
 			data-testid="watch-add-form"
 			onSubmit={(e) => {
@@ -103,21 +104,21 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			}}
 		>
 			<SiteField inputRef={siteInput} value={site} onInput={setSite} error={error} />
-			<label class="field col-12 col-md-6 col-lg-4">
-				<span class="field-label">密钥</span>
+			<label className="field col-12 col-md-6 col-lg-4">
+				<span className="field-label">密钥</span>
 				<SecretInput inputRef={keyInput} testId="watch-add-key" onInput={(v) => setKey(normalizeKey(v))} invalid={error?.field === "key"} describedBy={ERROR_ID} />
-				<p class="muted small">提交后由本站加密保存，关闭页面监测继续。请使用有限额的密钥。</p>
+				<p className="muted small">提交后由本站加密保存，关闭页面监测继续。请使用有限额的密钥。</p>
 				<FieldMessage error={error} field="key" />
 			</label>
-			<label class="field col-12 col-md-6 col-lg-4">
-				<span class="field-label">别名（可选）</span>
+			<label className="field col-12 col-md-6 col-lg-4">
+				<span className="field-label">别名（可选）</span>
 				<input
 					value={alias}
 					maxLength={WATCH_MAX_ALIAS}
 					placeholder="区分同一站点的不同通道"
-					autocomplete="off"
-					onInput={(e) => setAlias(e.currentTarget.value)}
-					class={privateInputClass(privacy)}
+					autoComplete="off"
+					onChange={(e) => setAlias(e.currentTarget.value)}
+					className={privateInputClass(privacy)}
 					data-testid="watch-add-alias"
 				/>
 			</label>
@@ -132,39 +133,39 @@ export function WatchAddForm({ onAdd, onClose }: { onAdd: (input: WatchInput) =>
 			/>
 			<FieldMessage error={error} field="model" />
 			<ChoiceField label="协议" testId="watch-add-protocol" value={protocol} options={PROTOCOLS} text={(p) => p} onChange={setProtocol} />
-			<label class="field col-12 col-md-6 col-lg-4">
-				<span class="field-label">告警邮箱（可选）</span>
+			<label className="field col-12 col-md-6 col-lg-4">
+				<span className="field-label">告警邮箱（可选）</span>
 				<input
 					type="email"
 					maxLength={WATCH_MAX_EMAIL}
 					placeholder="name@example.com"
-					autocomplete="off"
+					autoComplete="off"
 					value={alertEmail}
-					onInput={(e) => setAlertEmail(e.currentTarget.value)}
-					class={privateInputClass(privacy)}
+					onChange={(e) => setAlertEmail(e.currentTarget.value)}
+					className={privateInputClass(privacy)}
 					data-testid="watch-add-email"
 					{...invalid(error, "alertEmail")}
 				/>
-				<p class="muted small">邮箱在服务端加密保存，仅用于故障与恢复告警；支持直接回复邮件发送 pause、resume 或 recheck。</p>
+				<p className="muted small">邮箱在服务端加密保存，仅用于故障与恢复告警；支持直接回复邮件发送 pause、resume 或 recheck。</p>
 				<FieldMessage error={error} field="alertEmail" />
 			</label>
 			<WatchStrategyFields testPrefix="watch-add" strategy={strategy}>
 				<FieldMessage error={error} field="questions" />
 			</WatchStrategyFields>
-			<div class="field col-12">
-				<label class="consent-row">
+			<div className="field col-12">
+				<label className="consent-row">
 					<input type="checkbox" checked={consent} onChange={(e) => setConsent(e.currentTarget.checked)} data-testid="watch-add-consent" />
 					<span>{CONSENT_TEXT}</span>
 				</label>
 				<FieldMessage error={error} field="consent" />
 			</div>
-			<div class="form-foot col-12">
-				<p class="muted">监测由本站服务器执行。闲置 {WATCH_IDLE_DAYS} 天后自动删除，删除卡片会立即清空密钥与样本。</p>
-				<div class="actions">
-					<button type="button" class="btn btn-secondary" onClick={onClose}>
+			<div className="form-foot col-12">
+				<p className="muted">监测由本站服务器执行。闲置 {WATCH_IDLE_DAYS} 天后自动删除，删除卡片会立即清空密钥与样本。</p>
+				<div className="actions">
+					<button type="button" className="btn btn-secondary" onClick={onClose}>
 						取消
 					</button>
-					<button type="submit" class="btn btn-primary" disabled={busy || strategy.questions.questions === null} data-testid="watch-add-submit">
+					<button type="submit" className="btn btn-primary" disabled={busy || strategy.questions.questions === null} data-testid="watch-add-submit">
 						{busy ? "正在验证…" : "添加持续监测"}
 					</button>
 				</div>

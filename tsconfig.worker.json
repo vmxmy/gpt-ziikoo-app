@@ -1,5 +1,5 @@
 {
 	"extends": "./tsconfig.base.json",
 	"compilerOptions": { "lib": ["es2024"], "types": ["void/env"] },
-	"include": ["src/worker", "src/shared", "questions", "test/worker", "void.config.ts", "env.ts", "durable-objects", "routes", "email", ".void", "mock/src"]
+	"include": ["src/worker", "src/shared", "questions", "test/worker", "void.config.ts", "env.ts", "durable-objects", "routes", "email", "db", "pages/*.server.ts", ".void", "mock/src"]
 }

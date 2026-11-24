@@ -1,11 +1,10 @@
-import { useEffect } from "preact/hooks";
-import type { ComponentChildren } from "preact";
+import { useEffect, type ReactNode } from "react";
 
 type Props = {
 	open: boolean;
 	onClose: () => void;
 	title: string;
-	children: ComponentChildren;
+	children: ReactNode;
 };
 
 export function Modal({ open, onClose, title, children }: Props) {
@@ -21,15 +20,15 @@ export function Modal({ open, onClose, title, children }: Props) {
 	if (!open) return null;
 
 	return (
-		<div class="modal-backdrop" onClick={onClose}>
-			<div class="modal-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-				<div class="modal-header">
+		<div className="modal-backdrop" onClick={onClose}>
+			<div className="modal-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+				<div className="modal-header">
 					<h3 id="modal-title">{title}</h3>
-					<button type="button" class="modal-close" onClick={onClose} aria-label="关闭">
+					<button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
 						×
 					</button>
 				</div>
-				<div class="modal-body">{children}</div>
+				<div className="modal-body">{children}</div>
 			</div>
 		</div>
 	);

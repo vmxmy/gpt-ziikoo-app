@@ -7,14 +7,19 @@ export default defineConfig({
 	},
 	inference: {
 		bindings: {
-			db: false,
 			kv: false,
 			storage: false,
-			ai: false,
 		},
 	},
 	email: {
 		from: "alerts@mail.gpt.ziikoo.app",
+	},
+	head: {
+		htmlAttrs: { lang: "zh-CN" },
+		meta: [
+			{ charset: "utf-8" },
+			{ name: "viewport", content: "width=device-width, initial-scale=1" },
+		],
 	},
 	cloudflare: {
 		name: "gpt-ziikoo-void",
