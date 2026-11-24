@@ -5,9 +5,13 @@ import type { FailReason, ProbeResponse, Question } from "../shared/types.ts";
 import type { Protocol } from "../shared/protocols.ts";
 import { WATCH_IDLE_DAYS, WATCH_MAX_TOTAL, type WatchChange, type WatchStatus, type WatchUsage, type WatchView } from "../shared/watch.ts";
 import { addRow, applyMeasure, measureDue, measureRow, summarizePerf, type MeasureRow, type MeasureState } from "./measure.ts";
+import { hmacHex } from "./hmac.ts";
+import { liveTopic, publishWatchEvent } from "./live.ts";
 import { DEFAULT_LIMITS, defaultEffort, probe, type ProbeCapture, type ProbeInput, type ProbeLimits, type ProbeResult } from "./probe.ts";
 import { readUsage, validCount } from "./parse.ts";
 import type { WatchCreateCommand } from "./request.ts";
+
+export { hmacHex };
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
@@ -20,14 +24,8 @@ const TRANSIENT: readonly FailReason[] = ["timeout", "upstream_error", "bad_resp
 
 const encoder = new TextEncoder();
 
-const toHex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-
-export async function hmacHex(pepper: string, message: string): Promise<string> {
-	const key = await crypto.subtle.importKey("raw", encoder.encode(pepper), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-	return toHex(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
-}
 
 export function newToken(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -220,11 +218,12 @@ export class Watch extends DurableObject<Env> {
 		sql.exec("DELETE FROM samples WHERE rowid NOT IN (SELECT rowid FROM samples ORDER BY ts DESC LIMIT ?)", MAX_SAMPLES);
 	}
 
-	private toView(state: WatchState, now: number): WatchView {
+	private async toView(state: WatchState, now: number): Promise<WatchView> {
 		const { origin, host, alias, model, protocol, intervalMin, createdAt, status, expiresAt } = state;
 		const monitor = buildMonitor(this.samples(now), now, host, intervalMin * 60);
 		const questions = watchRotation(state.questions).map((q) => q.id);
-		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null, perf: state.measure ? summarizePerf(state.measure, state.seq, intervalMin, now) : null };
+		const topic = this.env.PEPPER ? await liveTopic(this.env.PEPPER, state.id) : undefined;
+		return { site: origin, host, alias, model, protocol, intervalMin, questions, createdAt, status, expiresAt, monitor, usage: state.usage ?? null, perf: state.measure ? summarizePerf(state.measure, state.seq, intervalMin, now) : null, liveTopic: topic };
 	}
 
 	private async save(state: WatchState, alarmAt: number): Promise<void> {
@@ -257,7 +256,7 @@ export class Watch extends DurableObject<Env> {
 		if (round) this.addSample(toSample(now, round.question, round.response));
 		const stored: WatchState = round ? { ...state, usage: addUsage(undefined, round.attempts, now) } : state;
 		await this.save(stored, now + cmd.intervalMin * MINUTE_MS);
-		return { kind: "created", watch: this.toView(stored, now) };
+		return { kind: "created", watch: await this.toView(stored, now) };
 	}
 
 	// Every look pushes the purge date out; a paused watch sleeps until that date, so its alarm moves too.
@@ -279,7 +278,9 @@ export class Watch extends DurableObject<Env> {
 				? { ...state, expiresAt, status: { kind: "paused" } }
 				: { ...state, expiresAt, status: { kind: "running" }, unauthorized: 0 };
 		await this.save(next, action === "pause" ? expiresAt : now);
-		return this.toView(next, now);
+		const view = await this.toView(next, now);
+		await publishWatchEvent(this.env, next.id, { kind: "update", view });
+		return view;
 	}
 
 	async update(change: WatchChange, now: number): Promise<WatchView | null> {
@@ -288,12 +289,16 @@ export class Watch extends DurableObject<Env> {
 		const { measure, ...schedule } = change;
 		const next: WatchState = { ...state, ...schedule, measure: applyMeasure(state.measure, measure), expiresAt: now + IDLE_MS };
 		await this.save(next, alarmAfterUpdate(next, await this.ctx.storage.getAlarm(), now));
-		return this.toView(next, now);
+		const view = await this.toView(next, now);
+		await publishWatchEvent(this.env, next.id, { kind: "update", view });
+		return view;
 	}
 
 	async deleteAll(): Promise<void> {
+		const state = await this.state();
 		await this.ctx.storage.deleteAlarm();
 		await this.ctx.storage.deleteAll();
+		if (state) await publishWatchEvent(this.env, state.id, { kind: "deleted" });
 	}
 
 	async alarm(): Promise<void> {
@@ -320,6 +325,10 @@ export class Watch extends DurableObject<Env> {
 		const next: WatchState = { ...latest, seq: latest.seq + 1, unauthorized, status, usage: addUsage(latest.usage, round.attempts, now) };
 		await this.ctx.storage.put(STATE_KEY, next);
 		await this.runMeasure(next, key, round.attempts.length === 1 && round.response.ok);
+		const finalState = await this.state();
+		if (finalState) {
+			await publishWatchEvent(this.env, finalState.id, { kind: "update", view: await this.toView(finalState, Date.now()) });
+		}
 	}
 
 	private async runMeasure(state: WatchState, key: string, firstTry: boolean): Promise<void> {

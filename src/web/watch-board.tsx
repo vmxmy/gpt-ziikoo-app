@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { connectLiveStream, type LiveClient } from "void/live/client";
 import { MONITOR, type MonitorState } from "../shared/monitor.ts";
-import { WATCH_IDLE_DAYS, type WatchChange, type WatchStatus, type WatchView } from "../shared/watch.ts";
+import { WATCH_IDLE_DAYS, type WatchChange, type WatchLiveEvent, type WatchStatus, type WatchView } from "../shared/watch.ts";
 import { adoptBoard, createWatch, deleteWatch, fetchBoardView, fetchWatch, orderBoard, setWatchState, updateWatch } from "./api.ts";
 import { BAR_HINT, LEGEND, MonitorCard, SiteName } from "./monitor-card.tsx";
 import { badgeLabel, emptyBuckets, latencyP50, monitorView } from "./monitor-view.ts";
@@ -8,6 +9,7 @@ import { usePrivacy } from "./privacy.ts";
 import { ms, pct } from "./results.ts";
 import { WatchAddForm } from "./watch-add.tsx";
 import { WatchEditForm } from "./watch-edit.tsx";
+import { applyWatchLiveEvent, type WatchCard } from "./watch-live.ts";
 import { WatchShare } from "./watch-share.tsx";
 import {
 	BOARD_KEY,
@@ -29,12 +31,8 @@ import {
 } from "./watch.ts";
 
 const REFRESH_MS = 60_000;
+const LIVE_REFRESH_MS = 300_000;
 const TICK_MS = 1_000;
-
-type WatchCard =
-	| { kind: "loading"; token: string }
-	| { kind: "live"; token: string; view: WatchView; actionError: string | null }
-	| { kind: "error"; token: string; message: string };
 
 type CardProps = {
 	card: WatchCard;
@@ -339,8 +337,16 @@ export function WatchBoard() {
 	const [adding, setAdding] = useState(false);
 	const [editing, setEditing] = useState<string | null>(null);
 	const [layout, setLayout] = useState<"cards" | "list">("cards");
+	const [liveConnected, setLiveConnected] = useState(false);
 	const latest = useRef(cards);
 	latest.current = cards;
+	const boardRef = useRef(board);
+	boardRef.current = board;
+	const liveRef = useRef<{
+		stream: LiveClient;
+		subs: Map<string, { topic: string; unsub?: () => Promise<void>; cancelled: boolean }>;
+		disposed: boolean;
+	} | null>(null);
 
 	useEffect(() => {
 		const migrate = async () => {
@@ -398,24 +404,102 @@ export function WatchBoard() {
 		addEventListener("hashchange", () => void handleHash());
 	}, []);
 
+	const refreshBoard = async (targetBoard: string) => {
+		try {
+			const result = await fetchBoardView(targetBoard);
+			if (boardRef.current !== targetBoard) return;
+			setCards(
+				result.watches.map(({ token, watch }): WatchCard =>
+					watch ? { kind: "live", token, view: watch, actionError: null } : { kind: "error", token, message: "读取失败" },
+				),
+			);
+		} catch (err) {
+			console.error("board view failed", err);
+		}
+	};
+
 	useEffect(() => {
 		if (!board) return;
-		const refresh = async () => {
-			try {
-				const result = await fetchBoardView(board);
-				setCards(
-					result.watches.map(({ token, watch }): WatchCard =>
-						watch ? { kind: "live", token, view: watch, actionError: null } : { kind: "error", token, message: "读取失败" },
-					),
-				);
-			} catch (err) {
-				console.error("board view failed", err);
-			}
-		};
-		void refresh();
-		const timer = setInterval(() => void refresh(), REFRESH_MS);
-		return () => clearInterval(timer);
+		void refreshBoard(board);
 	}, [board]);
+
+	useEffect(() => {
+		if (!board) return;
+		const timer = setInterval(() => void refreshBoard(board), liveConnected ? LIVE_REFRESH_MS : REFRESH_MS);
+		return () => clearInterval(timer);
+	}, [board, liveConnected]);
+
+	useEffect(() => {
+		if (!board) return;
+		let stream: LiveClient;
+		try {
+			stream = connectLiveStream("/api/board/live", { onError: () => setLiveConnected(false) });
+		} catch {
+			setLiveConnected(false);
+			return;
+		}
+		const session = {
+			stream,
+			subs: new Map<string, { topic: string; unsub?: () => Promise<void>; cancelled: boolean }>(),
+			disposed: false,
+		};
+		liveRef.current = session;
+		return () => {
+			session.disposed = true;
+			for (const entry of session.subs.values()) entry.cancelled = true;
+			session.subs.clear();
+			stream.close();
+			if (liveRef.current === session) liveRef.current = null;
+			setLiveConnected(false);
+		};
+	}, [board]);
+
+	useEffect(() => {
+		const session = liveRef.current;
+		if (!board || !session || session.disposed) return;
+		const desired = new Map<string, string>();
+		for (const card of cards) {
+			if (card.kind === "live" && card.view.liveTopic) {
+				desired.set(cardId(card.token), card.view.liveTopic);
+			}
+		}
+		for (const [id, entry] of session.subs) {
+			if (desired.get(id) !== entry.topic) {
+				entry.cancelled = true;
+				void entry.unsub?.().catch(() => {});
+				session.subs.delete(id);
+			}
+		}
+		for (const [id, topic] of desired) {
+			if (session.subs.has(id)) continue;
+			const entry: { topic: string; unsub?: () => Promise<void>; cancelled: boolean } = { topic, cancelled: false };
+			session.subs.set(id, entry);
+			void session.stream
+				.subscribe<WatchLiveEvent>({
+					id,
+					topic,
+					onEvent: (event) => {
+						if (session.disposed || entry.cancelled) return;
+						setLiveConnected(true);
+						if (event.data && (event.data.kind === "update" || event.data.kind === "deleted")) {
+							setCards((prev) => applyWatchLiveEvent(prev, topic, event.data));
+						}
+					},
+				})
+				.then((unsub) => {
+					if (session.disposed || entry.cancelled) {
+						void unsub().catch(() => {});
+						return;
+					}
+					entry.unsub = unsub;
+					setLiveConnected(true);
+				})
+				.catch(() => {
+					if (session.subs.get(id) === entry) session.subs.delete(id);
+					if (!session.disposed) setLiveConnected(false);
+				});
+		}
+	}, [board, cards]);
 
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), TICK_MS);
