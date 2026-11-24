@@ -1,122 +1,210 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { action, useRouter } from "@void/react";
-import { auth } from "void/client";
 import type { SavedReport } from "../src/shared/reports.ts";
 import type { OverallStatus } from "../src/shared/types.ts";
+import type { AuthProviders } from "../src/worker/auth-providers.ts";
+import { authClient } from "../src/web/auth-client.ts";
 import { ms, OVERALL_LABEL } from "../src/web/results.ts";
 import "../src/web/styles.css";
 import type { Props } from "./reports.server.ts";
 
+const OTP_RESEND_COOLDOWN_SEC = 60;
 const formatTime = (ts: number) => new Date(ts).toLocaleString("zh-CN", { hour12: false });
 
 function overallText(overall: string): string {
 	return overall in OVERALL_LABEL ? OVERALL_LABEL[overall as OverallStatus] : overall;
 }
 
-function AuthCard({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
-	const [mode, setMode] = useState<"signin" | "signup">("signin");
+function AuthCard({ onSignedIn, providers }: { onSignedIn: () => Promise<void>; providers: AuthProviders }) {
 	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [name, setName] = useState("");
-	const [busy, setBusy] = useState(false);
+	const [otp, setOtp] = useState("");
+	const [otpSent, setOtpSent] = useState(false);
+	const [cooldown, setCooldown] = useState(0);
+	const [busy, setBusy] = useState<"oauth" | "send" | "verify" | null>(null);
+	const [status, setStatus] = useState("");
 	const [error, setError] = useState("");
 
-	const submit = async (e: FormEvent) => {
-		e.preventDefault();
+	useEffect(() => {
+		if (cooldown <= 0) return;
+		const timer = setTimeout(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+		return () => clearTimeout(timer);
+	}, [cooldown]);
+
+	const signInWithProvider = async (provider: "google" | "github") => {
 		setError("");
-		setBusy(true);
+		setStatus("");
+		setBusy("oauth");
 		try {
-			if (mode === "signin") {
-				const res = await auth.signIn.email({ email: email.trim(), password });
-				if (res.error) {
-					setError(res.error.message ?? "登录失败");
-					return;
-				}
-			} else {
-				const res = await auth.signUp.email({
-					email: email.trim(),
-					password,
-					name: name.trim() || email.trim().split("@")[0] || "User",
-				});
-				if (res.error) {
-					setError(res.error.message ?? "注册失败");
-					return;
-				}
+			const res = await authClient.signIn.social({ provider, callbackURL: "/reports" });
+			if (res.error) {
+				setError(res.error.message ?? "登录失败");
 			}
-			await onSignedIn();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "请求失败");
 		} finally {
-			setBusy(false);
+			setBusy(null);
 		}
 	};
 
+	const sendOtp = async () => {
+		const trimmed = email.trim();
+		if (!trimmed) {
+			setError("请输入邮箱地址");
+			return;
+		}
+		setError("");
+		setStatus("");
+		setBusy("send");
+		try {
+			const res = await authClient.emailOtp.sendVerificationOtp({
+				email: trimmed,
+				type: "sign-in",
+			});
+			if (res.error) {
+				setError(res.error.message ?? "验证码发送失败");
+				return;
+			}
+			setOtpSent(true);
+			setCooldown(OTP_RESEND_COOLDOWN_SEC);
+			setStatus("验证码已发送至邮箱，5 分钟内有效。");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "验证码发送失败");
+		} finally {
+			setBusy(null);
+		}
+	};
+
+	const verifyOtp = async () => {
+		const trimmedEmail = email.trim();
+		const trimmedOtp = otp.trim();
+		if (!trimmedEmail) {
+			setError("请输入邮箱地址");
+			return;
+		}
+		if (!trimmedOtp) {
+			setError("请输入 6 位验证码");
+			return;
+		}
+		setError("");
+		setBusy("verify");
+		try {
+			const res = await authClient.signIn.emailOtp({
+				email: trimmedEmail,
+				otp: trimmedOtp,
+			});
+			if (res.error) {
+				setError(res.error.message ?? "验证码无效或已过期");
+				return;
+			}
+			await onSignedIn();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "登录失败");
+		} finally {
+			setBusy(null);
+		}
+	};
+
+	const submit = (e: FormEvent) => {
+		e.preventDefault();
+		if (otpSent) {
+			void verifyOtp();
+		} else {
+			void sendOtp();
+		}
+	};
+
+	const hasOAuth = providers.google || providers.github;
+
 	return (
 		<section className="panel" aria-labelledby="auth-h" data-testid="reports-auth-card">
-			<h2 id="auth-h">{mode === "signin" ? "登录查看报告归档" : "注册归档账号"}</h2>
+			<h2 id="auth-h">登录查看报告归档</h2>
 			<p className="notice">
 				首页 <a href="/">实时测试</a> 与持续监测均可匿名使用，无需账号。报告归档仅保存脱敏后的数值指标（主机名、模型、协议、总评与耗时统计），绝不保存站点密钥或回答原文。
 			</p>
-			<form className="form" onSubmit={(e) => void submit(e)}>
-				{mode === "signup" && (
+			{hasOAuth && (
+				<div className="auth-oauth">
+					{providers.google && (
+						<button
+							type="button"
+							className="btn btn-secondary"
+							disabled={busy !== null}
+							onClick={() => void signInWithProvider("google")}
+							data-testid="auth-google"
+						>
+							使用 Google 登录
+						</button>
+					)}
+					{providers.github && (
+						<button
+							type="button"
+							className="btn btn-secondary"
+							disabled={busy !== null}
+							onClick={() => void signInWithProvider("github")}
+							data-testid="auth-github"
+						>
+							使用 GitHub 登录
+						</button>
+					)}
+				</div>
+			)}
+			<form className="form auth-form" onSubmit={submit}>
+				<label className="field">
+					<span className="field-label">邮箱</span>
+					<div className="auth-email-row">
+						<input
+							type="email"
+							required
+							value={email}
+							onChange={(e) => setEmail(e.currentTarget.value)}
+							autoComplete="email"
+							placeholder="name@example.com"
+							data-testid="auth-email"
+						/>
+						<button
+							type="button"
+							className="btn btn-secondary"
+							disabled={busy !== null || cooldown > 0}
+							onClick={() => void sendOtp()}
+							data-testid="auth-send-otp"
+						>
+							{busy === "send" ? "发送中…" : cooldown > 0 ? `${cooldown} 秒后重发` : "发送验证码"}
+						</button>
+					</div>
+				</label>
+				{otpSent && (
 					<label className="field">
-						<span className="field-label">昵称</span>
+						<span className="field-label">邮箱验证码</span>
 						<input
 							type="text"
-							value={name}
-							onChange={(e) => setName(e.currentTarget.value)}
-							autoComplete="name"
-							placeholder="可选"
-							data-testid="auth-name"
+							inputMode="numeric"
+							autoComplete="one-time-code"
+							maxLength={6}
+							required
+							value={otp}
+							onChange={(e) => setOtp(e.currentTarget.value)}
+							placeholder="6 位数字验证码"
+							data-testid="auth-otp"
 						/>
 					</label>
 				)}
-				<label className="field">
-					<span className="field-label">邮箱</span>
-					<input
-						type="email"
-						required
-						value={email}
-						onChange={(e) => setEmail(e.currentTarget.value)}
-						autoComplete="email"
-						placeholder="name@example.com"
-						data-testid="auth-email"
-					/>
-				</label>
-				<label className="field">
-					<span className="field-label">密码</span>
-					<input
-						type="password"
-						required
-						minLength={8}
-						value={password}
-						onChange={(e) => setPassword(e.currentTarget.value)}
-						autoComplete={mode === "signin" ? "current-password" : "new-password"}
-						placeholder="至少 8 位"
-						data-testid="auth-password"
-					/>
-				</label>
+				{status && (
+					<p className="muted small" data-testid="auth-status">
+						{status}
+					</p>
+				)}
 				{error && (
 					<p className="field-error" role="alert" data-testid="auth-error">
 						{error}
 					</p>
 				)}
-				<div className="actions">
-					<button type="submit" className="btn btn-primary" disabled={busy} data-testid="auth-submit">
-						{busy ? "提交中…" : mode === "signin" ? "登录" : "注册"}
-					</button>
-					<button
-						type="button"
-						className="btn-text"
-						onClick={() => {
-							setMode(mode === "signin" ? "signup" : "signin");
-							setError("");
-						}}
-						data-testid="auth-mode-toggle"
-					>
-						{mode === "signin" ? "没有账号？去注册" : "已有账号？去登录"}
-					</button>
-				</div>
+				{otpSent && (
+					<div className="actions">
+						<button type="submit" className="btn btn-primary" disabled={busy !== null} data-testid="auth-submit">
+							{busy === "verify" ? "验证中…" : "验证并登录"}
+						</button>
+					</div>
+				)}
+				<p className="muted small">未注册邮箱验证通过后将自动创建账号，无需密码。</p>
 			</form>
 		</section>
 	);
@@ -221,11 +309,11 @@ function ReportCard({ report }: { report: SavedReport }) {
 	);
 }
 
-export default function ReportsPage({ user, reports }: Props) {
+export default function ReportsPage({ user, reports, providers }: Props) {
 	const router = useRouter();
 
 	const signOut = async () => {
-		await auth.signOut();
+		await authClient.signOut();
 		await router.refresh();
 	};
 
@@ -255,6 +343,7 @@ export default function ReportsPage({ user, reports }: Props) {
 			<main className="grid main-grid">
 				{!user ? (
 					<AuthCard
+						providers={providers}
 						onSignedIn={async () => {
 							await router.refresh();
 						}}

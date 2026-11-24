@@ -5,6 +5,7 @@ import { and, db, desc, eq } from "void/db";
 import { UsageLimit } from "void/limits";
 import { reports } from "../db/schema.ts";
 import type { ReportSummary, SavedReport } from "../src/shared/reports.ts";
+import { resolveAuthProviders } from "../src/worker/auth-providers.ts";
 
 export type Props = InferProps<typeof loader>;
 
@@ -69,10 +70,11 @@ export const head = defineHead(() => ({
 	meta: [{ name: "description", content: "登录后查看并诊断已归档的脱敏测试报告" }],
 }));
 
-export const loader = defineHandler(async () => {
+export const loader = defineHandler(async (c) => {
+	const providers = resolveAuthProviders(c.env as unknown as Record<string, string | undefined>);
 	const user = getUser();
 	if (!user) {
-		return { user: null, reports: [] as SavedReport[] };
+		return { user: null, reports: [] as SavedReport[], providers };
 	}
 	const rows = await db
 		.select()
@@ -95,6 +97,7 @@ export const loader = defineHandler(async () => {
 	return {
 		user: { id: user.id, email: user.email, name: user.name },
 		reports: items,
+		providers,
 	};
 });
 
