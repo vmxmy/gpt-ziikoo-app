@@ -12,5 +12,6 @@ declare global {
 		WATCH: DurableObjectNamespace<Watch>;
 		WATCH_REGISTRY: DurableObjectNamespace<WatchRegistry>;
 		BOARD: DurableObjectNamespace<Board>;
+		VOID_LIVE?: DurableObjectNamespace;
 	}
 }

@@ -54,6 +54,33 @@ describe("worker rate limits", () => {
 		expect(reached.target).toBe(false);
 	});
 
+	it.each(["GET", "POST"])("limits %s /api/board/live by caller IP before touching VOID_LIVE", async (method) => {
+		const ip = limiter(false);
+		let touched = false;
+		const env = {
+			IP_LIMITER: ip,
+			VOID_LIVE: {
+				idFromName: () => {
+					touched = true;
+					throw new Error("VOID_LIVE must not be reached");
+				},
+			},
+		};
+		const res = await worker.fetch(
+			new Request("https://gpt.ziikoo.app/api/board/live?connectionId=1234567890123456", {
+				method,
+				headers: { "CF-Connecting-IP": "203.0.113.7" },
+				...(method === "POST" ? { body: JSON.stringify({ connectionId: "1234567890123456", operations: [] }) } : {}),
+			}),
+			env as unknown as Env,
+			{ waitUntil: () => {} } as unknown as ExecutionContext,
+		);
+		expect(res.status).toBe(429);
+		expect(res.headers.get("Retry-After")).toBe("60");
+		expect(ip.keys).toEqual(["203.0.113.7"]);
+		expect(touched).toBe(false);
+	});
+
 	it("keys the target-host limit by hostname without the port", async () => {
 		const { call, host } = harness(true);
 		const res = await call("/api/probe", {

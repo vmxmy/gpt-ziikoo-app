@@ -34,16 +34,22 @@ function fileToRoutePath(routesApiRoot: string, file: string): string {
 	return rel.endsWith("/index") ? `/api/${rel.slice(0, -"/index".length)}` : `/api/${rel}`;
 }
 
+function parseWorkerRoutes(src: string): { path: string; method: string }[] {
+	return [...src.matchAll(/"(\/api\/[^"]+)":\s*\{([^}]+)\}/g)].flatMap(([, path, methods]) =>
+		[...methods.matchAll(/\b(GET|POST)\s*:/g)].map(([, method]) => ({ path, method })),
+	);
+}
+
 describe("public/api.md", () => {
 	it("lists every route the worker serves", () => {
-		const routes = [...worker.matchAll(/"(\/api\/[^"]+)": \{ (GET|POST):/g)].map(([, path, method]) => `| ${method} | \`${path}\` |`);
+		const routes = parseWorkerRoutes(worker).map(({ path, method }) => `| ${method} | \`${path}\` |`);
 		expect(routes.length).toBeGreaterThan(0);
 		expect(routes.filter((row) => !doc.includes(row))).toEqual([]);
 	});
 
 	it("matches routes/api/ file routes with src/worker/index.ts ROUTES", () => {
-		const expected = [...worker.matchAll(/"(\/api\/[^"]+)": \{ (GET|POST):/g)]
-			.map(([, path, method]) => `${method} ${path}`)
+		const expected = parseWorkerRoutes(worker)
+			.map(({ path, method }) => `${method} ${path}`)
 			.sort();
 		const routesApiRoot = join(process.cwd(), "routes/api");
 		const actual = listRouteFiles(routesApiRoot)

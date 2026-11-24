@@ -29,6 +29,8 @@
 | POST | `/api/board/adopt` | 把旧令牌迁移进看板 |
 | POST | `/api/board/move` | 合并看板 |
 | POST | `/api/board/order` | 保存看板里的顺序 |
+| GET | `/api/board/live` | 建立看板实时推送 SSE 连接 |
+| POST | `/api/board/live` | 订阅或取消订阅看板监测的实时更新 |
 | GET | `/api/frame` | 「播放动画」用的沙箱宿主页，供页面使用，脚本不需要调用 |
 
 ## POST /api/claude-case
@@ -254,6 +256,8 @@ curl -s https://gpt.ziikoo.app/api/probe \
 | `/api/board/adopt` | `{ "board"?, "tokens" }` | `{ "board" }`。`tokens` 最多 30 个。全部令牌无效时 `board` 是 `null` |
 | `/api/board/move` | `{ "from", "into"? }` | `{ "board" }`。把 `from` 的令牌并入 `into` 并删除 `from`；不给 `into` 时新签发 |
 | `/api/board/order` | `{ "board", "tokens" }` | `{ "tokens" }`。`tokens` 必须是看板现有令牌的一个排列，否则返回 409 |
+| `GET /api/board/live?connectionId=<uuid>` | 查询参数 `connectionId`（16 到 256 个字符，无请求体） | `text/event-stream`，推送已订阅监测的实时更新与删除事件 |
+| `POST /api/board/live` | `{ "connectionId", "operations": [{ "kind": "subscribe", "id", "topic" } \| { "kind": "unsubscribe", "id" }] }` | 控制响应；`topic` 必须是 `WatchView.liveTopic`（`^watch:[0-9a-f]{64}$`） |
 
 - 间隔是 1、5、10、30 分钟之一。2026-10-28 之前建的监测可能是 15 分钟。
 - `questions` 是非空的题 id 数组，只能含 `inWatchRotation` 不为 `false` 的题。不带时选全部。
@@ -262,6 +266,7 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - 令牌无效或监测已过期时返回 404，不区分两者。7 天没有读取或操作，监测自动删除。
 - 全站最多 200 个持续监测，一个看板最多 30 个，超出返回 429 `watch_limit`。
 - 建立时参数不合法，或首次调用判为 `unauthorized`，返回 400。问题出在 `site`、`key` 或 `model` 时带 `field` 指明字段。
+- `/api/board/live` 供页面实时接收监测轮次完成、状态变更与删除推送，URL 与请求头均不携带密钥、监测令牌或看板码，只传连接标识与 `WatchView.liveTopic` 里的不透明主题名；两个方法都计入 IP 限速。
 
 `WatchView`：
 
@@ -271,7 +276,8 @@ curl -s https://gpt.ziikoo.app/api/probe \
   monitor: { target, intervalSec, bucketMin, generatedAt, state, uptimePct, correctPct,
              last, buckets: [48 个 30 分钟格] },
   usage: { since, calls, unmetered, promptTokens, cachedTokens, outputTokens, reasoningTokens } | null,
-  perf: { checks, cacheChecks, cacheHitPct, tokensPerSec, speedSamples, lastAt, nextInRounds } | null }
+  perf: { checks, cacheChecks, cacheHitPct, tokensPerSec, speedSamples, lastAt, nextInRounds } | null,
+  liveTopic?: "watch:<64位十六进制>" }
 ```
 
 - `usage` 是累计用量。`since` 是开始计数的时间。`calls` 是发出的调用次数，含重试。`unmetered` 是可能已扣额度但没有返回可用用量的调用次数。`outputTokens` 含 `reasoningTokens`，`promptTokens` 含 `cachedTokens`。这项上线前建的监测在跑完下一轮之前是 `null`。

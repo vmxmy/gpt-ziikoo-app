@@ -15,6 +15,7 @@ import { newBoardCode } from "./board.ts";
 import { ClaudeCaseRateLimited, runClaudeCase } from "./claude-cases.ts";
 import { MAX_CALLS_PER_RUN, TOO_MANY_CALLS } from "./history.ts";
 import { objectId } from "./identity.ts";
+import { watchLive } from "./live.ts";
 import { fetchModels } from "./models.ts";
 import { probe, type ProbeResult } from "./probe.ts";
 import {
@@ -394,6 +395,19 @@ export const handleBoardOrder: WorkerHandler = async (request, env) => {
 	return json({ tokens } satisfies BoardOrderResponse);
 };
 
+const liveContext = (request: Request, env: Env) =>
+	({ req: { raw: request }, env, get: () => null }) as unknown as Parameters<typeof watchLive.connect>[0];
+
+export const handleBoardLiveGet: WorkerHandler = async (request, env) => {
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	return watchLive.connect(liveContext(request, env));
+};
+
+export const handleBoardLivePost: WorkerHandler = async (request, env) => {
+	if (!(await ipAllowed(request, env))) return rateLimited();
+	return watchLive.control(liveContext(request, env));
+};
+
 // The page posts the answer HTML in after load; the sandbox CSP gives the frame an opaque origin and no network.
 const FRAME_HTML = `<!doctype html><meta charset="utf-8"><script>
 addEventListener("message", function once(e) {
@@ -434,6 +448,7 @@ export const ROUTES: Record<string, Partial<Record<string, WorkerHandler>>> = {
 	"/api/board/adopt": { POST: handleBoardAdopt },
 	"/api/board/move": { POST: handleBoardMove },
 	"/api/board/order": { POST: handleBoardOrder },
+	"/api/board/live": { GET: handleBoardLiveGet, POST: handleBoardLivePost },
 };
 
 export function handleApiFallback(request: Request): Response {

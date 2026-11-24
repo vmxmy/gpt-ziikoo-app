@@ -103,7 +103,9 @@ export type WatchView = {
 	usage: WatchUsage | null;
 	// Null while measurement is off.
 	perf: WatchPerf | null;
+	liveTopic?: string;
 };
+export type WatchLiveEvent = { kind: "update"; view: WatchView } | { kind: "deleted" };
 export type WatchCreateResponse = { board: string; token: string; watch: WatchView };
 export type WatchDeleteResponse = { deleted: true };
 export type WatchCreateError =
