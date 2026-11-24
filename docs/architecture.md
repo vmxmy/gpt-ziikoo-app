@@ -51,15 +51,18 @@ DO 类用配置里的 `exports` 声明存储引擎,例如 `exports.durableObject
 
 ```
 请求 → WAF 限速(Free zone 只有 1 条规则,10 秒窗口,按 IP,当洪水闸)
-     → 静态资源(页面,不唤醒 Worker)
-     → Worker(仅 /api/*)
-          ├ 解析与校验请求体
-          ├ 限速绑定(键 = 调用方 IP,60 秒;键 = 目标主机,60 秒)
-          ├ 代发,流式读取并计字节与计时,256KB 上限,120 秒超时
-          │ (不带 runId 的 HTML 题:8MB,900 秒)
-          ├ 评分
-          └ 带 runId 则写入对象(DO),写入前脱敏
+     → Worker(Void 因 public/_headers 将 run_worker_first 设为 ["/**"],全部路径先进 Worker)
+          ├ 非 /api/* 路径: 经 Void headerMiddleware 附加主站 CSP 后由 ASSETS 静态资源返回
+          └ /api/* 路径:
+               ├ 解析与校验请求体
+               ├ 限速绑定(键 = 调用方 IP,60 秒;键 = 目标主机,60 秒)
+               ├ 代发,流式读取并计字节与计时,256KB 上限,120 秒超时
+               │ (不带 runId 的 HTML 题:8MB,900 秒)
+               ├ 评分
+               └ 带 runId 则写入对象(DO),写入前脱敏
 ```
+
+架构权衡(2026-11-24 迁移引入):原 `cf` 配置用 `runWorkerFirst: ["/api/*"]`,静态资源不唤醒 Worker。Void 在存在响应头规则时强制 `run_worker_first: ["/**"]`,因此静态页面可用性耦合到 Worker 运行时,且针对首页的突发流量也会消耗 Worker 调用额度(Worker 内部限速绑定仍只覆盖 `/api/*`)。本站目前仅维护者自用,在试点评估中将其作为显式权衡项跟踪。
 
 ## 暴露面
 
