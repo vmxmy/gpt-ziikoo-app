@@ -4,5 +4,12 @@
   Referrer-Policy: no-referrer
   Cache-Control: public, max-age=0, must-revalidate, no-transform
 
+/api/*
+  Cache-Control: no-store
+
+/api/frame
+  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; sandbox allow-scripts; frame-ancestors 'self'; base-uri 'none'; form-action 'none'
+  Cache-Control: no-store
+
 /api.md
   Content-Type: text/markdown; charset=utf-8
