@@ -17,7 +17,7 @@ export default defineConfig({
 		name: "gpt-ziikoo-void",
 		workers_dev: false,
 		preview_urls: false,
-		routes: [{ pattern: "gpt-void.ziikoo.app", custom_domain: true }],
+		routes: [{ pattern: "gpt.ziikoo.app", custom_domain: true }],
 		ratelimits: [
 			{ name: "IP_LIMITER", namespace_id: "7101", simple: { limit: 150, period: 60 } },
 			{ name: "HOST_LIMITER", namespace_id: "7102", simple: { limit: 120, period: 60 } },
