@@ -8,7 +8,7 @@
 
 约束:
 
-- Node.js 22.18 或更高。
+- Node.js 24.22 或更高。
 - `void` 内部调用 `cf` 执行部署与版本管理,配置写在 `void.config.ts`,资源 ID 与 Durable Object 迁移历史由 `void.lock.json` 锁定。
 - `.void/`、`.void-wrangler.jsonc`、`.cloudflare/` 存放生成物与构建输出,加入 `.gitignore`;`void.lock.json` 必须提交,不得删除或重排已部署的迁移步骤。
 - `package.json` 设置 `"type": "module"`。

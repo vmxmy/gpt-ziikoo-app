@@ -14,7 +14,7 @@
 - 目标地址只允许 `https`,拒绝 IP 字面量与 `localhost`,不跟随重定向。
 - 来自中转站的回答是不可信内容。页面只用文本节点渲染,不拼 HTML。唯一例外(2026-10-25 授权;2026-10-27 曾扩大到自定义 HTML 题,同日收回):`pelican-svg` 的回答只在沙箱 iframe `/api/frame` 里运行。该 iframe 是不透明源,有自己的 CSP,不能联网。iframe 不得加 `allow-same-origin`、`allow-popups`、`allow-forms`、`allow-top-navigation`。
 - `workers.dev` 与预览地址保持关闭,否则绕过边缘限速。这两个开关写在 `void.config.ts` 的 `cloudflare` 下(`workers_dev: false`、`preview_urls: false`)。
-- 主应用工具链是 `void` 加 `void.config.ts`、`void.lock.json`(2026-11-24 维护者授权迁移;独立子应用 `mock/` 暂保留原 `cf` 配置)。Node.js 22.18 或更高。生成的 Cloudflare 配置不入库,`void.lock.json` 必须提交,不得删除或重排已部署的 Durable Object 迁移记录。每次升级 `void` 前先审计其运行时日志与 `/__void/*` 端点。
+- 主应用工具链是 `void` 加 `void.config.ts`、`void.lock.json`(2026-11-24 维护者授权迁移;独立子应用 `mock/` 暂保留原 `cf` 配置)。Node.js 24.22 或更高。生成的 Cloudflare 配置不入库,`void.lock.json` 必须提交,不得删除或重排已部署的 Durable Object 迁移记录。每次升级 `void` 前先审计其运行时日志与 `/__void/*` 端点。
 - Void 会把 `public/_headers` 编译为 Hono `headerMiddleware`(后匹配生效),改动时必须在 `/*` 之后显式保留 `/api/*` 的 `Cache-Control: no-store` 与 `/api/frame` 的沙箱 CSP。
 - `ziikoo.app` 是 Free zone,且还承载其他站点。Bot Fight Mode 现在是关的,必须保持关闭,它不能被规则跳过,会质询匿名脚本。改这个全区设置前先想到本站。边缘限速只有 1 条规则、10 秒窗口,主要限速在 Worker 里。
 - 不在本仓库记录具体中转站的名字或测评结论。不做公开站点榜单。监测样本只存数字字段,不存回答原文。
