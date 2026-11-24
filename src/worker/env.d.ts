@@ -13,5 +13,6 @@ declare global {
 		WATCH_REGISTRY: DurableObjectNamespace<WatchRegistry>;
 		BOARD: DurableObjectNamespace<Board>;
 		VOID_LIVE?: DurableObjectNamespace;
+		SEND_EMAIL?: SendEmail;
 	}
 }

@@ -13,6 +13,9 @@ export default defineConfig({
 			ai: false,
 		},
 	},
+	email: {
+		from: "alerts@mail.gpt.ziikoo.app",
+	},
 	cloudflare: {
 		name: "gpt-ziikoo-void",
 		workers_dev: false,

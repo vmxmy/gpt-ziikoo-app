@@ -2,7 +2,7 @@ import { getQuestion, instantiate, SAMPLE_SEED, watchQuestions } from "../../que
 import { CLAUDE_CASES, type ClaudeCaseId } from "../shared/claude-cases.ts";
 import { PROTOCOL_MESSAGE, PROTOCOLS, type Protocol } from "../shared/protocols.ts";
 import type { CustomQuestion, Effort, Question } from "../shared/types.ts";
-import { BOARD_MAX_WATCHES, isWatchInterval, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchChange, type WatchIntervalMin } from "../shared/watch.ts";
+import { BOARD_MAX_WATCHES, isValidAlertEmail, isWatchInterval, WATCH_INTERVALS, WATCH_MAX_ALIAS, type WatchChange, type WatchIntervalMin } from "../shared/watch.ts";
 import { DEFAULT_LIMITS, defaultEffort, LONG_ANSWER_LIMITS, type ProbeLimits } from "./probe.ts";
 import { parseSite } from "./target-url.ts";
 
@@ -193,6 +193,7 @@ export type WatchCreateCommand = HistoryCommand & {
 	alias: string;
 	board?: string;
 	measure: boolean;
+	alertEmail?: string;
 };
 export type WatchCreateResult = { ok: true; value: WatchCreateCommand } | { ok: false; message: string; field?: WatchField };
 
@@ -220,7 +221,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (typeof f.key !== "string" || !KEY.test(f.key)) {
 		return { ok: false, message: "key 必须是 8 到 1024 个字母、数字或 _ . - 字符", field: "key" };
 	}
-	const { model, protocol, intervalMin, alias, board } = f;
+	const { model, protocol, intervalMin, alias, board, alertEmail } = f;
 	if (typeof model !== "string" || model.trim() === "" || model.length > MAX_MODEL_LENGTH) {
 		return { ok: false, message: "model 必须是 1 到 100 个字符", field: "model" };
 	}
@@ -231,6 +232,9 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (f.measure !== undefined && typeof f.measure !== "boolean") return bad(MEASURE_MESSAGE);
 	if (alias !== undefined && typeof alias !== "string") return bad("alias 必须是字符串");
 	if (board !== undefined && (typeof board !== "string" || !BOARD.test(board))) return bad("board 不合法");
+	if (alertEmail !== undefined && typeof alertEmail !== "string") return bad("alertEmail 必须是字符串");
+	const trimmedEmail = typeof alertEmail === "string" ? alertEmail.trim() : "";
+	if (trimmedEmail !== "" && !isValidAlertEmail(trimmedEmail)) return bad("alertEmail 格式不合法");
 	return {
 		ok: true,
 		value: {
@@ -244,6 +248,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 			alias: (alias ?? "").trim().slice(0, WATCH_MAX_ALIAS),
 			board: board ?? undefined,
 			measure: f.measure === true,
+			...(trimmedEmail !== "" ? { alertEmail: trimmedEmail.toLowerCase() } : {}),
 		},
 	};
 }
@@ -266,12 +271,30 @@ export function parseWatchState(body: unknown): Result<{ token: string; action: 
 export function parseWatchUpdate(body: unknown): Result<{ token: string; change: WatchChange }> {
 	const token = parseWatchToken(body);
 	if (!token.ok) return token;
-	const { questions, intervalMin, measure } = fields(body) ?? {};
+	const { questions, intervalMin, measure, alertEmail } = fields(body) ?? {};
 	if (measure !== undefined && typeof measure !== "boolean") return bad(MEASURE_MESSAGE);
 	if (intervalMin !== undefined && !isWatchInterval(intervalMin)) return bad(INTERVAL_MESSAGE);
 	const picked = questions === undefined ? null : parseWatchQuestions(questions);
 	if (picked && !picked.ok) return picked;
-	const change: WatchChange = { ...(picked && { questions: picked.value }), ...(intervalMin !== undefined && { intervalMin }), ...(measure !== undefined && { measure }) };
+	let emailPatch: { alertEmail?: string | null } = {};
+	if (alertEmail !== undefined) {
+		if (alertEmail === null) {
+			emailPatch = { alertEmail: null };
+		} else if (typeof alertEmail === "string") {
+			const trimmed = alertEmail.trim();
+			if (trimmed === "") emailPatch = { alertEmail: null };
+			else if (!isValidAlertEmail(trimmed)) return bad("alertEmail 格式不合法");
+			else emailPatch = { alertEmail: trimmed.toLowerCase() };
+		} else {
+			return bad("alertEmail 格式不合法");
+		}
+	}
+	const change: WatchChange = {
+		...(picked && { questions: picked.value }),
+		...(intervalMin !== undefined && { intervalMin }),
+		...(measure !== undefined && { measure }),
+		...emailPatch,
+	};
 	return { ok: true, value: { token: token.value, change } };
 }
 

@@ -247,10 +247,10 @@ curl -s https://gpt.ziikoo.app/api/probe \
 
 | 接口 | 请求体 | 返回 |
 | --- | --- | --- |
-| `/api/watch` | `{ "site", "key", "model", "protocol", "intervalMin", "alias", "consent": true, "questions"?, "board"?, "measure"? }` | `{ "board", "token", "watch": WatchView }` |
+| `/api/watch` | `{ "site", "key", "model", "protocol", "intervalMin", "alias", "consent": true, "questions"?, "board"?, "measure"?, "alertEmail"? }` | `{ "board", "token", "watch": WatchView }` |
 | `/api/watch/view` | `{ "token" }` | `WatchView` |
 | `/api/watch/state` | `{ "token", "action": "pause" \| "resume" }` | `WatchView` |
-| `/api/watch/update` | `{ "token", "questions"?, "intervalMin"?, "measure"? }` | `WatchView`。只改给出的字段 |
+| `/api/watch/update` | `{ "token", "questions"?, "intervalMin"?, "measure"?, "alertEmail"? }` | `WatchView`。只改给出的字段 |
 | `/api/watch/delete` | `{ "token" }` | `{ "deleted": true }`。立即清除密钥与样本 |
 | `/api/board/view` | `{ "board" }` | `{ "watches": [{ "token", "watch": WatchView \| null }] }`。`null` 表示这次读取失败 |
 | `/api/board/adopt` | `{ "board"?, "tokens" }` | `{ "board" }`。`tokens` 最多 30 个。全部令牌无效时 `board` 是 `null` |
@@ -262,6 +262,7 @@ curl -s https://gpt.ziikoo.app/api/probe \
 - 间隔是 1、5、10、30 分钟之一。2026-10-28 之前建的监测可能是 15 分钟。
 - `questions` 是非空的题 id 数组，只能含 `inWatchRotation` 不为 `false` 的题。不带时选全部。
 - `alias` 是别名，最多 40 个字符，可以是空字符串。
+- `alertEmail` 可选，最多 254 个字符。在服务端加密保存，从不回显。连续失败、密钥被拒或恢复正常时发送告警邮件，并支持直接回复邮件发送 `pause`、`resume` 或 `recheck` 控制监测。`/api/watch/update` 传 `null` 或 `""` 可清除告警邮箱。
 - `token` 只在建立时返回一次，持有它就能读取、暂停、修改与删除。`board` 给了且非空时加入这个看板，否则新签发。
 - 令牌无效或监测已过期时返回 404，不区分两者。7 天没有读取或操作，监测自动删除。
 - 全站最多 200 个持续监测，一个看板最多 30 个，超出返回 429 `watch_limit`。
@@ -277,7 +278,8 @@ curl -s https://gpt.ziikoo.app/api/probe \
              last, buckets: [48 个 30 分钟格] },
   usage: { since, calls, unmetered, promptTokens, cachedTokens, outputTokens, reasoningTokens } | null,
   perf: { checks, cacheChecks, cacheHitPct, tokensPerSec, speedSamples, lastAt, nextInRounds } | null,
-  liveTopic?: "watch:<64位十六进制>" }
+  liveTopic?: "watch:<64位十六进制>",
+  hasAlertEmail?: boolean }
 ```
 
 - `usage` 是累计用量。`since` 是开始计数的时间。`calls` 是发出的调用次数，含重试。`unmetered` 是可能已扣额度但没有返回可用用量的调用次数。`outputTokens` 含 `reasoningTokens`，`promptTokens` 含 `cachedTokens`。这项上线前建的监测在跑完下一轮之前是 `null`。
