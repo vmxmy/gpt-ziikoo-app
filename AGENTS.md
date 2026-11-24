@@ -11,7 +11,7 @@
 - 读取与删除历史必须出示同一站点和同一密钥。对象不存在与为空返回相同结果。
 - 探针接口发的题只来自题库里的固定题、服务端用封闭词表生成的题,或调用方随请求给出的自定义题(2026-10-23 授权,规则见「自定义题」节)。自定义题只在 `/api/probe` 当次调用内存在:不落库、不进历史、不进监测轮转、不占用题库 id。只访问 `/v1/responses`、`/v1/chat/completions`、`/v1/messages`(Anthropic 协议,2026-10-27 授权)或 `/v1beta/models/{model}:streamGenerateContent`(Gemini 协议,2026-11-21 授权)。Gemini 协议的密钥只放请求头 `x-goog-api-key`,不放查询串 `?key=`,也不放 `Authorization`。另有 `/api/models` 只访问 `GET /v1/models`,只回模型 id,不入库不进日志(2026-10-25 授权)。
 - `/api/claude-case` 只发服务端固定的用例 C1 到 C10、P1、P2,只访问 `/v1/messages`、`/v1/messages/count_tokens` 与 `GET /v1/models`;不访问批量接口,结果不落库,日志只含主机名、用例 id、结论、状态码、延迟(2026-11-04 维护者授权)。
-- 目标地址只允许 `https`,拒绝 IP 字面量与 `localhost`,不跟随重定向。
+- 目标地址只允许 `https` 域名或公网 IPv4(2026-11-24 维护者授权放行公网 IPv4),拒绝私网/回环/链路本地/保留段 IPv4、IPv6 字面量与 `localhost`,不跟随重定向。
 - 来自中转站的回答是不可信内容。页面只用文本节点渲染,不拼 HTML。唯一例外(2026-10-25 授权;2026-10-27 曾扩大到自定义 HTML 题,同日收回):`pelican-svg` 的回答只在沙箱 iframe `/api/frame` 里运行。该 iframe 是不透明源,有自己的 CSP,不能联网。iframe 不得加 `allow-same-origin`、`allow-popups`、`allow-forms`、`allow-top-navigation`。
 - `workers.dev` 与预览地址保持关闭,否则绕过边缘限速。这两个开关写在 `void.config.ts` 的 `cloudflare` 下(`workers_dev: false`、`preview_urls: false`)。
 - 主应用工具链是 `void` 加 `void.config.ts`、`void.lock.json`(2026-11-24 维护者授权迁移;独立子应用 `mock/` 暂保留原 `cf` 配置)。Node.js 24.22 或更高。生成的 Cloudflare 配置不入库,`void.lock.json` 必须提交,不得删除或重排已部署的 Durable Object 迁移记录。每次升级 `void` 前先审计其运行时日志与 `/__void/*` 端点。

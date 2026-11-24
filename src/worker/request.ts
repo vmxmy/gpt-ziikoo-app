@@ -54,7 +54,7 @@ function isIntIn(value: unknown, min: number, max: number): value is number {
 
 function parseTarget(f: Record<string, unknown>): Result<HistoryCommand & { host: string }> {
 	const site = typeof f.site === "string" ? parseSite(f.site) : null;
-	if (!site?.ok) return bad("site 不合法：只接受 https 域名");
+	if (!site?.ok) return bad("site 不合法：只接受 https 域名或公网 IPv4");
 	if (typeof f.key !== "string" || !KEY.test(f.key)) return bad("key 必须是 8 到 1024 个字母、数字或 _ . - 字符");
 	return { ok: true, value: { origin: site.origin, host: site.host, key: f.key } };
 }
@@ -216,7 +216,7 @@ export function parseWatchCreate(body: unknown): WatchCreateResult {
 	if (!f) return bad("请求体必须是 JSON 对象");
 	if (f.consent !== true) return bad("必须同意由本站加密保存密钥");
 	const site = typeof f.site === "string" ? parseSite(f.site) : null;
-	if (!site?.ok) return { ok: false, message: "site 不合法：只接受 https 域名", field: "site" };
+	if (!site?.ok) return { ok: false, message: "site 不合法：只接受 https 域名或公网 IPv4", field: "site" };
 	if (typeof f.key !== "string" || !KEY.test(f.key)) {
 		return { ok: false, message: "key 必须是 8 到 1024 个字母、数字或 _ . - 字符", field: "key" };
 	}

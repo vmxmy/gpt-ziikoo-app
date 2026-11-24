@@ -98,8 +98,17 @@ describe("score", () => {
 describe("parseSite", () => {
 	it.each([
 		"http://api.example.com",
+		"https://0.0.0.0",
+		"https://10.0.0.1",
+		"https://100.64.0.1",
 		"https://127.0.0.1",
 		"https://0x7f000001",
+		"https://169.254.169.254",
+		"https://172.16.0.1",
+		"https://192.168.1.1",
+		"https://198.18.0.1",
+		"https://224.0.0.1",
+		"https://255.255.255.255",
 		"https://[::1]",
 		"https://localhost",
 		"https://app.localhost",
@@ -112,6 +121,14 @@ describe("parseSite", () => {
 		"not a url",
 	])("rejects %s", (input) => {
 		expect(parseSite(input)).toEqual({ ok: false });
+	});
+
+	it.each([
+		["https://40.160.102.197/", { ok: true, origin: "https://40.160.102.197", host: "40.160.102.197" }],
+		["https://40.160.102.197:8443/v1", { ok: true, origin: "https://40.160.102.197:8443", host: "40.160.102.197" }],
+		["https://1.1.1.1", { ok: true, origin: "https://1.1.1.1", host: "1.1.1.1" }],
+	])("accepts public IPv4 %s", (input, expected) => {
+		expect(parseSite(input)).toEqual(expected);
 	});
 
 	it.each([
